@@ -13,7 +13,7 @@ import { CategoriesSection } from "@/components/homepage/categories-section";
 import { LatestReleasesSection } from "@/components/homepage/latest-releases-section";
 import { TelegramBanner } from "@/components/homepage/telegram-banner";
 
-export const revalidate = 60; // ISR cache revalidation
+export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   const [stats, featuredApps, categories, latestReleases, trendingApps, settings] =
@@ -30,9 +30,6 @@ export default async function HomePage() {
     <div className="flex flex-col min-h-screen">
       {/* Hero Section */}
       <HeroSection totalApps={stats.totalApps} />
-
-      {/* Platform Real Statistics */}
-      <StatsSection stats={stats} />
 
       {/* Featured Apps Section */}
       <FeaturedSection apps={featuredApps} />
@@ -55,6 +52,9 @@ export default async function HomePage() {
         subtitle="Ranked by recorded downloads and community activity"
         viewAllHref="/apps?sort=downloads"
       />
+
+      {/* Platform Real Statistics - Positioned directly above Telegram Banner */}
+      <StatsSection stats={stats} />
 
       {/* Telegram Community Banner */}
       <TelegramBanner telegramUrl={settings?.telegramUrl || "https://t.me/awtmods"} />

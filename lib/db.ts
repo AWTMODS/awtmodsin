@@ -526,7 +526,7 @@ export async function createApplication(
 
 export async function updateApplication(
   id: string,
-  updates: Partial<Application>
+  updates: Partial<Application> & { version?: any; screenshots?: any }
 ): Promise<Application | null> {
   const supabase = getDbClient();
 
@@ -541,6 +541,21 @@ export async function updateApplication(
 
       if (!error && result?.success && result?.app) {
         return result.app;
+      }
+
+      // If simple update and RPC returned error, fallback to direct table update
+      const { version, screenshots, category, latest_version, versions, ...appFields } = updates as any;
+      if (Object.keys(appFields).length > 0) {
+        const { data: directData, error: directErr } = await supabase
+          .from("applications")
+          .update({ ...appFields, updated_at: new Date().toISOString() })
+          .eq("id", id)
+          .select()
+          .single();
+
+        if (!directErr && directData) {
+          return directData;
+        }
       }
     } catch (err) {
       console.error("updateApplication error:", err);

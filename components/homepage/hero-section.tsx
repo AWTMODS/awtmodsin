@@ -6,7 +6,11 @@ import Link from "next/link";
 import { Search, ShieldCheck, Zap, RefreshCw, Layers, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-export function HeroSection() {
+interface HeroSectionProps {
+  totalApps?: number;
+}
+
+export function HeroSection({ totalApps }: HeroSectionProps = {}) {
   const [searchQuery, setSearchQuery] = useState("");
   const router = useRouter();
 
@@ -61,7 +65,7 @@ export function HeroSection() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 max-w-xl">
               <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border bg-card/60 text-xs font-medium text-muted-foreground">
                 <Layers className="h-4 w-4 text-foreground shrink-0" />
-                <span>1000+ Apps</span>
+                <span>{totalApps && totalApps > 0 ? `${totalApps} Apps` : "Verified Apps"}</span>
               </div>
               <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border bg-card/60 text-xs font-medium text-muted-foreground">
                 <Zap className="h-4 w-4 text-foreground shrink-0" />

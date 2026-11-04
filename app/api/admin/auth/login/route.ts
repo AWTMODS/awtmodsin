@@ -2,16 +2,20 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 import { createAdminSessionToken } from "@/lib/auth/session";
+import { getEnv } from "@/lib/env";
 
 function getSupabaseAdmin() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const url = getEnv(
+    "NEXT_PUBLIC_SUPABASE_URL",
+    "https://uzmskxruuvfgokststox.supabase.co"
+  );
   const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    getEnv("SUPABASE_SERVICE_ROLE_KEY") ||
+    getEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
 
   if (!url || !key) {
     throw new Error(
-      "Supabase environment variables (NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_ANON_KEY) are missing. Please restart your Next.js server to reload .env.local."
+      "Supabase environment variables (NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_ANON_KEY) are missing in .env.local."
     );
   }
 

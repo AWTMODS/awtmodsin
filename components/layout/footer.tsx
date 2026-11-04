@@ -154,13 +154,6 @@ export function Footer() {
         {/* Bottom Bar */}
         <div className="border-t border-border/60 pt-8 flex flex-col sm:flex-row items-center justify-between text-xs text-muted-foreground gap-4">
           <p>© {new Date().getFullYear()} AWTMods.in. All rights reserved.</p>
-          <div className="flex items-center gap-4">
-            <span>Clean Minimal Architecture</span>
-            <span>•</span>
-            <Link href="/admin/login" className="hover:underline hover:text-foreground">
-              Admin Portal
-            </Link>
-          </div>
         </div>
       </div>
     </footer>

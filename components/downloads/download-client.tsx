@@ -96,12 +96,6 @@ export function DownloadClient({
               Checking mirrors and security signatures for {app.name} {version.version_name}
             </p>
           </div>
-          <button
-            onClick={() => setSecondsLeft(0)}
-            className="text-xs text-muted-foreground underline hover:text-foreground pt-2"
-          >
-            Skip countdown
-          </button>
         </div>
       ) : (
         <div className="space-y-6 animate-in fade-in zoom-in-95 duration-300">

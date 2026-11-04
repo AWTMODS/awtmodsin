@@ -1,7 +1,18 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { pool } from "@/lib/db/postgres";
+import { createClient } from "@supabase/supabase-js";
 import { createAdminSessionToken } from "@/lib/auth/session";
+
+function getSupabaseAdmin() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://uzmskxruuvfgokststox.supabase.co";
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    "";
+  return createClient(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
 
 export async function POST(req: Request) {
   try {
@@ -18,79 +29,38 @@ export async function POST(req: Request) {
     // 30 days if rememberMe is true, otherwise 24 hours
     const sessionMaxAge = rememberMe ? 86400 * 30 : 86400 * 1;
 
-    // 1. Authenticate against Supabase Auth (auth.users) using bcrypt
-    const authResult = await pool.query(
-      `
-      SELECT 
-        id, 
-        email, 
-        (crypt($2, encrypted_password) = encrypted_password) as password_matches 
-      FROM auth.users 
-      WHERE lower(email) = $1
-      LIMIT 1;
-      `,
-      [cleanEmail, password.trim()]
+    const supabase = getSupabaseAdmin();
+
+    // 1. Authenticate & Authorize via secure PostgreSQL RPC over HTTPS
+    // Verifies bcrypt password in auth.users, checks public.admins, and enforces 3-admin limit
+    const { data: authData, error: rpcError } = await supabase.rpc(
+      "verify_admin_login",
+      {
+        p_email: cleanEmail,
+        p_password: password.trim(),
+      }
     );
 
-    if (authResult.rows.length === 0 || !authResult.rows[0].password_matches) {
+    if (rpcError) {
+      console.error("Supabase RPC error:", rpcError);
       return NextResponse.json(
-        { error: "Invalid administrator credentials" },
-        { status: 401 }
+        { error: "Authentication system error: " + rpcError.message },
+        { status: 500 }
       );
     }
 
-    const authUser = authResult.rows[0];
-
-    // 2. Strict Administrator Authorization: Check public.admins table
-    const adminResult = await pool.query(
-      `
-      SELECT id, auth_user_id, email, role, is_active 
-      FROM public.admins 
-      WHERE auth_user_id = $1 AND lower(email) = $2
-      LIMIT 1;
-      `,
-      [authUser.id, cleanEmail]
-    );
-
-    if (adminResult.rows.length === 0) {
-      return NextResponse.json(
-        {
-          error:
-            "Access Denied: This account is not an authorized AWTMods administrator.",
-        },
-        { status: 403 }
-      );
+    if (!authData || !authData.success) {
+      const errorMsg =
+        authData?.error || "Invalid administrator credentials or access denied.";
+      const status = errorMsg.includes("Access Denied") || errorMsg.includes("Security Policy")
+        ? 403
+        : 401;
+      return NextResponse.json({ error: errorMsg }, { status });
     }
 
-    const admin = adminResult.rows[0];
+    const admin = authData.admin;
 
-    // 3. Verify Account Status is Active
-    if (!admin.is_active) {
-      return NextResponse.json(
-        {
-          error:
-            "Access Denied: This administrator account has been deactivated by the Superadmin.",
-        },
-        { status: 403 }
-      );
-    }
-
-    // 4. Verify Strict Three-Administrator Limit
-    const totalAdminsCountRes = await pool.query(
-      "SELECT COUNT(*) as count FROM public.admins;"
-    );
-    const totalAdmins = parseInt(totalAdminsCountRes.rows[0].count, 10);
-    if (totalAdmins > 3) {
-      return NextResponse.json(
-        {
-          error:
-            "Security Policy Violation: More than 3 administrator accounts detected. Access blocked.",
-        },
-        { status: 403 }
-      );
-    }
-
-    // 5. Generate Signed Server Session Token
+    // 2. Generate Signed Server Session Token (HMAC SHA-256)
     const sessionToken = createAdminSessionToken(
       {
         id: admin.id,
@@ -100,7 +70,7 @@ export async function POST(req: Request) {
       sessionMaxAge
     );
 
-    // 6. Set Secure, HttpOnly Cookie
+    // 3. Set Secure, HttpOnly Session Cookie
     const cookieStore = cookies();
     cookieStore.set("awtmods_admin_session", sessionToken, {
       httpOnly: true,
@@ -110,23 +80,21 @@ export async function POST(req: Request) {
       path: "/",
     });
 
-    // 7. Log activity in admin_activity_logs (non-blocking)
-    pool
-      .query(
-        `
-        INSERT INTO public.admin_activity_logs (admin_id, action, entity_type, details)
-        VALUES ($1, 'login', 'auth', $2);
-        `,
-        [
-          admin.id,
-          JSON.stringify({
-            ip: req.headers.get("x-forwarded-for") || "local",
-            userAgent: req.headers.get("user-agent") || "unknown",
-            rememberMe: !!rememberMe,
-          }),
-        ]
-      )
-      .catch((err) => console.error("Activity log error:", err));
+    // 4. Log login event to admin_activity_logs over HTTPS
+    try {
+      await supabase.from("admin_activity_logs").insert({
+        admin_id: admin.id,
+        action: "login",
+        entity_type: "auth",
+        details: {
+          ip: req.headers.get("x-forwarded-for") || "local",
+          userAgent: req.headers.get("user-agent") || "unknown",
+          rememberMe: !!rememberMe,
+        },
+      });
+    } catch (logErr) {
+      console.error("Activity log error:", logErr);
+    }
 
     return NextResponse.json({
       success: true,
@@ -137,7 +105,7 @@ export async function POST(req: Request) {
       },
     });
   } catch (err: any) {
-    console.error("Admin authentication error:", err);
+    console.error("Admin authentication exception:", err);
     return NextResponse.json(
       { error: err.message || "Authentication system error" },
       { status: 500 }

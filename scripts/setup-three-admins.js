@@ -126,3 +126,4 @@ async function provisionAdmin(email, password, role = "admin") {
 
 const args = process.argv.slice(2);
 provisionAdmin(args[0], args[1], args[2]);
+

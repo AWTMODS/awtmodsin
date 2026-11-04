@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { verifyAdminSessionTokenEdge } from "@/lib/auth/edge-session";
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Protect /admin frontend routes (except /admin/login)
@@ -11,9 +12,11 @@ export function middleware(request: NextRequest) {
   const isAdminApi = pathname.startsWith("/api/admin") && !pathname.startsWith("/api/admin/auth");
 
   if (isAdminPage || isAdminApi) {
-    const adminSession = request.cookies.get("awtmods_admin_session")?.value;
+    const adminSessionToken = request.cookies.get("awtmods_admin_session")?.value;
 
-    if (!adminSession || adminSession !== "authenticated") {
+    const session = await verifyAdminSessionTokenEdge(adminSessionToken);
+
+    if (!session) {
       if (isAdminApi) {
         return NextResponse.json(
           { error: "Unauthorized: Administrator access required" },
@@ -32,4 +35,3 @@ export function middleware(request: NextRequest) {
 export const config = {
   matcher: ["/admin/:path*", "/api/admin/:path*"],
 };
-

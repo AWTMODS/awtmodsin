@@ -18,6 +18,7 @@ import {
   HardDrive,
   Copy,
   ExternalLink,
+  Send,
 } from "lucide-react";
 import { getApplicationBySlug, getApplications } from "@/lib/db";
 import { Button } from "@/components/ui/button";
@@ -145,6 +146,23 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
                 <span>Download APK</span>
               </Button>
             </Link>
+            <a
+              href="https://t.me/awtmods"
+              target="_blank"
+              rel="noreferrer"
+              className="w-full sm:w-auto"
+            >
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                className="w-full sm:w-auto h-14 sm:h-[54px] px-6 rounded-2xl gap-2 font-semibold border-border bg-secondary/30 hover:bg-secondary text-foreground transition-colors"
+                title="Join Telegram Channel"
+              >
+                <Send className="h-4 w-4 sm:h-5 sm:w-5 text-sky-400" />
+                <span>Join Telegram</span>
+              </Button>
+            </a>
             <ShareButton appName={app.name} className="h-14 sm:h-[54px] px-6 rounded-2xl" />
           </div>
         </div>

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Download, ExternalLink, Check, AlertCircle, RefreshCw, AlertTriangle } from "lucide-react";
+import { Download, ExternalLink, Check, AlertCircle, RefreshCw, AlertTriangle, Send } from "lucide-react";
 import { Application, ApplicationVersion, DownloadSource } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -131,6 +131,25 @@ export function DownloadClient({
               </span>
               <ExternalLink className="h-4 w-4 sm:h-5 sm:w-5 ml-1 opacity-70" />
             </Button>
+
+            {/* Join Telegram Button */}
+            <a
+              href="https://t.me/awtmods"
+              target="_blank"
+              rel="noreferrer"
+              className="block w-full"
+            >
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                className="w-full h-12 sm:h-13 rounded-2xl text-sm sm:text-base font-semibold border-border bg-secondary/50 hover:bg-secondary gap-2.5 transition-all text-foreground"
+              >
+                <Send className="h-4 w-4 sm:h-5 sm:w-5 text-sky-400" />
+                <span>Join Telegram Channel</span>
+                <ExternalLink className="h-3.5 w-3.5 opacity-60 ml-auto" />
+              </Button>
+            </a>
 
             {downloadInitiated && (
               <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium animate-in fade-in">

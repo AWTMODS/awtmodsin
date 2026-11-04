@@ -4,6 +4,7 @@ import { formatDate } from "@/lib/utils";
 import { Download, RefreshCw, Calendar, Inbox } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { AppIcon } from "@/components/applications/app-icon";
 
 export const metadata = {
   title: "Latest Application Updates & Changelogs",
@@ -54,17 +55,7 @@ export default async function UpdatesPage() {
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-border/60">
                   <div className="flex items-center gap-4">
                     <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-2xl border border-border bg-secondary flex items-center justify-center font-bold text-base text-foreground">
-                      {app.icon_url && (
-                        <img
-                          src={app.icon_url}
-                          alt={app.name}
-                          className="absolute inset-0 h-full w-full object-cover"
-                          onError={(e) => {
-                            (e.currentTarget as HTMLElement).style.display = "none";
-                          }}
-                        />
-                      )}
-                      <span>{app.name.slice(0, 1)}</span>
+                      <AppIcon src={app.icon_url} alt={app.name} />
                     </div>
                     <div>
                       <Link

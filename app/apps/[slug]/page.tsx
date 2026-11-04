@@ -23,6 +23,7 @@ import { getApplicationBySlug, getApplications } from "@/lib/db";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AppCard } from "@/components/applications/app-card";
+import { AppIcon } from "@/components/applications/app-icon";
 import { ScreenshotsGallery } from "@/components/applications/screenshots-gallery";
 import { ShareButton } from "@/components/applications/share-button";
 import { formatDate, formatNumber } from "@/lib/utils";
@@ -99,17 +100,7 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
           {/* App Info & Icon */}
           <div className="flex items-start sm:items-center gap-5">
             <div className="relative h-20 w-20 sm:h-24 sm:w-24 shrink-0 overflow-hidden rounded-2xl border border-border shadow-sm bg-secondary flex items-center justify-center font-bold text-2xl text-foreground">
-              {app.icon_url && (
-                <img
-                  src={app.icon_url}
-                  alt={app.name}
-                  className="absolute inset-0 h-full w-full object-cover"
-                  onError={(e) => {
-                    (e.currentTarget as HTMLElement).style.display = "none";
-                  }}
-                />
-              )}
-              <span>{app.name.slice(0, 1)}</span>
+              <AppIcon src={app.icon_url} alt={app.name} />
             </div>
             <div className="space-y-1.5">
               <div className="flex flex-wrap items-center gap-2">

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { getApplicationBySlug, getSiteSettings } from "@/lib/db";
 import { DownloadClient } from "@/components/downloads/download-client";
 import { ShieldCheck, HardDrive, Cpu, CheckCircle2, AlertTriangle, ArrowLeft } from "lucide-react";
+import { AppIcon } from "@/components/applications/app-icon";
 
 interface DownloadPageProps {
   params: {
@@ -81,17 +82,7 @@ export default async function DownloadPage({
         {/* App Mini Header */}
         <div className="flex items-center gap-4 pb-6 border-b border-border/70">
           <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-2xl border border-border shadow-xs bg-secondary flex items-center justify-center font-bold text-lg text-foreground">
-            {app.icon_url && (
-              <img
-                src={app.icon_url}
-                alt={app.name}
-                className="absolute inset-0 h-full w-full object-cover"
-                onError={(e) => {
-                  (e.currentTarget as HTMLElement).style.display = "none";
-                }}
-              />
-            )}
-            <span>{app.name.slice(0, 1)}</span>
+            <AppIcon src={app.icon_url} alt={app.name} />
           </div>
           <div>
             <div className="flex items-center gap-1.5">

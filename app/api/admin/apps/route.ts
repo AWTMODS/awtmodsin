@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { ZodError } from "zod";
 import { createApplication, getApplications } from "@/lib/db";
 import { applicationSchema } from "@/lib/validation/app-schemas";
@@ -9,6 +10,20 @@ export async function POST(req: Request) {
     const validated = applicationSchema.parse(json);
 
     const app = await createApplication(validated as any);
+
+    // Immediately purge and revalidate cache so new app appears instantly on main site
+    try {
+      revalidatePath("/");
+      revalidatePath("/apps");
+      revalidatePath("/categories");
+      revalidatePath("/search");
+      if (app.slug) {
+        revalidatePath(`/apps/${app.slug}`);
+      }
+    } catch {
+      // Ignore cache revalidation errors
+    }
+
     return NextResponse.json({ success: true, app });
   } catch (err: any) {
     if (err instanceof ZodError) {
@@ -34,4 +49,3 @@ export async function GET() {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
-

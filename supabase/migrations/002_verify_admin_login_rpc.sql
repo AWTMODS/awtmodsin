@@ -69,3 +69,4 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.verify_admin_login(TEXT, TEXT) TO service_role, anon;
+

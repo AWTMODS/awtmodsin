@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Download, Layers } from "lucide-react";
 import { Application } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
+import { cn, getAppUrl } from "@/lib/utils";
 import { AppIcon } from "./app-icon";
 
 interface AppCardProps {
@@ -18,7 +18,7 @@ export function AppCard({ app, className, variant = "grid" }: AppCardProps) {
   const size = app.latest_version?.file_size || "";
   const featureTag = app.category?.name || "Verified APK";
   const appName = app.name || "Untitled App";
-  const appSlug = app.slug || `app-${app.id}`;
+  const appUrl = getAppUrl(app.slug || `app-${app.id}`);
 
   if (variant === "horizontal" || variant === "compact") {
     return (
@@ -29,7 +29,7 @@ export function AppCard({ app, className, variant = "grid" }: AppCardProps) {
         )}
       >
         <Link
-          href={`/apps/${appSlug}`}
+          href={appUrl}
           className="flex items-center gap-3.5 flex-1 min-w-0"
         >
           <div className="relative h-12 w-12 rounded-xl overflow-hidden border border-border bg-secondary shrink-0 flex items-center justify-center font-bold text-sm text-foreground">
@@ -56,7 +56,7 @@ export function AppCard({ app, className, variant = "grid" }: AppCardProps) {
 
         <div className="flex items-center gap-2 shrink-0">
           <Link
-            href={`/apps/${appSlug}`}
+            href={appUrl}
             className="inline-flex items-center justify-center rounded-lg h-9 w-9 hover:bg-secondary text-foreground transition-colors"
           >
             <Download className="h-4 w-4" />
@@ -84,7 +84,7 @@ export function AppCard({ app, className, variant = "grid" }: AppCardProps) {
           </Badge>
         </div>
 
-        <Link href={`/apps/${appSlug}`}>
+        <Link href={appUrl}>
           <h3 className="font-bold text-base text-foreground line-clamp-1 group-hover:text-neutral-400 transition-colors">
             {appName}
           </h3>
@@ -105,7 +105,7 @@ export function AppCard({ app, className, variant = "grid" }: AppCardProps) {
         </div>
 
         <Link
-          href={`/apps/${appSlug}`}
+          href={appUrl}
           className="inline-flex items-center justify-center bg-primary text-primary-foreground hover:opacity-90 rounded-xl h-8 text-xs font-semibold px-3 gap-1.5 shadow-sm transition-all active:scale-[0.98]"
         >
           <span>Get</span>

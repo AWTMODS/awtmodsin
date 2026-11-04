@@ -1,5 +1,6 @@
 import { MetadataRoute } from "next";
 import { getApplications, getCategories } from "@/lib/db";
+import { getAppUrl } from "@/lib/utils";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = "https://www.awtmods.in";
@@ -80,7 +81,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   // Dynamic App routes
   const appRoutes: MetadataRoute.Sitemap = applications.map((app) => ({
-    url: `${baseUrl}/apps/${app.slug}`,
+    url: `${baseUrl}${getAppUrl(app.slug)}`,
     lastModified: new Date(app.updated_at),
     changeFrequency: "weekly",
     priority: 0.85,

@@ -203,7 +203,7 @@ export function DownloadClient({
       {/* Report Broken Link trigger */}
       <div className="pt-4">
         <Link
-          href={`/report-issue?app=${app.slug}&type=broken_link&version=${version.version_name}`}
+          href={`/report-issue?app=${app.slug.replace(/\.html$/i, "")}&type=broken_link&version=${version.version_name}`}
           className="text-xs text-muted-foreground hover:text-destructive transition-colors inline-flex items-center gap-1"
         >
           <AlertTriangle className="h-3.5 w-3.5" />

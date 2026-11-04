@@ -206,6 +206,12 @@ export async function getApplications(options?: {
 
 export async function getApplicationBySlug(slug: string): Promise<Application | null> {
   const supabase = getDbClient();
+  const cleanSlug = slug ? slug.replace(/\.html$/i, "").trim() : "";
+  const legacyAliases: Record<string, string> = {
+    "spotify-premium-mod-1793814592151": "spotify-premium",
+    "minecraft-pocket-edition-1793815123541": "minecraft-mod-apk",
+  };
+  const targetSlug = legacyAliases[cleanSlug] || cleanSlug;
 
   if (supabase) {
     try {
@@ -220,8 +226,9 @@ export async function getApplicationBySlug(slug: string): Promise<Application | 
           ),
           screenshots(*)
         `)
-        .eq("slug", slug)
-        .single();
+        .or(`slug.eq.${targetSlug},slug.eq.${cleanSlug},slug.eq.${slug}`)
+        .limit(1)
+        .maybeSingle();
 
       if (!error && data) {
         const latest =
@@ -245,7 +252,9 @@ export async function getApplicationBySlug(slug: string): Promise<Application | 
     }
   }
 
-  const app = memoryApps.find((a) => a.slug === slug);
+  const app = memoryApps.find(
+    (a) => a.slug === targetSlug || a.slug === cleanSlug || a.slug === slug
+  );
   return app || null;
 }
 

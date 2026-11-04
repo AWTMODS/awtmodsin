@@ -26,7 +26,11 @@ export async function PATCH(
       revalidatePath("/categories");
       revalidatePath("/search");
       if (updated.slug) {
-        revalidatePath(`/apps/${updated.slug}`);
+        const clean = updated.slug.replace(/\.html$/i, "");
+        revalidatePath(`/apps/${clean}`);
+        revalidatePath(`/apps/${clean}.html`);
+        revalidatePath(`/download/${clean}`);
+        revalidatePath(`/download/${clean}.html`);
       }
     } catch {
       // Ignore

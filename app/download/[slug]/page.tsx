@@ -1,10 +1,11 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { getApplicationBySlug, getSiteSettings } from "@/lib/db";
 import { DownloadClient } from "@/components/downloads/download-client";
 import { ShieldCheck, HardDrive, Cpu, CheckCircle2, AlertTriangle, ArrowLeft } from "lucide-react";
 import { AppIcon } from "@/components/applications/app-icon";
+import { getAppUrl, cleanAppSlug } from "@/lib/utils";
 
 interface DownloadPageProps {
   params: {
@@ -30,13 +31,24 @@ export default async function DownloadPage({
   params,
   searchParams,
 }: DownloadPageProps) {
+  const rawSlug = params.slug;
   const [app, settings] = await Promise.all([
-    getApplicationBySlug(params.slug),
+    getApplicationBySlug(rawSlug),
     getSiteSettings(),
   ]);
 
   if (!app || app.status !== "published") {
     notFound();
+  }
+
+  // Canonical .html redirect for download page
+  const canonicalSlug = `${cleanAppSlug(app.slug)}.html`;
+  if (rawSlug !== canonicalSlug) {
+    const qParams = new URLSearchParams();
+    if (searchParams.mirror) qParams.set("mirror", searchParams.mirror);
+    if (searchParams.version) qParams.set("version", searchParams.version);
+    const qs = qParams.toString();
+    redirect(`/download/${canonicalSlug}${qs ? `?${qs}` : ""}`);
   }
 
   // Find target version
@@ -54,7 +66,7 @@ export default async function DownloadPage({
         <p className="text-sm text-muted-foreground mt-2">
           This application currently does not have an active public version release.
         </p>
-        <Link href={`/apps/${app.slug}`} className="mt-6 inline-block underline">
+        <Link href={getAppUrl(app.slug)} className="mt-6 inline-block underline">
           Return to app page
         </Link>
       </div>
@@ -71,7 +83,7 @@ export default async function DownloadPage({
   return (
     <div className="container mx-auto max-w-3xl px-4 py-12 sm:px-6">
       <Link
-        href={`/apps/${app.slug}`}
+        href={getAppUrl(app.slug)}
         className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors mb-8"
       >
         <ArrowLeft className="h-4 w-4" />

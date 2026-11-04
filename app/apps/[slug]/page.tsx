@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import type { Metadata } from "next";
@@ -27,7 +27,7 @@ import { AppCard } from "@/components/applications/app-card";
 import { AppIcon } from "@/components/applications/app-icon";
 import { ScreenshotsGallery } from "@/components/applications/screenshots-gallery";
 import { ShareButton } from "@/components/applications/share-button";
-import { formatDate, formatNumber } from "@/lib/utils";
+import { formatDate, formatNumber, getAppUrl, getDownloadUrl, cleanAppSlug } from "@/lib/utils";
 
 interface AppDetailProps {
   params: {
@@ -51,10 +51,17 @@ export async function generateMetadata({ params }: AppDetailProps): Promise<Meta
 }
 
 export default async function AppDetailPage({ params }: AppDetailProps) {
-  const app = await getApplicationBySlug(params.slug);
+  const rawSlug = params.slug;
+  const app = await getApplicationBySlug(rawSlug);
 
   if (!app) {
     notFound();
+  }
+
+  // Canonical .html redirect: if accessed without .html or with legacy slug, redirect to /apps/{cleanSlug}.html
+  const canonicalSlug = `${cleanAppSlug(app.slug)}.html`;
+  if (rawSlug !== canonicalSlug) {
+    redirect(`/apps/${canonicalSlug}`);
   }
 
   // Get related applications from same category
@@ -137,7 +144,7 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
 
           {/* Download APK Action Button */}
           <div className="w-full lg:w-auto flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            <Link href={`/download/${app.slug}`} className="w-full sm:w-auto">
+            <Link href={getDownloadUrl(app.slug)} className="w-full sm:w-auto">
               <Button
                 size="lg"
                 className="w-full sm:w-auto rounded-2xl px-8 sm:px-10 h-14 sm:h-[54px] font-bold gap-2.5 text-base sm:text-lg shadow-md hover:shadow-lg transition-all"
@@ -339,7 +346,7 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
                     </div>
                   </div>
 
-                  <Link href={`/download/${app.slug}?mirror=${mirror.id}`}>
+                  <Link href={getDownloadUrl(app.slug, { mirrorId: mirror.id })}>
                     <Button size="sm" className="rounded-xl px-4 gap-1.5 font-semibold">
                       <Download className="h-3.5 w-3.5" />
                       <span>Download</span>
@@ -378,7 +385,7 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
                       </div>
                     </div>
 
-                    <Link href={`/download/${app.slug}?version=${ver.id}`}>
+                    <Link href={getDownloadUrl(app.slug, { versionId: ver.id })}>
                       <Button variant="secondary" size="sm" className="rounded-xl gap-1 text-xs">
                         <Download className="h-3.5 w-3.5" />
                         <span>Download</span>
@@ -481,7 +488,7 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
             {/* Broken Link Report link */}
             <div className="pt-4 border-t border-border/70 text-center">
               <Link
-                href={`/report-issue?app=${app.slug}&type=broken_link`}
+                href={`/report-issue?app=${cleanAppSlug(app.slug)}&type=broken_link`}
                 className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 transition-colors"
               >
                 <AlertTriangle className="h-3.5 w-3.5" />

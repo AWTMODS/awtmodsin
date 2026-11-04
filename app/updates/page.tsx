@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getRecentlyUpdated } from "@/lib/db";
-import { formatDate } from "@/lib/utils";
+import { formatDate, getAppUrl, getDownloadUrl } from "@/lib/utils";
 import { Download, RefreshCw, Calendar, Inbox } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -59,7 +59,7 @@ export default async function UpdatesPage() {
                     </div>
                     <div>
                       <Link
-                        href={`/apps/${app.slug}`}
+                        href={getAppUrl(app.slug)}
                         className="text-lg font-bold text-foreground hover:underline"
                       >
                         {app.name}
@@ -87,7 +87,7 @@ export default async function UpdatesPage() {
                       )}
                     </div>
 
-                    <Link href={`/download/${app.slug}`}>
+                    <Link href={getDownloadUrl(app.slug)}>
                       <Button size="sm" className="rounded-xl px-4 gap-1.5 font-semibold">
                         <Download className="h-3.5 w-3.5" />
                         <span>Download</span>

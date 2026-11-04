@@ -6,7 +6,7 @@ import Image from "next/image";
 import { Application, AppCategory } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { formatDate, formatNumber } from "@/lib/utils";
+import { formatDate, formatNumber, getAppUrl } from "@/lib/utils";
 import {
   Search,
   Filter,
@@ -266,7 +266,7 @@ export function AppsTable({ initialApps, categories }: AppsTableProps) {
                           </Link>
 
                           <Link
-                            href={`/apps/${app.slug}`}
+                            href={getAppUrl(app.slug)}
                             target="_blank"
                             className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted"
                             title="Preview Public Page"

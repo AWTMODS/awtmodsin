@@ -18,7 +18,11 @@ export async function POST(req: Request) {
       revalidatePath("/categories");
       revalidatePath("/search");
       if (app.slug) {
-        revalidatePath(`/apps/${app.slug}`);
+        const clean = app.slug.replace(/\.html$/i, "");
+        revalidatePath(`/apps/${clean}`);
+        revalidatePath(`/apps/${clean}.html`);
+        revalidatePath(`/download/${clean}`);
+        revalidatePath(`/download/${clean}.html`);
       }
     } catch {
       // Ignore cache revalidation errors

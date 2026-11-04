@@ -382,9 +382,13 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
 
     setSubmitting(true);
 
+    const cleanFinalSlug = (slug.trim() || name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-"))
+      .replace(/\.html$/i, "")
+      .replace(/^-|-$/g, "");
+
     const payload = {
       name: name.trim(),
-      slug: slug.trim() || name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+      slug: cleanFinalSlug,
       package_name: packageName.trim(),
       developer: finalDeveloper,
       category_id: categoryId,
@@ -478,11 +482,14 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
               Slug (URL Key) <span className="text-destructive">*</span>
             </label>
             <Input
-              placeholder="e.g. spotify-mod-apk"
+              placeholder="e.g. spotify-premium"
               value={slug}
-              onChange={(e) => setSlug(e.target.value)}
+              onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/\.html$/i, ""))}
               className="rounded-xl font-mono"
             />
+            <p className="text-[11px] text-muted-foreground font-mono">
+              Live link: /apps/{(slug || "app-name").replace(/\.html$/i, "")}.html
+            </p>
           </div>
 
           <div className="space-y-1.5">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Logo } from "@/components/layout/logo";
@@ -12,8 +12,21 @@ import { toast } from "sonner";
 export default function AdminLoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+
+  useEffect(() => {
+    try {
+      const savedEmail = localStorage.getItem("awtmods_admin_remember_email");
+      if (savedEmail) {
+        setEmail(savedEmail);
+        setRememberMe(true);
+      }
+    } catch {
+      // Ignore if localStorage is unavailable
+    }
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,13 +36,23 @@ export default function AdminLoginPage() {
       const res = await fetch("/api/admin/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, rememberMe }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
         throw new Error(data.error || "Authentication failed");
+      }
+
+      try {
+        if (rememberMe) {
+          localStorage.setItem("awtmods_admin_remember_email", email.trim());
+        } else {
+          localStorage.removeItem("awtmods_admin_remember_email");
+        }
+      } catch {
+        // Ignore localStorage error
       }
 
       toast.success("Welcome back, Administrator!");
@@ -90,6 +113,21 @@ export default function AdminLoginPage() {
                 className="pl-10 rounded-xl"
               />
             </div>
+          </div>
+
+          <div className="flex items-center justify-between py-1">
+            <label className="flex items-center gap-2.5 cursor-pointer select-none group">
+              <input
+                type="checkbox"
+                id="rememberMe"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="h-4 w-4 rounded border-border bg-secondary accent-black dark:accent-white focus:ring-1 focus:ring-ring cursor-pointer transition-colors"
+              />
+              <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors font-medium">
+                Remember me
+              </span>
+            </label>
           </div>
 
           <Button

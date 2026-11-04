@@ -4,7 +4,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export async function POST(req: Request) {
   try {
-    const { email, password } = await req.json();
+    const { email, password, rememberMe } = await req.json();
 
     if (!email || !password) {
       return NextResponse.json(
@@ -12,6 +12,9 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
+
+    // 30 days if rememberMe is true, otherwise 1 day session
+    const sessionMaxAge = rememberMe ? 86400 * 30 : 86400 * 1;
 
     // Attempt Supabase Auth if configured
     const supabase = createServerSupabaseClient();
@@ -36,7 +39,7 @@ export async function POST(req: Request) {
             httpOnly: true,
             secure: process.env.NODE_ENV === "production",
             sameSite: "lax",
-            maxAge: 86400 * 7,
+            maxAge: sessionMaxAge,
             path: "/",
           });
           return NextResponse.json({ success: true, user: data.user });
@@ -58,7 +61,7 @@ export async function POST(req: Request) {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
-        maxAge: 86400 * 7,
+        maxAge: sessionMaxAge,
         path: "/",
       });
 

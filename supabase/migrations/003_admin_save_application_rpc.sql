@@ -161,3 +161,4 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.admin_delete_application(UUID) TO service_role, anon;
+

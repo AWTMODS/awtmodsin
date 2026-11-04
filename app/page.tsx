@@ -57,7 +57,7 @@ export default async function HomePage() {
       />
 
       {/* Telegram Community Banner */}
-      <TelegramBanner telegramUrl={settings.telegramUrl} />
+      <TelegramBanner telegramUrl={settings?.telegramUrl || "https://t.me/awtmods"} />
     </div>
   );
 }

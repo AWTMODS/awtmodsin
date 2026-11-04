@@ -6,8 +6,10 @@ interface TelegramBannerProps {
 }
 
 export function TelegramBanner({
-  telegramUrl = "https://t.me/awtmods",
-}: TelegramBannerProps) {
+  telegramUrl,
+}: TelegramBannerProps = {}) {
+  const safeUrl = telegramUrl || "https://t.me/awtmods";
+
   return (
     <section className="py-12">
       <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -31,7 +33,7 @@ export function TelegramBanner({
             </div>
 
             <a
-              href={telegramUrl}
+              href={safeUrl}
               target="_blank"
               rel="noreferrer"
               className="shrink-0"
@@ -50,4 +52,3 @@ export function TelegramBanner({
     </section>
   );
 }
-

@@ -4,11 +4,13 @@ import { uploadImageToCloudinary } from "@/lib/cloudinary";
 export async function POST(req: Request) {
   try {
     // Check if Cloudinary credentials are configured
-    if (
-      !process.env.CLOUDINARY_CLOUD_NAME ||
-      !process.env.CLOUDINARY_API_KEY ||
-      !process.env.CLOUDINARY_API_SECRET
-    ) {
+    const hasCloudinaryUrl = !!process.env.CLOUDINARY_URL;
+    const hasIndividualKeys =
+      !!process.env.CLOUDINARY_CLOUD_NAME &&
+      !!process.env.CLOUDINARY_API_KEY &&
+      !!process.env.CLOUDINARY_API_SECRET;
+
+    if (!hasCloudinaryUrl && !hasIndividualKeys) {
       return NextResponse.json(
         {
           error:
@@ -58,3 +60,4 @@ export async function POST(req: Request) {
     );
   }
 }
+

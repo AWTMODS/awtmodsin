@@ -38,3 +38,4 @@ export async function uploadImageToCloudinary(
 }
 
 export default cloudinary;
+

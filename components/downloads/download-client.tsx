@@ -123,13 +123,13 @@ export function DownloadClient({
             <Button
               size="lg"
               onClick={triggerDownload}
-              className="w-full h-14 rounded-2xl text-base font-bold shadow-lg gap-2"
+              className="w-full h-14 sm:h-16 rounded-2xl text-base sm:text-lg font-bold shadow-lg gap-2.5 hover:shadow-xl transition-all"
             >
-              <Download className="h-5 w-5" />
+              <Download className="h-5 w-5 sm:h-6 sm:w-6" />
               <span>
                 {downloadInitiated ? "Download Again" : "Download APK Now"}
               </span>
-              <ExternalLink className="h-4 w-4 ml-1 opacity-70" />
+              <ExternalLink className="h-4 w-4 sm:h-5 sm:w-5 ml-1 opacity-70" />
             </Button>
 
             {downloadInitiated && (

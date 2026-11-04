@@ -2,9 +2,16 @@
 
 import { Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
-export function ShareButton({ appName }: { appName: string }) {
+export function ShareButton({
+  appName,
+  className,
+}: {
+  appName: string;
+  className?: string;
+}) {
   const handleShare = async () => {
     const url = window.location.href;
 
@@ -34,10 +41,10 @@ export function ShareButton({ appName }: { appName: string }) {
       variant="outline"
       size="lg"
       onClick={handleShare}
-      className="rounded-2xl gap-2 font-medium border-border"
+      className={cn("rounded-2xl gap-2 font-medium border-border", className)}
       title="Share app"
     >
-      <Share2 className="h-4 w-4" />
+      <Share2 className="h-4 w-4 sm:h-5 sm:w-5" />
       <span className="hidden sm:inline">Share</span>
     </Button>
   );

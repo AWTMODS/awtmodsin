@@ -139,13 +139,13 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
             <Link href={`/download/${app.slug}`} className="w-full sm:w-auto">
               <Button
                 size="lg"
-                className="w-full sm:w-auto rounded-2xl px-8 font-bold gap-2 text-base shadow-md h-13"
+                className="w-full sm:w-auto rounded-2xl px-8 sm:px-10 h-14 sm:h-[54px] font-bold gap-2.5 text-base sm:text-lg shadow-md hover:shadow-lg transition-all"
               >
-                <Download className="h-5 w-5" />
+                <Download className="h-5 w-5 sm:h-6 sm:w-6" />
                 <span>Download APK</span>
               </Button>
             </Link>
-            <ShareButton appName={app.name} />
+            <ShareButton appName={app.name} className="h-14 sm:h-[54px] px-6 rounded-2xl" />
           </div>
         </div>
 

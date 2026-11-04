@@ -251,12 +251,20 @@ export function AppsTable({ initialApps, categories }: AppsTableProps) {
 
                       {/* Downloads */}
                       <td className="py-3 px-4 font-mono text-xs">
-                        {formatNumber(app.downloads_count || 0)}
+                        {formatNumber(app.downloads_count ?? 0)}
                       </td>
 
                       {/* Action buttons */}
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-1.5">
+                          <Link
+                            href={`/admin/apps/${app.id}/edit`}
+                            className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted"
+                            title="Edit Application"
+                          >
+                            <Edit className="h-3.5 w-3.5" />
+                          </Link>
+
                           <Link
                             href={`/apps/${app.slug}`}
                             target="_blank"

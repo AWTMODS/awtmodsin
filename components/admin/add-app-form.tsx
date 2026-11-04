@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { AppCategory, HostingProvider } from "@/lib/types";
+import { AppCategory, HostingProvider, Application } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,6 +24,7 @@ import { toast } from "sonner";
 
 interface AddAppFormProps {
   categories: AppCategory[];
+  initialApp?: Application;
 }
 
 interface MirrorForm {
@@ -33,22 +34,31 @@ interface MirrorForm {
   is_primary: boolean;
 }
 
-export function AddAppForm({ categories }: AddAppFormProps) {
+export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
+  const isEditing = !!initialApp?.id;
 
   // SECTION A: Basic Info
-  const [name, setName] = useState("");
-  const [slug, setSlug] = useState("");
-  const [packageName, setPackageName] = useState("");
-  const [developer, setDeveloper] = useState("");
-  const [categoryId, setCategoryId] = useState(categories[0]?.id || "");
-  const [shortDescription, setShortDescription] = useState("");
-  const [description, setDescription] = useState("");
+  const [name, setName] = useState(initialApp?.name || "");
+  const [slug, setSlug] = useState(initialApp?.slug || "");
+  const [packageName, setPackageName] = useState(initialApp?.package_name || "");
+  const [developer, setDeveloper] = useState(initialApp?.developer || "");
+  const [categoryId, setCategoryId] = useState(
+    initialApp?.category_id || categories[0]?.id || ""
+  );
+  const [shortDescription, setShortDescription] = useState(
+    initialApp?.short_description || ""
+  );
+  const [description, setDescription] = useState(
+    initialApp?.description || ""
+  );
 
   // SECTION B: Images
-  const [iconUrl, setIconUrl] = useState("");
-  const [screenshots, setScreenshots] = useState<string[]>([]);
+  const [iconUrl, setIconUrl] = useState(initialApp?.icon_url || "");
+  const [screenshots, setScreenshots] = useState<string[]>(
+    initialApp?.screenshots?.map((s) => (typeof s === "string" ? s : s.image_url)) || []
+  );
   const [newScreenshotUrl, setNewScreenshotUrl] = useState("");
   const [uploadingIcon, setUploadingIcon] = useState(false);
   const [uploadingScreenshot, setUploadingScreenshot] = useState(false);
@@ -107,13 +117,27 @@ export function AddAppForm({ categories }: AddAppFormProps) {
   };
 
   // SECTION C: APK Info
-  const [versionName, setVersionName] = useState("v1.0.0");
-  const [versionCode, setVersionCode] = useState("1");
-  const [fileSize, setFileSize] = useState("");
-  const [architecture, setArchitecture] = useState("arm64-v8a");
-  const [androidRequirement, setAndroidRequirement] = useState("Android 7.0+");
-  const [sha256, setSha256] = useState("");
-  const [releaseNotes, setReleaseNotes] = useState("");
+  const [versionName, setVersionName] = useState(
+    initialApp?.latest_version?.version_name || "v1.0.0"
+  );
+  const [versionCode, setVersionCode] = useState(
+    initialApp?.latest_version?.version_code?.toString() || "1"
+  );
+  const [fileSize, setFileSize] = useState(
+    initialApp?.latest_version?.file_size || ""
+  );
+  const [architecture, setArchitecture] = useState(
+    initialApp?.latest_version?.architecture || "arm64-v8a"
+  );
+  const [androidRequirement, setAndroidRequirement] = useState(
+    initialApp?.android_requirement || "Android 7.0+"
+  );
+  const [sha256, setSha256] = useState(
+    initialApp?.latest_version?.sha256 || ""
+  );
+  const [releaseNotes, setReleaseNotes] = useState(
+    initialApp?.latest_version?.release_notes || ""
+  );
 
   // SECTION D: Download Source (Direct Upload vs External Links)
   const [downloadMethod, setDownloadMethod] = useState<"external" | "upload">(
@@ -204,19 +228,32 @@ export function AddAppForm({ categories }: AddAppFormProps) {
     }
   };
 
-  const [mirrors, setMirrors] = useState<MirrorForm[]>([
-    {
-      hosting_provider: "mediafire",
-      download_url: "",
-      mirror_name: "Primary Mirror",
-      is_primary: true,
-    },
-  ]);
+  const initialMirrors: MirrorForm[] =
+    initialApp?.latest_version?.download_sources &&
+    initialApp.latest_version.download_sources.length > 0
+      ? initialApp.latest_version.download_sources.map((m) => ({
+          hosting_provider: m.hosting_provider,
+          download_url: m.download_url,
+          mirror_name: m.mirror_name || "Primary Mirror",
+          is_primary: m.is_primary,
+        }))
+      : [
+          {
+            hosting_provider: "mediafire",
+            download_url: "",
+            mirror_name: "Primary Mirror",
+            is_primary: true,
+          },
+        ];
+
+  const [mirrors, setMirrors] = useState<MirrorForm[]>(initialMirrors);
 
   // SECTION E: Publishing Options
-  const [status, setStatus] = useState<"published" | "draft">("published");
-  const [isFeatured, setIsFeatured] = useState(false);
-  const [isTrending, setIsTrending] = useState(false);
+  const [status, setStatus] = useState<"published" | "draft">(
+    (initialApp?.status as "published" | "draft") || "published"
+  );
+  const [isFeatured, setIsFeatured] = useState(initialApp?.is_featured || false);
+  const [isTrending, setIsTrending] = useState(initialApp?.is_trending || false);
 
   // Auto slug generation from name
   const handleNameChange = (val: string) => {
@@ -341,20 +378,25 @@ export function AddAppForm({ categories }: AddAppFormProps) {
       },
     };
 
+    const targetUrl = isEditing ? `/api/admin/apps/${initialApp!.id}` : "/api/admin/apps";
+    const targetMethod = isEditing ? "PUT" : "POST";
+
     try {
-      const res = await fetch("/api/admin/apps", {
-        method: "POST",
+      const res = await fetch(targetUrl, {
+        method: targetMethod,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || "Failed to publish app");
+        throw new Error(data.error || "Failed to save app");
       }
 
       toast.success(
-        submitStatus === "published"
+        isEditing
+          ? "Application updated successfully!"
+          : submitStatus === "published"
           ? "Application published successfully!"
           : "Saved as draft"
       );
@@ -1010,7 +1052,7 @@ export function AddAppForm({ categories }: AddAppFormProps) {
             onClick={() => handleSubmit("draft")}
             className="w-full sm:w-auto rounded-xl px-6 font-semibold"
           >
-            Save as Draft
+            {isEditing ? "Update as Draft" : "Save as Draft"}
           </Button>
 
           <Button
@@ -1023,12 +1065,12 @@ export function AddAppForm({ categories }: AddAppFormProps) {
             {submitting ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Publishing...</span>
+                <span>{isEditing ? "Updating..." : "Publishing..."}</span>
               </>
             ) : (
               <>
                 <CheckCircle2 className="h-4 w-4" />
-                <span>Publish Application</span>
+                <span>{isEditing ? "Save & Update Application" : "Publish Application"}</span>
               </>
             )}
           </Button>

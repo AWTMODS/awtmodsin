@@ -2,6 +2,13 @@ import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { updateApplication, deleteApplication } from "@/lib/db";
 
+export async function PUT(
+  req: Request,
+  { params }: { params: { id: string } }
+) {
+  return PATCH(req, { params });
+}
+
 export async function PATCH(
   req: Request,
   { params }: { params: { id: string } }

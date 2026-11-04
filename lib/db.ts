@@ -249,6 +249,50 @@ export async function getApplicationBySlug(slug: string): Promise<Application | 
   return app || null;
 }
 
+export async function getApplicationById(id: string): Promise<Application | null> {
+  const supabase = getDbClient();
+
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from("applications")
+        .select(`
+          *,
+          category:categories(*),
+          versions:application_versions(
+            *,
+            download_sources(*)
+          ),
+          screenshots(*)
+        `)
+        .eq("id", id)
+        .single();
+
+      if (!error && data) {
+        const latest =
+          data.versions?.find((v: any) => v.is_latest) || data.versions?.[0];
+
+        const { count: dlCount } = await supabase
+          .from("downloads")
+          .select("id", { count: "exact", head: true })
+          .eq("application_id", data.id);
+
+        return {
+          ...data,
+          latest_version: latest,
+          versions: data.versions,
+          downloads_count: dlCount || 0,
+        };
+      }
+    } catch {
+      // Fallback
+    }
+  }
+
+  const app = memoryApps.find((a) => a.id === id);
+  return app || null;
+}
+
 export async function getCategories(): Promise<AppCategory[]> {
   const supabase = getDbClient();
 

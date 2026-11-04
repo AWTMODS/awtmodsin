@@ -1,6 +1,8 @@
 import { getApplications, getSiteStats } from "@/lib/db";
 import { AnalyticsView } from "@/components/admin/analytics-view";
 
+export const dynamic = "force-dynamic";
+
 export const metadata = {
   title: "Download Analytics | AWTMods Admin",
 };

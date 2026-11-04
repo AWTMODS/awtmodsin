@@ -403,16 +403,39 @@ export async function getAnalyticsChartData(days: number = 30) {
   const stepDays = days <= 7 ? 1 : days <= 30 ? 4 : 15;
   const numSteps = Math.ceil(days / stepDays);
 
+  const supabase = getDbClient();
+  let dbDownloads: any[] = [];
+  if (supabase) {
+    try {
+      const sinceDate = new Date(now.getTime() - days * 86400000).toISOString();
+      const { data } = await supabase
+        .from("downloads")
+        .select("downloaded_at")
+        .gte("downloaded_at", sinceDate);
+      if (data) {
+        dbDownloads = data;
+      }
+    } catch {
+      // Fallback
+    }
+  }
+
   for (let i = numSteps - 1; i >= 0; i--) {
-    const d = new Date(now.getTime() - i * stepDays * 86400000);
-    const dateLabel = d.toLocaleDateString("en-US", {
+    const stepStart = new Date(now.getTime() - (i + 1) * stepDays * 86400000);
+    const stepEnd = new Date(now.getTime() - i * stepDays * 86400000);
+    const dateLabel = stepEnd.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
     });
 
+    const count = dbDownloads.filter((d: any) => {
+      const t = new Date(d.downloaded_at).getTime();
+      return t >= stepStart.getTime() && t <= stepEnd.getTime();
+    }).length;
+
     points.push({
       date: dateLabel,
-      downloads: Math.floor(Math.random() * 50) + 10,
+      downloads: count,
     });
   }
 

@@ -1,6 +1,8 @@
 import { getApplications, getCategories } from "@/lib/db";
 import { AppsTable } from "@/components/admin/apps-table";
 
+export const dynamic = "force-dynamic";
+
 export const metadata = {
   title: "Application Management | AWTMods Admin",
 };

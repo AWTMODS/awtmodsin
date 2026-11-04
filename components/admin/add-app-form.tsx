@@ -50,6 +50,61 @@ export function AddAppForm({ categories }: AddAppFormProps) {
   const [iconUrl, setIconUrl] = useState("");
   const [screenshots, setScreenshots] = useState<string[]>([]);
   const [newScreenshotUrl, setNewScreenshotUrl] = useState("");
+  const [uploadingIcon, setUploadingIcon] = useState(false);
+  const [uploadingScreenshot, setUploadingScreenshot] = useState(false);
+
+  const handleFileUpload = async (file: File, folder: "icons" | "screenshots") => {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("folder", folder);
+
+    const res = await fetch("/api/admin/upload", {
+      method: "POST",
+      body: formData,
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || "Upload failed");
+    }
+    return data.url as string;
+  };
+
+  const handleIconUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingIcon(true);
+    try {
+      const url = await handleFileUpload(file, "icons");
+      setIconUrl(url);
+      toast.success("App icon uploaded to Cloudinary!");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to upload icon to Cloudinary");
+    } finally {
+      setUploadingIcon(false);
+      e.target.value = "";
+    }
+  };
+
+  const handleScreenshotUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setUploadingScreenshot(true);
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const url = await handleFileUpload(files[i], "screenshots");
+        setScreenshots((prev) => [...prev, url]);
+      }
+      toast.success("Screenshots uploaded to Cloudinary!");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to upload screenshots");
+    } finally {
+      setUploadingScreenshot(false);
+      e.target.value = "";
+    }
+  };
 
   // SECTION C: APK Info
   const [versionName, setVersionName] = useState("v1.0.0");
@@ -346,10 +401,15 @@ export function AddAppForm({ categories }: AddAppFormProps) {
 
         {/* Icon */}
         <div className="space-y-3">
-          <label className="text-xs font-semibold uppercase text-foreground">
-            App Icon URL <span className="text-destructive">*</span>
-          </label>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold uppercase text-foreground">
+              App Icon URL <span className="text-destructive">*</span>
+            </label>
+            <span className="text-[11px] text-muted-foreground">
+              Paste URL or upload image file to Cloudinary
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
             <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-2xl border border-border bg-muted flex items-center justify-center">
               {iconUrl ? (
                 <img
@@ -362,19 +422,68 @@ export function AddAppForm({ categories }: AddAppFormProps) {
               )}
             </div>
             <Input
-              placeholder="https://.../icon.png"
+              placeholder="https://res.cloudinary.com/.../icon.png"
               value={iconUrl}
               onChange={(e) => setIconUrl(e.target.value)}
               className="rounded-xl flex-1 font-mono text-xs"
             />
+            <label className="cursor-pointer">
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleIconUpload}
+                disabled={uploadingIcon}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="default"
+                disabled={uploadingIcon}
+                className="rounded-xl gap-2 shrink-0 pointer-events-none"
+              >
+                {uploadingIcon ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Upload className="h-4 w-4" />
+                )}
+                <span>{uploadingIcon ? "Uploading..." : "Upload Icon"}</span>
+              </Button>
+            </label>
           </div>
         </div>
 
         {/* Screenshots */}
         <div className="space-y-3 pt-3 border-t border-border/70">
-          <label className="text-xs font-semibold uppercase text-foreground">
-            Screenshots Gallery ({screenshots.length})
-          </label>
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold uppercase text-foreground">
+              Screenshots Gallery ({screenshots.length})
+            </label>
+            <label className="cursor-pointer">
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={handleScreenshotUpload}
+                disabled={uploadingScreenshot}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={uploadingScreenshot}
+                className="rounded-xl gap-2 shrink-0 pointer-events-none text-xs h-8"
+              >
+                {uploadingScreenshot ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Upload className="h-3.5 w-3.5" />
+                )}
+                <span>{uploadingScreenshot ? "Uploading..." : "Upload Screenshots"}</span>
+              </Button>
+            </label>
+          </div>
           <div className="flex flex-wrap gap-3">
             {screenshots.map((s, index) => (
               <div
@@ -395,7 +504,7 @@ export function AddAppForm({ categories }: AddAppFormProps) {
 
           <div className="flex items-center gap-2 pt-2">
             <Input
-              placeholder="Paste screenshot image URL (https://...)"
+              placeholder="Or paste screenshot image URL (https://...)"
               value={newScreenshotUrl}
               onChange={(e) => setNewScreenshotUrl(e.target.value)}
               className="rounded-xl text-xs"
@@ -407,7 +516,7 @@ export function AddAppForm({ categories }: AddAppFormProps) {
               className="rounded-xl shrink-0 gap-1.5"
             >
               <Plus className="h-4 w-4" />
-              <span>Add</span>
+              <span>Add URL</span>
             </Button>
           </div>
         </div>

@@ -137,7 +137,7 @@ export function AddAppForm({ categories }: AddAppFormProps) {
       return;
     }
     if (!packageName.trim()) {
-      toast.error("Package name is required");
+      toast.error("Package name is required (e.g. com.example.app)");
       return;
     }
     if (!iconUrl.trim()) {
@@ -145,36 +145,56 @@ export function AddAppForm({ categories }: AddAppFormProps) {
       return;
     }
 
+    const finalShortDesc =
+      shortDescription.trim() ||
+      `${name.trim()} modded application for Android. Download verified APK.`;
+
+    const finalDesc =
+      description.trim() ||
+      `${name.trim()} is an unlocked and optimized Android application offering full features, high speed, and verified APK safety.`;
+
+    const finalFileSize = fileSize.trim() || "50 MB";
+    const finalDeveloper = developer.trim() || "AWTMods Team";
+
+    if (finalShortDesc.length < 3) {
+      toast.error("Short description must be at least 3 characters");
+      return;
+    }
+    if (finalDesc.length < 5) {
+      toast.error("Full description must be at least 5 characters");
+      return;
+    }
+
     setSubmitting(true);
 
     const payload = {
-      name,
-      slug: slug || name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-      package_name: packageName,
-      developer,
+      name: name.trim(),
+      slug: slug.trim() || name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+      package_name: packageName.trim(),
+      developer: finalDeveloper,
       category_id: categoryId,
-      short_description: shortDescription || `${name} for Android.`,
-      description: description || `${name} modified version for Android devices.`,
-      icon_url: iconUrl,
+      short_description: finalShortDesc,
+      description: finalDesc,
+      icon_url: iconUrl.trim(),
       android_requirement: androidRequirement,
       is_featured: isFeatured,
       is_trending: isTrending,
       status: submitStatus,
       screenshots,
       version: {
-        version_name: versionName,
+        version_name: versionName.trim() || "v1.0.0",
         version_code: parseInt(versionCode, 10) || 1,
-        file_size: fileSize,
+        file_size: finalFileSize,
         architecture,
         android_requirement: androidRequirement,
-        sha256: sha256 || null,
-        release_notes: releaseNotes,
+        sha256: sha256.trim() || null,
+        release_notes: releaseNotes.trim() || "Initial release with unlocked features.",
         is_latest: true,
         status: submitStatus,
         download_sources: mirrors.map((m) => ({
           download_type: downloadMethod,
           hosting_provider: m.hosting_provider,
-          download_url: m.download_url || "https://www.mediafire.com",
+          download_url: m.download_url.trim() || "https://www.mediafire.com",
           mirror_name: m.mirror_name,
           is_primary: m.is_primary,
         })),
@@ -430,9 +450,10 @@ export function AddAppForm({ categories }: AddAppFormProps) {
 
           <div className="space-y-1.5">
             <label className="text-xs font-semibold uppercase text-foreground">
-              File Size
+              File Size <span className="text-muted-foreground font-normal">(optional, default: 50 MB)</span>
             </label>
             <Input
+              placeholder="e.g. 72 MB"
               value={fileSize}
               onChange={(e) => setFileSize(e.target.value)}
               className="rounded-xl font-mono text-xs"

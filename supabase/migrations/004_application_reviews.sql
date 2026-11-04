@@ -78,3 +78,4 @@ DROP TRIGGER IF EXISTS trg_sync_application_rating ON public.application_reviews
 CREATE TRIGGER trg_sync_application_rating
 AFTER INSERT OR UPDATE OR DELETE ON public.application_reviews
 FOR EACH ROW EXECUTE FUNCTION public.fn_sync_application_rating();
+

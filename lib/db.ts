@@ -528,6 +528,7 @@ export async function createApplication(
     latest_version: newVersion,
     versions: [newVersion],
     screenshots: (data.screenshots as any) || [],
+    mod_features: data.mod_features || [],
   };
 
   memoryApps.unshift(newApp);

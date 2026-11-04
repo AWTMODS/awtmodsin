@@ -19,6 +19,8 @@ import {
   Globe,
   Loader2,
   Eye,
+  X,
+  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -53,6 +55,47 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
   const [description, setDescription] = useState(
     initialApp?.description || ""
   );
+
+  // Mod Features Unlocked
+  const [modFeatures, setModFeatures] = useState<string[]>(
+    initialApp?.mod_features && initialApp.mod_features.length > 0
+      ? initialApp.mod_features
+      : [
+          "Premium Unlocked",
+          "Ad-Free Clean Experience",
+          "Verified Safe APK Build",
+          "High Performance & Smooth",
+        ]
+  );
+  const [newFeatureText, setNewFeatureText] = useState("");
+
+  const addModFeature = (featText?: string) => {
+    const text = (featText || newFeatureText).trim();
+    if (!text) return;
+    if (modFeatures.some((f) => f.toLowerCase() === text.toLowerCase())) {
+      toast.error("This feature is already added");
+      return;
+    }
+    setModFeatures((prev) => [...prev, text]);
+    if (!featText) setNewFeatureText("");
+  };
+
+  const removeModFeature = (idx: number) => {
+    setModFeatures((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const suggestedFeatures = [
+    "Premium Unlocked",
+    "Ad-Free Clean Experience",
+    "Unlimited Money / Coins",
+    "Immortal / God Mode",
+    "All Skins & Items Unlocked",
+    "Pro Filters & 4K Export",
+    "No Watermark",
+    "High Bitrate / Lossless Audio",
+    "Unlimited Energy / Lives",
+    "Offline Mode Enabled",
+  ];
 
   // SECTION B: Images
   const [iconUrl, setIconUrl] = useState(initialApp?.icon_url || "");
@@ -400,6 +443,7 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
       is_trending: isTrending,
       status: submitStatus,
       screenshots,
+      mod_features: modFeatures,
       version: {
         version_name: versionName.trim() || "v1.0.0",
         version_code: parseInt(versionCode, 10) || 1,
@@ -556,6 +600,94 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
               onChange={(e) => setDescription(e.target.value)}
               className="rounded-xl"
             />
+          </div>
+
+          {/* Mod Features Unlocked Builder */}
+          <div className="space-y-3 sm:col-span-2 pt-4 border-t border-border/70">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+              <label className="text-xs font-semibold uppercase text-foreground flex items-center gap-1.5">
+                <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+                <span>Mod Features Unlocked (Shown on App Page)</span>
+              </label>
+              <span className="text-[11px] text-muted-foreground">
+                Customize the exact unlocked perks for this specific application
+              </span>
+            </div>
+
+            <div className="flex gap-2">
+              <Input
+                placeholder="Type a feature (e.g. God Mode, Unlimited Money, No Ads) and press Enter"
+                value={newFeatureText}
+                onChange={(e) => setNewFeatureText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addModFeature();
+                  }
+                }}
+                className="rounded-xl flex-1"
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => addModFeature()}
+                className="rounded-xl px-4 gap-1.5 shrink-0 font-semibold"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Add Feature</span>
+              </Button>
+            </div>
+
+            {/* Quick Suggestion Chips */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+              <span className="text-[11px] font-medium text-muted-foreground mr-1">
+                Quick Add:
+              </span>
+              {suggestedFeatures.map((feat) => {
+                const alreadyAdded = modFeatures.some((f) => f.toLowerCase() === feat.toLowerCase());
+                return (
+                  <button
+                    key={feat}
+                    type="button"
+                    disabled={alreadyAdded}
+                    onClick={() => addModFeature(feat)}
+                    className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
+                      alreadyAdded
+                        ? "border-border/40 text-muted-foreground/40 cursor-not-allowed"
+                        : "border-border bg-secondary/50 hover:bg-secondary text-foreground hover:border-foreground/40"
+                    }`}
+                  >
+                    + {feat}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Current Feature Tags */}
+            <div className="flex flex-wrap gap-2 pt-2">
+              {modFeatures.map((feat, idx) => (
+                <div
+                  key={idx}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-secondary/40 text-xs font-medium text-foreground shadow-xs group"
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                  <span>{feat}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeModFeature(idx)}
+                    className="text-muted-foreground hover:text-destructive p-0.5 rounded-md transition-colors ml-0.5"
+                    title="Remove feature"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+              {modFeatures.length === 0 && (
+                <p className="text-xs text-muted-foreground italic">
+                  No custom mod features added yet. Use the input above or click quick tags.
+                </p>
+              )}
+            </div>
           </div>
         </div>
       </div>

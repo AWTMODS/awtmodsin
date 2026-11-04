@@ -48,6 +48,7 @@ export const applicationSchema = z.object({
   is_trending: z.boolean().default(false),
   status: z.enum(["published", "draft", "archived"]).default("published"),
   screenshots: z.array(z.string().url()).optional().default([]),
+  mod_features: z.array(z.string()).optional().default([]),
   version: versionSchema.optional(),
 });
 

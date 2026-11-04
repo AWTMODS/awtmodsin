@@ -266,37 +266,29 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
             </p>
 
             {/* Features Checklist (2 columns) */}
-            <div className="pt-4 border-t border-border/70">
-              <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider mb-4">
-                Mod Features Unlocked
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                  <span>Premium Unlocked (No Subscription)</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                  <span>Download for Offline Use</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                  <span>Ad-Free Clean Experience</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                  <span>Play Any Song / Unlimited Skips</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                  <span>High-Quality Audio & Bitrate</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                  <span>Lightweight, Stable & Battery Efficient</span>
+            {((app.mod_features && app.mod_features.length > 0) || !app.mod_features) && (
+              <div className="pt-4 border-t border-border/70">
+                <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider mb-4">
+                  Mod Features Unlocked
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                  {(app.mod_features && app.mod_features.length > 0
+                    ? app.mod_features
+                    : [
+                        "Premium Unlocked",
+                        "Ad-Free Clean Experience",
+                        "Verified Safe APK Build",
+                        "Optimized & Battery Efficient",
+                      ]
+                  ).map((feature, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                      <span className="text-foreground font-medium">{feature}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
-            </div>
+            )}
 
             {/* What's New Box */}
             {latestVersion?.release_notes && (

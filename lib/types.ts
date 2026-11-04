@@ -84,6 +84,7 @@ export type Application = {
   versions?: ApplicationVersion[];
   screenshots?: AppScreenshot[];
   downloads_count?: number;
+  mod_features?: string[];
 };
 
 export type DownloadEvent = {

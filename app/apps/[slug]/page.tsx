@@ -157,10 +157,14 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
             </div>
             <div>
               <div className="text-sm font-bold text-foreground">
-                {app.rating.toFixed(1)} ★
+                {app.rating && Number(app.rating) > 0
+                  ? `${Number(app.rating).toFixed(1)} ★`
+                  : "0.0 ★"}
               </div>
               <div className="text-[11px] text-muted-foreground">
-                ({formatNumber(app.reviews_count)} Reviews)
+                {app.reviews_count && Number(app.reviews_count) > 0
+                  ? `(${formatNumber(app.reviews_count)} Reviews)`
+                  : "(0 Reviews)"}
               </div>
             </div>
           </div>
@@ -171,7 +175,7 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
             </div>
             <div>
               <div className="text-sm font-bold text-foreground">
-                {formatNumber(app.downloads_count || 100000)}
+                {formatNumber(app.downloads_count ?? 0)}
               </div>
               <div className="text-[11px] text-muted-foreground">Downloads</div>
             </div>

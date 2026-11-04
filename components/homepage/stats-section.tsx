@@ -12,7 +12,7 @@ interface StatsProps {
 
 export function StatsSection({ stats }: StatsProps) {
   const totalApps = stats?.totalApps ?? 0;
-  const totalDownloads = stats?.totalDownloads ?? 250000;
+  const totalDownloads = stats?.totalDownloads ?? 0;
   const totalCategories = stats?.totalCategories ?? 0;
   const recentUpdates = stats?.recentUpdates ?? 0;
 

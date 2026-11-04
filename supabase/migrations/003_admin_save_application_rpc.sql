@@ -37,6 +37,8 @@ BEGIN
       is_featured = COALESCE((p_app->>'is_featured')::boolean, false),
       is_trending = COALESCE((p_app->>'is_trending')::boolean, false),
       status = COALESCE(p_app->>'status', 'published'),
+      rating = COALESCE((p_app->>'rating')::numeric, rating),
+      reviews_count = COALESCE((p_app->>'reviews_count')::int, reviews_count),
       updated_at = NOW()
     WHERE id = v_app_id;
   ELSE
@@ -60,8 +62,8 @@ BEGIN
       COALESCE((p_app->>'is_featured')::boolean, false),
       COALESCE((p_app->>'is_trending')::boolean, false),
       COALESCE(p_app->>'status', 'published'),
-      4.8,
-      120
+      COALESCE((p_app->>'rating')::numeric, 0.0),
+      COALESCE((p_app->>'reviews_count')::int, 0)
     )
     RETURNING id INTO v_app_id;
   END IF;

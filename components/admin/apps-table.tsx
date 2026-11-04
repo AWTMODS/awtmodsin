@@ -251,7 +251,7 @@ export function AppsTable({ initialApps, categories }: AppsTableProps) {
 
                       {/* Downloads */}
                       <td className="py-3 px-4 font-mono text-xs">
-                        {formatNumber(app.downloads_count || 1000)}
+                        {formatNumber(app.downloads_count || 0)}
                       </td>
 
                       {/* Action buttons */}

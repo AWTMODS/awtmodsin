@@ -120,8 +120,23 @@ export async function getApplications(options?: {
 
       const { data, count, error } = await query;
       if (!error && data) {
+        // Fetch original download counts from downloads table
+        const appIds = data.map((item: any) => item.id);
+        const { data: dlData } = await supabase
+          .from("downloads")
+          .select("application_id")
+          .in("application_id", appIds);
+
+        const dlCounts: Record<string, number> = {};
+        if (dlData) {
+          dlData.forEach((row: any) => {
+            dlCounts[row.application_id] = (dlCounts[row.application_id] || 0) + 1;
+          });
+        }
+
         const apps = data.map((item: any) => ({
           ...item,
+          downloads_count: dlCounts[item.id] || 0,
           latest_version:
             item.versions?.find((v: any) => v.is_latest) || item.versions?.[0],
         }));
@@ -211,10 +226,18 @@ export async function getApplicationBySlug(slug: string): Promise<Application | 
       if (!error && data) {
         const latest =
           data.versions?.find((v: any) => v.is_latest) || data.versions?.[0];
+
+        // Fetch original real download count for this app
+        const { count: dlCount } = await supabase
+          .from("downloads")
+          .select("id", { count: "exact", head: true })
+          .eq("application_id", data.id);
+
         return {
           ...data,
           latest_version: latest,
           versions: data.versions,
+          downloads_count: dlCount || 0,
         };
       }
     } catch {
@@ -309,7 +332,7 @@ export async function getSiteStats() {
 
       const totalApps = appsCount.count || 0;
       const totalCategories = catsCount.count || 0;
-      const totalDownloads = (dlsCount.count || 0) + 250000; // Baseline platform count
+      const totalDownloads = dlsCount.count || 0; // Original live platform count
 
       return {
         totalApps,
@@ -324,7 +347,7 @@ export async function getSiteStats() {
 
   return {
     totalApps: memoryApps.filter((a) => a.status === "published").length,
-    totalDownloads: 250000 + memoryDownloads.length,
+    totalDownloads: memoryDownloads.length,
     totalCategories: memoryCategories.filter((c) => c.is_active).length,
     recentUpdates: memoryApps.length,
   };
@@ -420,8 +443,8 @@ export async function createApplication(
     is_featured: !!data.is_featured,
     is_trending: !!data.is_trending,
     status: data.status || "published",
-    rating: 5.0,
-    reviews_count: 1,
+    rating: 0,
+    reviews_count: 0,
     downloads_count: 0,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),

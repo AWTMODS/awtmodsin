@@ -20,13 +20,14 @@ import {
   ExternalLink,
   Send,
 } from "lucide-react";
-import { getApplicationBySlug, getApplications } from "@/lib/db";
+import { getApplicationBySlug, getApplications, getApplicationReviews } from "@/lib/db";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AppCard } from "@/components/applications/app-card";
 import { AppIcon } from "@/components/applications/app-icon";
 import { ScreenshotsGallery } from "@/components/applications/screenshots-gallery";
 import { ShareButton } from "@/components/applications/share-button";
+import { ReviewsSection } from "@/components/applications/reviews-section";
 import { formatDate, formatNumber, getAppUrl, getDownloadUrl, cleanAppSlug } from "@/lib/utils";
 
 interface AppDetailProps {
@@ -64,11 +65,14 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
     redirect(`/apps/${canonicalSlug}`);
   }
 
-  // Get related applications from same category
-  const { applications: relatedApps } = await getApplications({
-    categorySlug: app.category?.slug,
-    limit: 5,
-  });
+  // Get related applications from same category and app reviews
+  const [{ applications: relatedApps }, reviews] = await Promise.all([
+    getApplications({
+      categorySlug: app.category?.slug,
+      limit: 5,
+    }),
+    getApplicationReviews(app.id),
+  ]);
 
   const filteredRelated = relatedApps.filter((a) => a.id !== app.id).slice(0, 4);
 
@@ -176,23 +180,29 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
 
         {/* Stats Strip */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-6 mt-6 border-t border-border/70">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-secondary flex items-center justify-center shrink-0 border border-border">
+          <a
+            href="#reviews"
+            className="flex items-center gap-3 group hover:opacity-85 transition-all cursor-pointer"
+            title="Click to view or write reviews"
+          >
+            <div className="h-10 w-10 rounded-xl bg-secondary flex items-center justify-center shrink-0 border border-border group-hover:border-amber-500/50 transition-colors">
               <Star className="h-5 w-5 text-amber-500 fill-amber-500" />
             </div>
             <div>
-              <div className="text-sm font-bold text-foreground">
-                {app.rating && Number(app.rating) > 0
-                  ? `${Number(app.rating).toFixed(1)} ★`
-                  : "0.0 ★"}
+              <div className="text-sm font-bold text-foreground flex items-center gap-1">
+                <span>
+                  {app.rating && Number(app.rating) > 0
+                    ? `${Number(app.rating).toFixed(1)} ★`
+                    : "0.0 ★"}
+                </span>
               </div>
-              <div className="text-[11px] text-muted-foreground">
+              <div className="text-[11px] text-muted-foreground group-hover:text-foreground group-hover:underline transition-colors">
                 {app.reviews_count && Number(app.reviews_count) > 0
                   ? `(${formatNumber(app.reviews_count)} Reviews)`
                   : "(0 Reviews)"}
               </div>
             </div>
-          </div>
+          </a>
 
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-xl bg-secondary flex items-center justify-center shrink-0 border border-border">
@@ -396,6 +406,15 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
               </div>
             </div>
           )}
+
+          {/* User Reviews & Ratings Section */}
+          <ReviewsSection
+            applicationId={app.id}
+            appName={app.name}
+            initialReviews={reviews}
+            currentRating={Number(app.rating) || 0}
+            currentReviewsCount={app.reviews_count || 0}
+          />
         </div>
 
         {/* Right Column: App Information Sidebar */}

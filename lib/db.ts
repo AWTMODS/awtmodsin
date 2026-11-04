@@ -12,6 +12,7 @@ import {
   SiteSettings,
   UserReport,
   DownloadEvent,
+  ApplicationReview,
 } from "./types";
 
 const DEFAULT_SUPABASE_URL = "https://uzmskxruuvfgokststox.supabase.co";
@@ -827,4 +828,63 @@ export async function updateSiteSettings(
     ...updates,
   };
   return memorySettings;
+}
+
+// ==========================================
+// APPLICATION REVIEWS & RATINGS
+// ==========================================
+
+export async function getApplicationReviews(
+  applicationId: string
+): Promise<ApplicationReview[]> {
+  const supabase = getDbClient();
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from("application_reviews")
+        .select("*")
+        .eq("application_id", applicationId)
+        .order("created_at", { ascending: false });
+
+      if (!error && data) {
+        return data as ApplicationReview[];
+      }
+    } catch (err) {
+      console.error("getApplicationReviews error:", err);
+    }
+  }
+  return [];
+}
+
+export async function createApplicationReview(data: {
+  applicationId: string;
+  userName: string;
+  rating: number;
+  comment: string;
+}): Promise<ApplicationReview | null> {
+  const supabase = getDbClient();
+  if (supabase) {
+    try {
+      const { data: inserted, error } = await supabase
+        .from("application_reviews")
+        .insert({
+          application_id: data.applicationId,
+          user_name: data.userName.trim(),
+          rating: data.rating,
+          comment: data.comment.trim(),
+        })
+        .select()
+        .single();
+
+      if (!error && inserted) {
+        return inserted as ApplicationReview;
+      }
+      if (error) {
+        console.error("createApplicationReview error:", error);
+      }
+    } catch (err) {
+      console.error("createApplicationReview exception:", err);
+    }
+  }
+  return null;
 }

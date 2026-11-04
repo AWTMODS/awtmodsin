@@ -149,3 +149,13 @@ export type SiteSettings = {
   allowedProviders: HostingProvider[];
 };
 
+export type ApplicationReview = {
+  id: string;
+  application_id: string;
+  user_name: string;
+  rating: number;
+  comment: string;
+  created_at: string;
+};
+
+

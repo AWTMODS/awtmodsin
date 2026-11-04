@@ -3,16 +3,6 @@ import { uploadBufferToR2 } from "@/lib/r2";
 
 export async function POST(req: Request) {
   try {
-    if (!process.env.R2_ACCESS_KEY_ID || !process.env.R2_SECRET_ACCESS_KEY) {
-      return NextResponse.json(
-        {
-          error:
-            "Cloudflare R2 credentials are missing. Please ensure R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY are set.",
-        },
-        { status: 503 }
-      );
-    }
-
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
 
@@ -46,4 +36,3 @@ export async function POST(req: Request) {
     );
   }
 }
-

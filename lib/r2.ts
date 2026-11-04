@@ -1,21 +1,30 @@
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { getEnv } from "./env";
 
-const accountId = process.env.R2_ACCOUNT_ID || "3aa3beaf7fea2a73879df0c02a516526";
-const endpoint = process.env.R2_ENDPOINT || `https://${accountId}.r2.cloudflarestorage.com`;
+export function getR2Config() {
+  const accountId = getEnv("R2_ACCOUNT_ID", "3aa3beaf7fea2a73879df0c02a516526");
+  const endpoint = getEnv("R2_ENDPOINT", `https://${accountId}.r2.cloudflarestorage.com`);
+  const accessKeyId = getEnv("R2_ACCESS_KEY_ID", "09f923767decc8bf4d1ca3d96741cfdf");
+  const secretAccessKey = getEnv("R2_SECRET_ACCESS_KEY", "c11f09735f1fdc596d7ec20dd66b187dfdb2a40004618ffdf9beab76091a92fc");
+  const bucket = getEnv("R2_BUCKET_NAME", "awtmods-apks");
+  const publicBaseUrl = getEnv("R2_PUBLIC_BASE_URL", `https://pub-${accountId}.r2.dev`);
 
-export const r2Client = new S3Client({
-  region: "auto",
-  endpoint,
-  credentials: {
-    accessKeyId: process.env.R2_ACCESS_KEY_ID || "",
-    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || "",
-  },
-});
+  return { accountId, endpoint, accessKeyId, secretAccessKey, bucket, publicBaseUrl };
+}
 
-export const R2_BUCKET = process.env.R2_BUCKET_NAME || "awtmods-apks";
-export const R2_PUBLIC_URL =
-  process.env.R2_PUBLIC_BASE_URL || `https://pub-${accountId}.r2.dev`;
+export function getR2Client(): S3Client {
+  const { endpoint, accessKeyId, secretAccessKey } = getR2Config();
+
+  return new S3Client({
+    region: "auto",
+    endpoint,
+    credentials: {
+      accessKeyId,
+      secretAccessKey,
+    },
+  });
+}
 
 /**
  * Generate a pre-signed PUT URL so the client can upload large APK files
@@ -25,17 +34,20 @@ export async function generateR2PresignedUpload(
   filename: string,
   contentType = "application/vnd.android.package-archive"
 ): Promise<{ uploadUrl: string; publicUrl: string; key: string }> {
+  const { bucket, publicBaseUrl } = getR2Config();
+  const client = getR2Client();
+
   const safeFilename = filename.replace(/[^a-zA-Z0-9.-]/g, "_");
   const key = `apks/${Date.now()}-${safeFilename}`;
 
   const command = new PutObjectCommand({
-    Bucket: R2_BUCKET,
+    Bucket: bucket,
     Key: key,
     ContentType: contentType,
   });
 
-  const uploadUrl = await getSignedUrl(r2Client, command, { expiresIn: 3600 });
-  const publicUrl = `${R2_PUBLIC_URL}/${key}`;
+  const uploadUrl = await getSignedUrl(client, command, { expiresIn: 3600 });
+  const publicUrl = `${publicBaseUrl}/${key}`;
 
   return { uploadUrl, publicUrl, key };
 }
@@ -48,17 +60,19 @@ export async function uploadBufferToR2(
   buffer: Buffer,
   contentType = "application/vnd.android.package-archive"
 ): Promise<string> {
+  const { bucket, publicBaseUrl } = getR2Config();
+  const client = getR2Client();
+
   const safeFilename = filename.replace(/[^a-zA-Z0-9.-]/g, "_");
   const key = `apks/${Date.now()}-${safeFilename}`;
 
   const command = new PutObjectCommand({
-    Bucket: R2_BUCKET,
+    Bucket: bucket,
     Key: key,
     Body: buffer,
     ContentType: contentType,
   });
 
-  await r2Client.send(command);
-  return `${R2_PUBLIC_URL}/${key}`;
+  await client.send(command);
+  return `${publicBaseUrl}/${key}`;
 }
-

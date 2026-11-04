@@ -3,16 +3,6 @@ import { generateR2PresignedUpload } from "@/lib/r2";
 
 export async function POST(req: Request) {
   try {
-    if (!process.env.R2_ACCESS_KEY_ID || !process.env.R2_SECRET_ACCESS_KEY) {
-      return NextResponse.json(
-        {
-          error:
-            "Cloudflare R2 credentials are missing in .env.local. Please ensure R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY are set.",
-        },
-        { status: 503 }
-      );
-    }
-
     const { filename, contentType } = await req.json();
 
     if (!filename) {
@@ -41,4 +31,3 @@ export async function POST(req: Request) {
     );
   }
 }
-

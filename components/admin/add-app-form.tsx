@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { AppCategory, HostingProvider, Application } from "@/lib/types";
@@ -62,6 +62,10 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
   const [newScreenshotUrl, setNewScreenshotUrl] = useState("");
   const [uploadingIcon, setUploadingIcon] = useState(false);
   const [uploadingScreenshot, setUploadingScreenshot] = useState(false);
+
+  const iconInputRef = useRef<HTMLInputElement>(null);
+  const screenshotInputRef = useRef<HTMLInputElement>(null);
+  const apkInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileUpload = async (file: File, folder: "icons" | "screenshots") => {
     const formData = new FormData();
@@ -148,69 +152,95 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
   const [uploadedApkUrl, setUploadedApkUrl] = useState("");
   const [uploadedApkName, setUploadedApkName] = useState("");
 
-  const handleApkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const handleApkFileSelected = async (file: File) => {
     if (!file) return;
 
     setUploadingApk(true);
-    setApkProgress(0);
+    setApkProgress(10);
+
+    const formattedSize = `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
+    setFileSize(formattedSize);
 
     try {
-      // 1. Get presigned upload URL from Cloudflare R2
-      const presignRes = await fetch("/api/admin/r2/presign", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          filename: file.name,
-          contentType: file.type || "application/vnd.android.package-archive",
-        }),
-      });
+      let finalPublicUrl = "";
 
-      const presignData = await presignRes.json();
-      if (!presignRes.ok) {
-        throw new Error(presignData.error || "Failed to initialize Cloudflare R2 storage");
+      // 1. Try Direct Presigned Upload to Cloudflare R2
+      try {
+        const presignRes = await fetch("/api/admin/r2/presign", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            filename: file.name,
+            contentType: file.type || "application/vnd.android.package-archive",
+          }),
+        });
+
+        if (presignRes.ok) {
+          const presignData = await presignRes.json();
+          if (presignData.uploadUrl) {
+            await new Promise<void>((resolve, reject) => {
+              const xhr = new XMLHttpRequest();
+              xhr.open("PUT", presignData.uploadUrl, true);
+              xhr.setRequestHeader(
+                "Content-Type",
+                file.type || "application/vnd.android.package-archive"
+              );
+
+              xhr.upload.onprogress = (event) => {
+                if (event.lengthComputable) {
+                  const percent = Math.round((event.loaded / event.total) * 90);
+                  setApkProgress(Math.max(15, percent));
+                }
+              };
+
+              xhr.onload = () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                  finalPublicUrl = presignData.publicUrl;
+                  resolve();
+                } else {
+                  reject(new Error(`Direct R2 upload status ${xhr.status}`));
+                }
+              };
+
+              xhr.onerror = () =>
+                reject(new Error("Direct R2 upload CORS or network error"));
+
+              xhr.send(file);
+            });
+          }
+        }
+      } catch (directErr) {
+        console.warn("Direct R2 PUT failed, switching to server proxy upload:", directErr);
       }
 
-      // 2. Direct streaming upload to Cloudflare R2 with progress
-      await new Promise<void>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open("PUT", presignData.uploadUrl, true);
-        xhr.setRequestHeader(
-          "Content-Type",
-          file.type || "application/vnd.android.package-archive"
-        );
+      // 2. If direct PUT failed (e.g. CORS), upload through server-side R2 pipeline
+      if (!finalPublicUrl) {
+        setApkProgress(60);
+        const formData = new FormData();
+        formData.append("file", file);
 
-        xhr.upload.onprogress = (event) => {
-          if (event.lengthComputable) {
-            const percent = Math.round((event.loaded / event.total) * 100);
-            setApkProgress(percent);
-          }
-        };
+        const uploadRes = await fetch("/api/admin/r2/upload", {
+          method: "POST",
+          body: formData,
+        });
 
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            resolve();
-          } else {
-            reject(new Error(`Cloudflare R2 rejected upload (${xhr.status})`));
-          }
-        };
+        const uploadData = await uploadRes.json();
+        if (!uploadRes.ok || !uploadData.publicUrl) {
+          throw new Error(uploadData.error || "Failed to upload APK to Cloudflare R2");
+        }
 
-        xhr.onerror = () =>
-          reject(new Error("Network error during APK upload to Cloudflare R2"));
+        finalPublicUrl = uploadData.publicUrl;
+      }
 
-        xhr.send(file);
-      });
-
-      const formattedSize = `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
-      setFileSize(formattedSize);
-      setUploadedApkUrl(presignData.publicUrl);
+      setApkProgress(100);
+      setUploadedApkUrl(finalPublicUrl);
       setUploadedApkName(file.name);
 
       // Set primary mirror to the R2 URL
       setMirrors((prev) => [
         {
           hosting_provider: "cloudflare_r2",
-          download_url: presignData.publicUrl,
+          download_url: finalPublicUrl,
           mirror_name: "High-Speed Direct Mirror (Cloudflare R2)",
           is_primary: true,
         },
@@ -218,7 +248,7 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
       ]);
 
       toast.success(
-        `APK uploaded to Cloudflare R2 successfully! (${formattedSize})`
+        `APK stored in Cloudflare R2 successfully! (${formattedSize})`
       );
     } catch (err: any) {
       console.error(err);
@@ -226,6 +256,14 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
     } finally {
       setUploadingApk(false);
     }
+  };
+
+  const handleApkUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleApkFileSelected(file);
+    }
+    e.target.value = "";
   };
 
   const initialMirrors: MirrorForm[] =
@@ -554,29 +592,29 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
               onChange={(e) => setIconUrl(e.target.value)}
               className="rounded-xl flex-1 font-mono text-xs"
             />
-            <label className="cursor-pointer">
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleIconUpload}
-                disabled={uploadingIcon}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="default"
-                disabled={uploadingIcon}
-                className="rounded-xl gap-2 shrink-0 pointer-events-none"
-              >
-                {uploadingIcon ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Upload className="h-4 w-4" />
-                )}
-                <span>{uploadingIcon ? "Uploading..." : "Upload Icon"}</span>
-              </Button>
-            </label>
+            <input
+              ref={iconInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleIconUpload}
+              disabled={uploadingIcon}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="default"
+              onClick={() => iconInputRef.current?.click()}
+              disabled={uploadingIcon}
+              className="rounded-xl gap-2 shrink-0 text-xs"
+            >
+              {uploadingIcon ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Upload className="h-4 w-4" />
+              )}
+              <span>{uploadingIcon ? "Uploading..." : "Upload Icon"}</span>
+            </Button>
           </div>
         </div>
 
@@ -586,30 +624,30 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
             <label className="text-xs font-semibold uppercase text-foreground">
               Screenshots Gallery ({screenshots.length})
             </label>
-            <label className="cursor-pointer">
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                className="hidden"
-                onChange={handleScreenshotUpload}
-                disabled={uploadingScreenshot}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={uploadingScreenshot}
-                className="rounded-xl gap-2 shrink-0 pointer-events-none text-xs h-8"
-              >
-                {uploadingScreenshot ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Upload className="h-3.5 w-3.5" />
-                )}
-                <span>{uploadingScreenshot ? "Uploading..." : "Upload Screenshots"}</span>
-              </Button>
-            </label>
+            <input
+              ref={screenshotInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={handleScreenshotUpload}
+              disabled={uploadingScreenshot}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => screenshotInputRef.current?.click()}
+              disabled={uploadingScreenshot}
+              className="rounded-xl gap-2 shrink-0 text-xs h-8"
+            >
+              {uploadingScreenshot ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Upload className="h-3.5 w-3.5" />
+              )}
+              <span>{uploadingScreenshot ? "Uploading..." : "Upload Screenshots"}</span>
+            </Button>
           </div>
           <div className="flex flex-wrap gap-3">
             {screenshots.map((s, index) => (
@@ -784,7 +822,19 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
         </div>
 
         {downloadMethod === "upload" ? (
-          <div className="border border-dashed border-border rounded-2xl p-8 text-center bg-secondary/20 space-y-4">
+          <div
+            className="border-2 border-dashed border-border hover:border-neutral-400 dark:hover:border-neutral-600 transition-colors rounded-2xl p-8 text-center bg-secondary/20 space-y-4"
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const f = e.dataTransfer.files?.[0];
+              if (f) handleApkFileSelected(f);
+            }}
+          >
             <div className="mx-auto w-14 h-14 rounded-2xl bg-secondary border border-border flex items-center justify-center text-foreground">
               {uploadingApk ? (
                 <Loader2 className="h-6 w-6 animate-spin text-foreground" />
@@ -824,44 +874,41 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
               </div>
             )}
 
+            {/* Hidden native file input controlled via apkInputRef */}
+            <input
+              ref={apkInputRef}
+              type="file"
+              accept=".apk,.APK,application/vnd.android.package-archive,*/*"
+              className="hidden"
+              onChange={handleApkUpload}
+              disabled={uploadingApk}
+            />
+
             {uploadedApkUrl ? (
               <div className="flex flex-col items-center gap-2 pt-1">
                 <div className="text-xs font-mono bg-card px-3 py-1.5 rounded-xl border border-border text-muted-foreground break-all max-w-md">
                   {uploadedApkUrl}
                 </div>
-                <label className="cursor-pointer pt-1">
-                  <input
-                    type="file"
-                    accept=".apk"
-                    className="hidden"
-                    onChange={handleApkUpload}
-                    disabled={uploadingApk}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="rounded-xl text-xs gap-1.5 pointer-events-none"
-                  >
-                    <Upload className="h-3.5 w-3.5" />
-                    <span>Replace APK</span>
-                  </Button>
-                </label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => apkInputRef.current?.click()}
+                  disabled={uploadingApk}
+                  className="rounded-xl text-xs gap-1.5"
+                >
+                  <Upload className="h-3.5 w-3.5" />
+                  <span>Replace APK</span>
+                </Button>
               </div>
             ) : (
-              <label className="cursor-pointer inline-block">
-                <input
-                  type="file"
-                  accept=".apk"
-                  className="hidden"
-                  onChange={handleApkUpload}
-                  disabled={uploadingApk}
-                />
+              <div>
                 <Button
                   type="button"
                   variant="default"
+                  onClick={() => apkInputRef.current?.click()}
                   disabled={uploadingApk}
-                  className="rounded-xl gap-2 font-semibold text-xs pointer-events-none px-5"
+                  className="rounded-xl gap-2 font-bold text-sm px-6 h-12 shadow-md hover:scale-[1.02] active:scale-[0.98] transition-transform"
                 >
                   {uploadingApk ? (
                     <>
@@ -875,7 +922,10 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
                     </>
                   )}
                 </Button>
-              </label>
+                <p className="text-[11px] text-muted-foreground mt-2">
+                  Or drag &amp; drop your .apk file directly into this area
+                </p>
+              </div>
             )}
           </div>
         ) : (

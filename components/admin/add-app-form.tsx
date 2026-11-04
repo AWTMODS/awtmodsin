@@ -119,6 +119,91 @@ export function AddAppForm({ categories }: AddAppFormProps) {
   const [downloadMethod, setDownloadMethod] = useState<"external" | "upload">(
     "external"
   );
+  const [uploadingApk, setUploadingApk] = useState(false);
+  const [apkProgress, setApkProgress] = useState(0);
+  const [uploadedApkUrl, setUploadedApkUrl] = useState("");
+  const [uploadedApkName, setUploadedApkName] = useState("");
+
+  const handleApkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingApk(true);
+    setApkProgress(0);
+
+    try {
+      // 1. Get presigned upload URL from Cloudflare R2
+      const presignRes = await fetch("/api/admin/r2/presign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: file.name,
+          contentType: file.type || "application/vnd.android.package-archive",
+        }),
+      });
+
+      const presignData = await presignRes.json();
+      if (!presignRes.ok) {
+        throw new Error(presignData.error || "Failed to initialize Cloudflare R2 storage");
+      }
+
+      // 2. Direct streaming upload to Cloudflare R2 with progress
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("PUT", presignData.uploadUrl, true);
+        xhr.setRequestHeader(
+          "Content-Type",
+          file.type || "application/vnd.android.package-archive"
+        );
+
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            const percent = Math.round((event.loaded / event.total) * 100);
+            setApkProgress(percent);
+          }
+        };
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve();
+          } else {
+            reject(new Error(`Cloudflare R2 rejected upload (${xhr.status})`));
+          }
+        };
+
+        xhr.onerror = () =>
+          reject(new Error("Network error during APK upload to Cloudflare R2"));
+
+        xhr.send(file);
+      });
+
+      const formattedSize = `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
+      setFileSize(formattedSize);
+      setUploadedApkUrl(presignData.publicUrl);
+      setUploadedApkName(file.name);
+
+      // Set primary mirror to the R2 URL
+      setMirrors((prev) => [
+        {
+          hosting_provider: "cloudflare_r2",
+          download_url: presignData.publicUrl,
+          mirror_name: "High-Speed Direct Mirror (Cloudflare R2)",
+          is_primary: true,
+        },
+        ...prev.map((m) => ({ ...m, is_primary: false })),
+      ]);
+
+      toast.success(
+        `APK uploaded to Cloudflare R2 successfully! (${formattedSize})`
+      );
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "Failed to upload APK to Cloudflare R2");
+    } finally {
+      setUploadingApk(false);
+    }
+  };
+
   const [mirrors, setMirrors] = useState<MirrorForm[]>([
     {
       hosting_provider: "mediafire",
@@ -657,28 +742,99 @@ export function AddAppForm({ categories }: AddAppFormProps) {
         </div>
 
         {downloadMethod === "upload" ? (
-          <div className="border border-dashed border-border rounded-2xl p-8 text-center bg-secondary/20 space-y-3">
-            <HardDrive className="h-10 w-10 text-muted-foreground mx-auto" />
+          <div className="border border-dashed border-border rounded-2xl p-8 text-center bg-secondary/20 space-y-4">
+            <div className="mx-auto w-14 h-14 rounded-2xl bg-secondary border border-border flex items-center justify-center text-foreground">
+              {uploadingApk ? (
+                <Loader2 className="h-6 w-6 animate-spin text-foreground" />
+              ) : uploadedApkUrl ? (
+                <CheckCircle2 className="h-7 w-7 text-emerald-500" />
+              ) : (
+                <HardDrive className="h-7 w-7 text-muted-foreground" />
+              )}
+            </div>
+
             <div className="space-y-1">
               <div className="text-sm font-bold text-foreground">
-                Direct APK Upload
+                {uploadedApkUrl
+                  ? "APK Stored in Cloudflare R2"
+                  : uploadingApk
+                  ? `Uploading to Cloudflare R2... ${apkProgress}%`
+                  : "Direct APK Upload to Cloudflare R2"}
               </div>
-              <p className="text-xs text-muted-foreground">
-                Drop your signed APK file here or browse storage (Max 2GB).
+              <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+                {uploadedApkUrl
+                  ? `${uploadedApkName} (${fileSize}) is uploaded and configured as your high-speed primary mirror.`
+                  : "Select or drop a signed .apk file to upload directly to your Cloudflare R2 bucket (up to 2GB)."}
               </p>
             </div>
-            <Input
-              type="file"
-              accept=".apk"
-              className="max-w-xs mx-auto text-xs"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) {
-                  setFileSize(`${(file.size / (1024 * 1024)).toFixed(1)} MB`);
-                  toast.success(`Selected ${file.name} (${(file.size / (1024 * 1024)).toFixed(1)} MB)`);
-                }
-              }}
-            />
+
+            {uploadingApk && (
+              <div className="max-w-xs mx-auto space-y-1.5">
+                <div className="w-full bg-secondary rounded-full h-2 overflow-hidden border border-border">
+                  <div
+                    className="bg-foreground h-full transition-all duration-200 rounded-full"
+                    style={{ width: `${apkProgress}%` }}
+                  />
+                </div>
+                <div className="text-[11px] font-mono text-muted-foreground text-right">
+                  {apkProgress}%
+                </div>
+              </div>
+            )}
+
+            {uploadedApkUrl ? (
+              <div className="flex flex-col items-center gap-2 pt-1">
+                <div className="text-xs font-mono bg-card px-3 py-1.5 rounded-xl border border-border text-muted-foreground break-all max-w-md">
+                  {uploadedApkUrl}
+                </div>
+                <label className="cursor-pointer pt-1">
+                  <input
+                    type="file"
+                    accept=".apk"
+                    className="hidden"
+                    onChange={handleApkUpload}
+                    disabled={uploadingApk}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="rounded-xl text-xs gap-1.5 pointer-events-none"
+                  >
+                    <Upload className="h-3.5 w-3.5" />
+                    <span>Replace APK</span>
+                  </Button>
+                </label>
+              </div>
+            ) : (
+              <label className="cursor-pointer inline-block">
+                <input
+                  type="file"
+                  accept=".apk"
+                  className="hidden"
+                  onChange={handleApkUpload}
+                  disabled={uploadingApk}
+                />
+                <Button
+                  type="button"
+                  variant="default"
+                  disabled={uploadingApk}
+                  className="rounded-xl gap-2 font-semibold text-xs pointer-events-none px-5"
+                >
+                  {uploadingApk ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Uploading ({apkProgress}%)...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="h-4 w-4" />
+                      <span>Choose .APK File</span>
+                    </>
+                  )}
+                </Button>
+              </label>
+            )}
           </div>
         ) : (
           <div className="space-y-4">

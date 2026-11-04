@@ -25,6 +25,8 @@ export async function PATCH(
       revalidatePath("/apps");
       revalidatePath("/categories");
       revalidatePath("/search");
+      revalidatePath("/admin");
+      revalidatePath("/admin/apps");
       if (updated.slug) {
         const clean = updated.slug.replace(/\.html$/i, "");
         revalidatePath(`/apps/${clean}`);

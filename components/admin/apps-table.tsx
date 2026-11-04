@@ -24,13 +24,18 @@ import { toast } from "sonner";
 interface AppsTableProps {
   initialApps: Application[];
   categories: AppCategory[];
+  defaultStatus?: string;
 }
 
-export function AppsTable({ initialApps, categories }: AppsTableProps) {
+export function AppsTable({
+  initialApps,
+  categories,
+  defaultStatus = "",
+}: AppsTableProps) {
   const [apps, setApps] = useState<Application[]>(initialApps);
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
-  const [selectedStatus, setSelectedStatus] = useState("");
+  const [selectedStatus, setSelectedStatus] = useState(defaultStatus);
 
   const filteredApps = apps.filter((app) => {
     const matchesSearch =
@@ -144,9 +149,18 @@ export function AppsTable({ initialApps, categories }: AppsTableProps) {
             onChange={(e) => setSelectedStatus(e.target.value)}
             className="rounded-xl border border-border bg-card px-3 py-2 text-xs sm:text-sm text-foreground focus:outline-none"
           >
-            <option value="">All Statuses</option>
-            <option value="published">Published</option>
-            <option value="draft">Draft</option>
+            <option value="">All Statuses ({apps.length})</option>
+            <option value="published">
+              Published ({apps.filter((a) => a.status === "published").length})
+            </option>
+            <option value="draft">
+              Draft ({apps.filter((a) => a.status === "draft").length})
+            </option>
+            {apps.some((a) => a.status === "archived") && (
+              <option value="archived">
+                Archived ({apps.filter((a) => a.status === "archived").length})
+              </option>
+            )}
           </select>
 
           <Link href="/admin/apps/new">

@@ -11,8 +11,9 @@ export default async function AdminAnalyticsPage() {
   const [stats, { applications }] = await Promise.all([
     getSiteStats(),
     getApplications({
-      limit: 10,
+      limit: 50,
       sortBy: "downloads",
+      status: "all",
     }),
   ]);
 

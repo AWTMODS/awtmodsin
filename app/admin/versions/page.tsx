@@ -6,7 +6,7 @@ export const metadata = {
 };
 
 export default async function AdminVersionsPage() {
-  const { applications } = await getApplications({ limit: 100 });
+  const { applications } = await getApplications({ limit: 100, status: "all" });
 
   return (
     <div className="space-y-6">

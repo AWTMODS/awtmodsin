@@ -29,7 +29,7 @@ export default async function HomePage() {
   return (
     <div className="flex flex-col min-h-screen">
       {/* Hero Section */}
-      <HeroSection totalApps={stats.totalApps} />
+      <HeroSection totalApps={stats.publishedApps ?? stats.totalApps} />
 
       {/* Featured Apps Section */}
       <FeaturedSection apps={featuredApps} />

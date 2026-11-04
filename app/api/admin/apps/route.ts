@@ -11,12 +11,14 @@ export async function POST(req: Request) {
 
     const app = await createApplication(validated as any);
 
-    // Immediately purge and revalidate cache so new app appears instantly on main site
+    // Immediately purge and revalidate cache so new app appears instantly on main site and admin dashboard
     try {
       revalidatePath("/");
       revalidatePath("/apps");
       revalidatePath("/categories");
       revalidatePath("/search");
+      revalidatePath("/admin");
+      revalidatePath("/admin/apps");
       if (app.slug) {
         const clean = app.slug.replace(/\.html$/i, "");
         revalidatePath(`/apps/${clean}`);
@@ -47,7 +49,7 @@ export async function POST(req: Request) {
 
 export async function GET() {
   try {
-    const { applications } = await getApplications({ limit: 100 });
+    const { applications } = await getApplications({ limit: 100, status: "all" });
     return NextResponse.json({ applications });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });

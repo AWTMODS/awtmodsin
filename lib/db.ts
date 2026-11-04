@@ -75,9 +75,9 @@ export async function getApplications(options?: {
         { count: "exact" }
       );
 
-      if (options?.status) {
+      if (options?.status && options.status !== "all") {
         query = query.eq("status", options.status);
-      } else {
+      } else if (!options?.status) {
         query = query.eq("status", "published");
       }
 
@@ -151,9 +151,9 @@ export async function getApplications(options?: {
   // Memory fallback logic
   let filtered = [...memoryApps];
 
-  if (options?.status) {
+  if (options?.status && options.status !== "all") {
     filtered = filtered.filter((a) => a.status === options.status);
-  } else {
+  } else if (!options?.status) {
     filtered = filtered.filter((a) => a.status === "published");
   }
 
@@ -378,32 +378,42 @@ export async function getSiteStats() {
 
   if (supabase) {
     try {
-      const [appsCount, catsCount, dlsCount] = await Promise.all([
+      const [pubAppsCount, draftAppsCount, catsCount, dlsCount] = await Promise.all([
         supabase.from("applications").select("id", { count: "exact", head: true }).eq("status", "published"),
+        supabase.from("applications").select("id", { count: "exact", head: true }).eq("status", "draft"),
         supabase.from("categories").select("id", { count: "exact", head: true }).eq("is_active", true),
         supabase.from("downloads").select("id", { count: "exact", head: true }),
       ]);
 
-      const totalApps = appsCount.count || 0;
+      const publishedApps = pubAppsCount.count || 0;
+      const draftApps = draftAppsCount.count || 0;
+      const totalApps = publishedApps + draftApps;
       const totalCategories = catsCount.count || 0;
       const totalDownloads = dlsCount.count || 0; // Original live platform count
 
       return {
         totalApps,
+        publishedApps,
+        draftApps,
         totalDownloads,
         totalCategories,
-        recentUpdates: totalApps,
+        recentUpdates: publishedApps,
       };
     } catch {
       // Fallback
     }
   }
 
+  const publishedApps = memoryApps.filter((a) => a.status === "published").length;
+  const draftApps = memoryApps.filter((a) => a.status === "draft").length;
+
   return {
-    totalApps: memoryApps.filter((a) => a.status === "published").length,
+    totalApps: publishedApps + draftApps,
+    publishedApps,
+    draftApps,
     totalDownloads: memoryDownloads.length,
     totalCategories: memoryCategories.filter((c) => c.is_active).length,
-    recentUpdates: memoryApps.length,
+    recentUpdates: publishedApps,
   };
 }
 

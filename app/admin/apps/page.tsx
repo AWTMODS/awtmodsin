@@ -7,9 +7,13 @@ export const metadata = {
   title: "Application Management | AWTMods Admin",
 };
 
-export default async function AdminAppsPage() {
+export default async function AdminAppsPage({
+  searchParams,
+}: {
+  searchParams?: { status?: string; category?: string };
+}) {
   const [{ applications }, categories] = await Promise.all([
-    getApplications({ limit: 100 }),
+    getApplications({ limit: 100, status: "all" }),
     getCategories(),
   ]);
 
@@ -24,7 +28,11 @@ export default async function AdminAppsPage() {
         </p>
       </div>
 
-      <AppsTable initialApps={applications} categories={categories} />
+      <AppsTable
+        initialApps={applications}
+        categories={categories}
+        defaultStatus={searchParams?.status}
+      />
     </div>
   );
 }

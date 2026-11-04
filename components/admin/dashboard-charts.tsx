@@ -205,8 +205,13 @@ export function DashboardCharts({
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="font-semibold text-xs text-foreground truncate">
-                      {app.name}
+                    <div className="font-semibold text-xs text-foreground truncate flex items-center gap-1.5">
+                      <span className="truncate">{app.name}</span>
+                      {app.status === "draft" && (
+                        <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-amber-500 bg-amber-500/15 border border-amber-500/25 px-1.5 py-0.5 rounded-md">
+                          Draft
+                        </span>
+                      )}
                     </div>
                     <div className="text-[11px] text-muted-foreground">
                       {app.category?.name || "App"}

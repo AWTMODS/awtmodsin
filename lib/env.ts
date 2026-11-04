@@ -36,3 +36,4 @@ export function getEnv(key: string, defaultValue = ""): string {
 
   return defaultValue;
 }
+

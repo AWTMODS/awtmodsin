@@ -4,20 +4,22 @@ import { createClient } from "@supabase/supabase-js";
 import { createAdminSessionToken } from "@/lib/auth/session";
 import { getEnv } from "@/lib/env";
 
+const DEFAULT_SUPABASE_URL = "https://uzmskxruuvfgokststox.supabase.co";
+const DEFAULT_SUPABASE_ANON_KEY =
+  "sb_publishable_GDnnEMuWJQLDOMSlvox7CA_e-bPy7LR";
+
 function getSupabaseAdmin() {
-  const url = getEnv(
-    "NEXT_PUBLIC_SUPABASE_URL",
-    "https://uzmskxruuvfgokststox.supabase.co"
-  );
+  const url =
+    getEnv("NEXT_PUBLIC_SUPABASE_URL") ||
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    DEFAULT_SUPABASE_URL;
+
   const key =
     getEnv("SUPABASE_SERVICE_ROLE_KEY") ||
-    getEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
-
-  if (!url || !key) {
-    throw new Error(
-      "Supabase environment variables (NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_ANON_KEY) are missing in .env.local."
-    );
-  }
+    getEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY") ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    DEFAULT_SUPABASE_ANON_KEY;
 
   return createClient(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },
@@ -42,7 +44,8 @@ export async function POST(req: Request) {
     const supabase = getSupabaseAdmin();
 
     // 1. Authenticate & Authorize via secure PostgreSQL RPC over HTTPS
-    // Verifies bcrypt password in auth.users, checks public.admins, and enforces 3-admin limit
+    // Verifies bcrypt password in auth.users, checks public.admins, enforces 3-admin limit,
+    // and records the login event in admin_activity_logs (SECURITY DEFINER)
     const { data: authData, error: rpcError } = await supabase.rpc(
       "verify_admin_login",
       {
@@ -90,22 +93,6 @@ export async function POST(req: Request) {
       maxAge: sessionMaxAge,
       path: "/",
     });
-
-    // 4. Log login event to admin_activity_logs over HTTPS
-    try {
-      await supabase.from("admin_activity_logs").insert({
-        admin_id: admin.id,
-        action: "login",
-        entity_type: "auth",
-        details: {
-          ip: req.headers.get("x-forwarded-for") || "local",
-          userAgent: req.headers.get("user-agent") || "unknown",
-          rememberMe: !!rememberMe,
-        },
-      });
-    } catch (logErr) {
-      console.error("Activity log error:", logErr);
-    }
 
     return NextResponse.json({
       success: true,

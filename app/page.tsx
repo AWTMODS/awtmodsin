@@ -1,9 +1,6 @@
 import {
   getSiteStats,
-  getFeaturedApps,
   getCategories,
-  getLatestReleases,
-  getTrendingApps,
   getApplications,
   getSiteSettings,
 } from "@/lib/db";
@@ -14,34 +11,30 @@ import { CategoriesSection } from "@/components/homepage/categories-section";
 import { LatestReleasesSection } from "@/components/homepage/latest-releases-section";
 import { TelegramBanner } from "@/components/homepage/telegram-banner";
 
-export const dynamic = "force-dynamic";
+// Edge-cached for 60 seconds (with instant on-demand revalidation on admin updates)
+export const revalidate = 60;
 
 export default async function HomePage() {
   const [
     stats,
-    featuredApps,
+    { applications: publishedApps },
     categories,
-    latestReleases,
-    trendingApps,
-    pcByPlatform,
-    pcByCat,
     settings,
   ] = await Promise.all([
     getSiteStats(),
-    getFeaturedApps(),
+    getApplications({ limit: 30, sortBy: "newest" }),
     getCategories(),
-    getLatestReleases(),
-    getTrendingApps(),
-    getApplications({ platform: "pc", limit: 4 }),
-    getApplications({ categorySlug: "pc-software", limit: 4 }),
     getSiteSettings(),
   ]);
 
-  const pcMap = new Map();
-  [...pcByPlatform.applications, ...pcByCat.applications].forEach((a) =>
-    pcMap.set(a.id, a)
-  );
-  const pcSoftwares = Array.from(pcMap.values());
+  const featuredApps = publishedApps.filter((a) => a.is_featured).slice(0, 4);
+  const trendingApps = [...publishedApps]
+    .sort((a, b) => (b.downloads_count || 0) - (a.downloads_count || 0))
+    .slice(0, 6);
+  const latestReleases = publishedApps.slice(0, 6);
+  const pcSoftwares = publishedApps
+    .filter((a) => (a as any).platform === "pc" || a.category?.slug === "pc-software")
+    .slice(0, 4);
 
   return (
     <div className="flex flex-col min-h-screen">

@@ -44,6 +44,7 @@ export function CategoryCard({ category, className }: CategoryCardProps) {
   return (
     <Link
       href={`/categories/${category.slug}`}
+      prefetch={true}
       className={cn(
         "group flex flex-col items-center justify-center p-5 rounded-2xl border border-border bg-card hover:border-neutral-400/50 dark:hover:border-neutral-600/50 hover:shadow-md transition-all text-center",
         className

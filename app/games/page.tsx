@@ -7,6 +7,8 @@ export const metadata = {
   description: "Download verified modded Android games with unlocked levels, coins, and premium content.",
 };
 
+export const revalidate = 60;
+
 export default async function GamesPage() {
   const { applications: gameApps } = await getApplications({
     categorySlug: "games",

@@ -54,6 +54,8 @@ export async function generateMetadata({ params }: AppDetailProps): Promise<Meta
   };
 }
 
+export const revalidate = 60;
+
 export default async function AppDetailPage({ params }: AppDetailProps) {
   const rawSlug = params.slug;
   const app = await getApplicationBySlug(rawSlug);

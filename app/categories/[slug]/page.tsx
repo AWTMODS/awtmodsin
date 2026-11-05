@@ -20,6 +20,8 @@ export async function generateMetadata({ params }: CategoryPageProps) {
   };
 }
 
+export const revalidate = 60;
+
 export default async function CategoryDetailPage({ params }: CategoryPageProps) {
   const category = await getCategoryBySlug(params.slug);
   if (!category) {

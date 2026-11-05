@@ -4,7 +4,7 @@ import { AppCard } from "@/components/applications/app-card";
 import { Monitor, ShieldCheck, Zap, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 export const metadata = {
   title: "PC Software & Windows Tools | AWTMods",
@@ -88,3 +88,4 @@ export default async function PcSoftwarePage() {
     </div>
   );
 }
+

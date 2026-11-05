@@ -26,30 +26,37 @@ let memorySettings: SiteSettings = { ...initialSiteSettings };
 let memoryReports: UserReport[] = [];
 let memoryDownloads: DownloadEvent[] = [];
 
-// Helper to get supabase client safely with automatic environment and fallback support
+// High performance in-memory TTL caching (cleared instantly on admin mutations)
+let cachedCategories: { data: AppCategory[]; timestamp: number } | null = null;
+let cachedSettings: { data: SiteSettings; timestamp: number } | null = null;
+let cachedStats: { data: any; timestamp: number } | null = null;
+
+export function invalidateDbCache() {
+  cachedCategories = null;
+  cachedSettings = null;
+  cachedStats = null;
+}
+
+// Persistent singleton Supabase client with HTTP connection pooling
+let sharedSupabaseClient: any = null;
+
 export function getDbClient() {
-  try {
-    const serverClient = createServerSupabaseClient();
-    if (serverClient) return serverClient;
-  } catch {
-    // If called outside request context (e.g. build time, static export)
-  }
+  if (sharedSupabaseClient) return sharedSupabaseClient;
 
   const url =
-    getEnv("NEXT_PUBLIC_SUPABASE_URL") ||
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
     DEFAULT_SUPABASE_URL;
 
   const key =
-    getEnv("SUPABASE_SERVICE_ROLE_KEY") ||
-    getEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY") ||
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
     DEFAULT_SUPABASE_ANON_KEY;
 
-  return createClient(url, key, {
+  sharedSupabaseClient = createClient(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
+
+  return sharedSupabaseClient;
 }
 
 // ==========================================
@@ -128,16 +135,19 @@ export async function getApplications(options?: {
       if (!error && data) {
         // Fetch original download counts from downloads table
         const appIds = data.map((item: any) => item.id);
-        const { data: dlData } = await supabase
-          .from("downloads")
-          .select("application_id")
-          .in("application_id", appIds);
-
         const dlCounts: Record<string, number> = {};
-        if (dlData) {
-          dlData.forEach((row: any) => {
-            dlCounts[row.application_id] = (dlCounts[row.application_id] || 0) + 1;
-          });
+
+        if (appIds.length > 0) {
+          const { data: dlData } = await supabase
+            .from("downloads")
+            .select("application_id")
+            .in("application_id", appIds);
+
+          if (dlData) {
+            dlData.forEach((row: any) => {
+              dlCounts[row.application_id] = (dlCounts[row.application_id] || 0) + 1;
+            });
+          }
         }
 
         const apps = data.map((item: any) => ({
@@ -313,6 +323,11 @@ export async function getApplicationById(id: string): Promise<Application | null
 }
 
 export async function getCategories(): Promise<AppCategory[]> {
+  const now = Date.now();
+  if (cachedCategories && now - cachedCategories.timestamp < 60000) {
+    return cachedCategories.data;
+  }
+
   const supabase = getDbClient();
 
   if (supabase) {
@@ -335,17 +350,20 @@ export async function getCategories(): Promise<AppCategory[]> {
           countsMap[a.category_id] = (countsMap[a.category_id] || 0) + 1;
         });
 
-        return cats.map((cat: any) => ({
+        const result = cats.map((cat: any) => ({
           ...cat,
           app_count: countsMap[cat.id] || 0,
         }));
+
+        cachedCategories = { data: result, timestamp: now };
+        return result;
       }
     } catch {
       // Fallback
     }
   }
 
-  return memoryCategories
+  const result = memoryCategories
     .filter((c) => c.is_active)
     .map((cat) => ({
       ...cat,
@@ -353,6 +371,9 @@ export async function getCategories(): Promise<AppCategory[]> {
         (a) => a.category_id === cat.id && a.status === "published"
       ).length,
     }));
+
+  cachedCategories = { data: result, timestamp: now };
+  return result;
 }
 
 export async function getCategoryBySlug(slug: string): Promise<AppCategory | null> {
@@ -383,6 +404,11 @@ export async function getRecentlyUpdated(): Promise<Application[]> {
 }
 
 export async function getSiteStats() {
+  const now = Date.now();
+  if (cachedStats && now - cachedStats.timestamp < 30000) {
+    return cachedStats.data;
+  }
+
   const supabase = getDbClient();
 
   if (supabase) {
@@ -400,7 +426,7 @@ export async function getSiteStats() {
       const totalCategories = catsCount.count || 0;
       const totalDownloads = dlsCount.count || 0; // Original live platform count
 
-      return {
+      const result = {
         totalApps,
         publishedApps,
         draftApps,
@@ -408,6 +434,9 @@ export async function getSiteStats() {
         totalCategories,
         recentUpdates: publishedApps,
       };
+
+      cachedStats = { data: result, timestamp: now };
+      return result;
     } catch {
       // Fallback
     }
@@ -416,7 +445,7 @@ export async function getSiteStats() {
   const publishedApps = memoryApps.filter((a) => a.status === "published").length;
   const draftApps = memoryApps.filter((a) => a.status === "draft").length;
 
-  return {
+  const result = {
     totalApps: publishedApps + draftApps,
     publishedApps,
     draftApps,
@@ -424,6 +453,9 @@ export async function getSiteStats() {
     totalCategories: memoryCategories.filter((c) => c.is_active).length,
     recentUpdates: publishedApps,
   };
+
+  cachedStats = { data: result, timestamp: now };
+  return result;
 }
 
 export async function getAnalyticsChartData(days: number = 30) {
@@ -478,6 +510,7 @@ export async function getAnalyticsChartData(days: number = 30) {
 export async function createApplication(
   data: Partial<Application> & { version?: any }
 ): Promise<Application> {
+  invalidateDbCache();
   const supabase = getDbClient();
 
   if (supabase) {
@@ -558,6 +591,7 @@ export async function updateApplication(
   id: string,
   updates: Partial<Application> & { version?: any; screenshots?: any }
 ): Promise<Application | null> {
+  invalidateDbCache();
   const supabase = getDbClient();
 
   if (supabase) {
@@ -607,6 +641,7 @@ export async function updateApplication(
 }
 
 export async function deleteApplication(id: string): Promise<boolean> {
+  invalidateDbCache();
   const supabase = getDbClient();
 
   if (supabase) {
@@ -806,6 +841,11 @@ export async function updateReportStatus(
 }
 
 export async function getSiteSettings(): Promise<SiteSettings> {
+  const now = Date.now();
+  if (cachedSettings && now - cachedSettings.timestamp < 60000) {
+    return cachedSettings.data;
+  }
+
   const supabase = getDbClient();
 
   if (supabase) {
@@ -816,6 +856,7 @@ export async function getSiteSettings(): Promise<SiteSettings> {
         data.forEach((row: any) => {
           settingsObj[row.setting_key] = row.setting_value;
         });
+        cachedSettings = { data: settingsObj, timestamp: now };
         return settingsObj;
       }
     } catch {
@@ -823,12 +864,14 @@ export async function getSiteSettings(): Promise<SiteSettings> {
     }
   }
 
+  cachedSettings = { data: memorySettings, timestamp: now };
   return memorySettings;
 }
 
 export async function updateSiteSettings(
   updates: Partial<SiteSettings>
 ): Promise<SiteSettings> {
+  invalidateDbCache();
   const supabase = getDbClient();
 
   if (supabase) {

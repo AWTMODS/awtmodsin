@@ -1,8 +1,11 @@
 import { Suspense } from "react";
+import Link from "next/link";
 import { getApplications, getCategories } from "@/lib/db";
 import { AppCard } from "@/components/applications/app-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AppsFilterBar } from "@/components/applications/apps-filter-bar";
+
+export const revalidate = 60;
 
 interface AppsPageProps {
   searchParams: {
@@ -88,7 +91,7 @@ export default async function AppsPage({ searchParams }: AppsPageProps) {
             params.set("page", pageNum.toString());
 
             return (
-              <a
+              <Link
                 key={pageNum}
                 href={`/apps?${params.toString()}`}
                 className={`h-10 w-10 flex items-center justify-center rounded-xl text-sm font-semibold transition-colors ${
@@ -98,7 +101,7 @@ export default async function AppsPage({ searchParams }: AppsPageProps) {
                 }`}
               >
                 {pageNum}
-              </a>
+              </Link>
             );
           })}
         </div>

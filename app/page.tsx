@@ -36,8 +36,52 @@ export default async function HomePage() {
     .filter((a) => (a as any).platform === "pc" || a.category?.slug === "pc-software")
     .slice(0, 4);
 
+  const baseUrl =
+    process.env.NEXT_PUBLIC_SITE_URL || "https://awtmodsin.vercel.app";
+
+  const homeJsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": `${baseUrl}/#website`,
+        url: baseUrl,
+        name: "AWTMods",
+        description:
+          "Discover and download verified Android modded applications, premium APKs, and PC software.",
+        potentialAction: {
+          "@type": "SearchAction",
+          target: {
+            "@type": "EntryPoint",
+            urlTemplate: `${baseUrl}/search?q={search_term_string}`,
+          },
+          "query-input": "required name=search_term_string",
+        },
+      },
+      {
+        "@type": "Organization",
+        "@id": `${baseUrl}/#organization`,
+        name: "AWTMods",
+        url: baseUrl,
+        logo: `${baseUrl}/icon`,
+        sameAs: [
+          settings?.telegramUrl || "https://t.me/awtmods",
+          settings?.instagramUrl || "https://instagram.com/awtmods",
+          settings?.youtubeUrl || "https://youtube.com/@awtmods",
+          settings?.twitterUrl || "https://x.com/awtmods",
+        ],
+      },
+    ],
+  };
+
   return (
     <div className="flex flex-col min-h-screen">
+      {/* Schema.org Structured Data */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(homeJsonLd) }}
+      />
+
       {/* Hero Section */}
       <HeroSection totalApps={stats.publishedApps ?? stats.totalApps} />
 

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { getCategoryBySlug, getApplications } from "@/lib/db";
 import { AppCard } from "@/components/applications/app-card";
+import type { Metadata } from "next";
 
 interface CategoryPageProps {
   params: {
@@ -10,13 +11,35 @@ interface CategoryPageProps {
   };
 }
 
-export async function generateMetadata({ params }: CategoryPageProps) {
+export async function generateMetadata({ params }: CategoryPageProps): Promise<Metadata> {
   const category = await getCategoryBySlug(params.slug);
   if (!category) return { title: "Category Not Found" };
 
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://awtmodsin.vercel.app";
+  const canonicalUrl = `${baseUrl}/categories/${category.slug}`;
+  const title = `${category.name} Modded Apps & APKs - Free Download`;
+  const description =
+    category.description ||
+    `Download the best verified ${category.name} modded applications and games for Android at AWTMods.`;
+
   return {
-    title: `${category.name} Modded Apps & APKs`,
-    description: category.description || `Download best ${category.name} modded apps for Android.`,
+    title,
+    description,
+    alternates: {
+      canonical: canonicalUrl,
+    },
+    openGraph: {
+      title,
+      description,
+      url: canonicalUrl,
+      type: "website",
+      siteName: "AWTMods",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+    },
   };
 }
 
@@ -33,10 +56,64 @@ export default async function CategoryDetailPage({ params }: CategoryPageProps) 
     limit: 24,
   });
 
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://awtmodsin.vercel.app";
+  const categoryUrl = `${baseUrl}/categories/${category.slug}`;
+
+  const categoryJsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "CollectionPage",
+        "@id": categoryUrl,
+        url: categoryUrl,
+        name: `${category.name} Apps & Games`,
+        description:
+          category.description ||
+          `Browse verified modded Android applications in ${category.name}.`,
+        isPartOf: {
+          "@type": "WebSite",
+          "@id": `${baseUrl}/#website`,
+          name: "AWTMods",
+          url: baseUrl,
+        },
+      },
+      {
+        "@type": "BreadcrumbList",
+        "@id": `${categoryUrl}#breadcrumb`,
+        itemListElement: [
+          {
+            "@type": "ListItem",
+            position: 1,
+            name: "Home",
+            item: baseUrl,
+          },
+          {
+            "@type": "ListItem",
+            position: 2,
+            name: "Categories",
+            item: `${baseUrl}/categories`,
+          },
+          {
+            "@type": "ListItem",
+            position: 3,
+            name: category.name,
+            item: categoryUrl,
+          },
+        ],
+      },
+    ],
+  };
+
   return (
     <div className="container mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      {/* Schema.org CollectionPage & BreadcrumbList */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(categoryJsonLd) }}
+      />
+
       {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-xs text-muted-foreground mb-6">
+      <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-muted-foreground mb-6">
         <Link href="/" className="hover:text-foreground transition-colors">
           Home
         </Link>
@@ -76,4 +153,3 @@ export default async function CategoryDetailPage({ params }: CategoryPageProps) 
     </div>
   );
 }
-

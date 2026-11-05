@@ -1,10 +1,28 @@
 import { getApplications, getCategories } from "@/lib/db";
 import { AppCard } from "@/components/applications/app-card";
 import { Gamepad2, Sparkles } from "lucide-react";
+import type { Metadata } from "next";
 
-export const metadata = {
-  title: "Modded Android Games & APKs",
-  description: "Download verified modded Android games with unlocked levels, coins, and premium content.",
+const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://awtmodsin.vercel.app";
+
+export const metadata: Metadata = {
+  title: "Modded Android Games & APKs - Safe & High Speed Downloads",
+  description:
+    "Download verified modded Android games with unlocked features, ad-free gameplay, and high frame rates.",
+  alternates: {
+    canonical: `${baseUrl}/games`,
+  },
+  openGraph: {
+    title: "Modded Android Games & APKs | AWTMods",
+    description: "Download verified modded Android games with unlocked features and direct high-speed APK downloads.",
+    url: `${baseUrl}/games`,
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Modded Android Games & APKs | AWTMods",
+    description: "Download verified modded Android games with unlocked features and direct high-speed APK downloads.",
+  },
 };
 
 export const revalidate = 60;

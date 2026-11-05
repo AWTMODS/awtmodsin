@@ -41,15 +41,47 @@ export async function generateMetadata({ params }: AppDetailProps): Promise<Meta
   const app = await getApplicationBySlug(params.slug);
   if (!app) return { title: "App Not Found" };
 
+  const baseUrl =
+    process.env.NEXT_PUBLIC_SITE_URL || "https://awtmodsin.vercel.app";
   const isPc = (app as any).platform === "pc" || app.category?.slug === "pc-software";
+  const canonicalSlug = `${cleanAppSlug(app.slug)}.html`;
+  const canonicalUrl = `${baseUrl}/apps/${canonicalSlug}`;
+
+  const title = `${app.name} (${app.latest_version?.version_name || "Latest"}) ${
+    isPc ? "Download for PC" : "Download Mod APK"
+  }`;
+  const description =
+    app.short_description ||
+    `Download ${app.name} (${app.latest_version?.version_name || "latest version"}) ${
+      isPc ? "for PC Windows" : "modded APK for Android"
+    }. Clean, verified, and free high-speed download mirrors.`;
 
   return {
-    title: `${app.name} (${app.latest_version?.version_name || "Latest"}) ${isPc ? "Download for PC" : "Download APK"}`,
-    description: app.short_description,
+    title,
+    description,
+    alternates: {
+      canonical: canonicalUrl,
+    },
     openGraph: {
-      title: `${app.name} ${isPc ? "Download PC Software" : "Download Modded APK"} | AWTMods`,
-      description: app.short_description,
-      images: [{ url: app.icon_url }],
+      title: `${title} | AWTMods`,
+      description,
+      url: canonicalUrl,
+      siteName: "AWTMods",
+      images: [
+        {
+          url: app.icon_url,
+          width: 512,
+          height: 512,
+          alt: app.name,
+        },
+      ],
+      type: "article",
+    },
+    twitter: {
+      card: "summary",
+      title,
+      description,
+      images: [app.icon_url],
     },
   };
 }
@@ -86,8 +118,105 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
   const downloadSources = latestVersion?.download_sources || [];
   const isPc = (app as any).platform === "pc" || app.category?.slug === "pc-software";
 
+  const baseUrl =
+    process.env.NEXT_PUBLIC_SITE_URL || "https://awtmodsin.vercel.app";
+  const canonicalUrl = `${baseUrl}/apps/${canonicalSlug}`;
+
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": isPc ? "SoftwareApplication" : "MobileApplication",
+        "@id": `${canonicalUrl}#software`,
+        name: app.name,
+        headline: `${app.name} (${latestVersion?.version_name || "Latest"})`,
+        description: app.short_description || app.description,
+        image: app.icon_url,
+        url: canonicalUrl,
+        operatingSystem: isPc
+          ? "Windows 10, Windows 11"
+          : app.android_requirement || "Android 7.0+",
+        applicationCategory: app.category?.name || (isPc ? "UtilitiesApplication" : "GameApplication"),
+        softwareVersion: latestVersion?.version_name || "1.0.0",
+        fileSize: latestVersion?.file_size || "50 MB",
+        author: {
+          "@type": "Organization",
+          name: app.developer || "AWTMods",
+        },
+        publisher: {
+          "@type": "Organization",
+          name: "AWTMods",
+          url: baseUrl,
+        },
+        offers: {
+          "@type": "Offer",
+          price: "0",
+          priceCurrency: "USD",
+          availability: "https://schema.org/InStock",
+        },
+        ...(Number(app.rating) > 0
+          ? {
+              aggregateRating: {
+                "@type": "AggregateRating",
+                ratingValue: Number(app.rating).toFixed(1),
+                reviewCount: Math.max(1, Number(app.reviews_count) || 1),
+                bestRating: "5",
+                worstRating: "1",
+              },
+            }
+          : {}),
+      },
+      {
+        "@type": "BreadcrumbList",
+        "@id": `${canonicalUrl}#breadcrumb`,
+        itemListElement: [
+          {
+            "@type": "ListItem",
+            position: 1,
+            name: "Home",
+            item: baseUrl,
+          },
+          {
+            "@type": "ListItem",
+            position: 2,
+            name: isPc ? "PC Software" : "Apps",
+            item: `${baseUrl}${isPc ? "/pc-software" : "/apps"}`,
+          },
+          ...(app.category
+            ? [
+                {
+                  "@type": "ListItem",
+                  position: 3,
+                  name: app.category.name,
+                  item: `${baseUrl}/categories/${app.category.slug}`,
+                },
+                {
+                  "@type": "ListItem",
+                  position: 4,
+                  name: app.name,
+                  item: canonicalUrl,
+                },
+              ]
+            : [
+                {
+                  "@type": "ListItem",
+                  position: 3,
+                  name: app.name,
+                  item: canonicalUrl,
+                },
+              ]),
+        ],
+      },
+    ],
+  };
+
   return (
     <div className="container mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      {/* Schema.org Structured Data */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       {/* Breadcrumb Navigation */}
       <nav className="flex items-center gap-1.5 text-xs text-muted-foreground mb-6 overflow-x-auto whitespace-nowrap">
         <Link href="/" className="hover:text-foreground transition-colors">

@@ -11,9 +11,15 @@ interface SearchPageProps {
   };
 }
 
-export const metadata = {
-  title: "Search Applications & Mods",
-  description: "Search across hundreds of modded Android applications, games, and tools.",
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Search Applications & Mods | AWTMods",
+  description: "Search across hundreds of modded Android applications, games, and PC software.",
+  robots: {
+    index: false,
+    follow: true,
+  },
 };
 
 export default async function SearchPage({ searchParams }: SearchPageProps) {

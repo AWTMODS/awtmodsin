@@ -21,9 +21,20 @@ export async function generateMetadata({ params }: DownloadPageProps) {
   const app = await getApplicationBySlug(params.slug);
   if (!app) return { title: "Download App" };
 
+  const baseUrl =
+    process.env.NEXT_PUBLIC_SITE_URL || "https://awtmodsin.vercel.app";
+  const canonicalUrl = `${baseUrl}${getAppUrl(app.slug)}`;
+
   return {
     title: `Downloading ${app.name} (${app.latest_version?.version_name || "Latest"})`,
-    description: `Preparing your secure download for ${app.name} APK.`,
+    description: `Preparing your secure download for ${app.name}.`,
+    robots: {
+      index: false,
+      follow: true,
+    },
+    alternates: {
+      canonical: canonicalUrl,
+    },
   };
 }
 

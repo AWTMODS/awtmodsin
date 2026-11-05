@@ -3,7 +3,8 @@ import { getApplications, getCategories } from "@/lib/db";
 import { getAppUrl } from "@/lib/utils";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = "https://www.awtmods.in";
+  const baseUrl =
+    process.env.NEXT_PUBLIC_SITE_URL || "https://awtmodsin.vercel.app";
 
   const [{ applications }, categories] = await Promise.all([
     getApplications({ limit: 100 }),

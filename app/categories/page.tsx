@@ -1,9 +1,26 @@
 import { getCategories } from "@/lib/db";
 import { CategoryCard } from "@/components/categories/category-card";
+import type { Metadata } from "next";
 
-export const metadata = {
-  title: "Application Categories",
-  description: "Browse modded Android applications and games by category.",
+const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://awtmodsin.vercel.app";
+
+export const metadata: Metadata = {
+  title: "Application Categories - Browse Apps & Games | AWTMods",
+  description: "Browse modded Android applications, games, and PC software organized by category.",
+  alternates: {
+    canonical: `${baseUrl}/categories`,
+  },
+  openGraph: {
+    title: "Application Categories | AWTMods",
+    description: "Browse modded Android applications, games, and PC software organized by category.",
+    url: `${baseUrl}/categories`,
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Application Categories | AWTMods",
+    description: "Browse modded Android applications, games, and PC software organized by category.",
+  },
 };
 
 export const revalidate = 60;

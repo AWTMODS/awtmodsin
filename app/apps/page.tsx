@@ -5,6 +5,8 @@ import { AppCard } from "@/components/applications/app-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AppsFilterBar } from "@/components/applications/apps-filter-bar";
 
+import type { Metadata } from "next";
+
 export const revalidate = 60;
 
 interface AppsPageProps {
@@ -16,9 +18,26 @@ interface AppsPageProps {
   };
 }
 
-export const metadata = {
-  title: "All Modded Applications & APKs",
-  description: "Browse our complete catalog of modded Android applications, games, and tools.",
+const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://awtmodsin.vercel.app";
+
+export const metadata: Metadata = {
+  title: "All Modded Applications & APKs - Safe & Verified Downloads",
+  description:
+    "Browse our complete catalog of modded Android applications, games, utilities, and PC software with direct high-speed downloads.",
+  alternates: {
+    canonical: `${baseUrl}/apps`,
+  },
+  openGraph: {
+    title: "All Modded Applications & APKs | AWTMods",
+    description: "Browse our complete catalog of modded Android applications, games, utilities, and PC software.",
+    url: `${baseUrl}/apps`,
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "All Modded Applications & APKs | AWTMods",
+    description: "Browse our complete catalog of modded Android applications, games, utilities, and PC software.",
+  },
 };
 
 export default async function AppsPage({ searchParams }: AppsPageProps) {

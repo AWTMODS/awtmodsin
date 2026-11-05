@@ -3,13 +3,30 @@ import { getApplications } from "@/lib/db";
 import { AppCard } from "@/components/applications/app-card";
 import { Monitor, ShieldCheck, Zap, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import type { Metadata } from "next";
 
 export const revalidate = 60;
 
-export const metadata = {
-  title: "PC Software & Windows Tools | AWTMods",
+const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://awtmodsin.vercel.app";
+
+export const metadata: Metadata = {
+  title: "PC Software & Windows Tools - Verified Downloads | AWTMods",
   description:
-    "Download verified PC software, Windows tools, utilities, creative suites, and desktop applications.",
+    "Download verified PC software, Windows tools, utilities, creative suites, and desktop applications with clean standalone installers.",
+  alternates: {
+    canonical: `${baseUrl}/pc-software`,
+  },
+  openGraph: {
+    title: "PC Software & Windows Tools | AWTMods",
+    description: "Download verified PC software, Windows tools, utilities, and desktop applications.",
+    url: `${baseUrl}/pc-software`,
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "PC Software & Windows Tools | AWTMods",
+    description: "Download verified PC software, Windows tools, utilities, and desktop applications.",
+  },
 };
 
 export default async function PcSoftwarePage() {

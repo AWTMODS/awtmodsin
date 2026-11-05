@@ -5,45 +5,75 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { Toaster } from "sonner";
 
+const siteUrl =
+  process.env.NEXT_PUBLIC_SITE_URL || "https://awtmodsin.vercel.app";
+
 export const metadata: Metadata = {
-  metadataBase: new URL("https://www.awtmods.in"),
+  metadataBase: new URL(siteUrl),
   title: {
-    default: "AWTMods — Download Modded Apps & Premium APKs",
+    default: "AWTMods — Download Modded Apps, Games & PC Software",
     template: "%s | AWTMods",
   },
   description:
-    "Discover and download verified Android modded applications, premium APKs, tools, and unlocked features. Safe, fast, and free download mirrors.",
+    "Discover and download verified Android modded applications, premium APKs, modded games, and PC software. 100% clean, high-speed, and free mirrors.",
   keywords: [
     "AWTMods",
     "Modded APK",
     "Android Apps",
     "Premium APK",
     "Free Android Mods",
+    "PC Software",
+    "Windows Repacks",
     "Spotify Mod APK",
-    "YouTube Premium APK",
-    "Instagram Mod",
+    "Minecraft Mod APK",
+    "Verified APK",
   ],
   authors: [{ name: "AWTMods Team" }],
+  creator: "AWTMods",
+  publisher: "AWTMods",
+  formatDetection: {
+    email: false,
+    address: false,
+    telephone: false,
+  },
+  alternates: {
+    canonical: "./",
+  },
   openGraph: {
-    title: "AWTMods — Download Modded Apps & Premium APKs",
+    title: "AWTMods — Download Modded Apps, Games & PC Software",
     description:
-      "Your trusted directory for Android modded applications and premium unlocked APKs.",
-    url: "https://www.awtmods.in",
+      "Your trusted directory for Android modded applications, premium APKs, and verified PC software.",
+    url: siteUrl,
     siteName: "AWTMods",
     images: [
       {
-        url: "/og-image.png",
-        width: 1200,
-        height: 630,
-        alt: "AWTMods Publishing Platform",
+        url: "/icon",
+        width: 512,
+        height: 512,
+        alt: "AWTMods Platform",
       },
     ],
     locale: "en_US",
     type: "website",
   },
+  twitter: {
+    card: "summary",
+    title: "AWTMods — Download Modded Apps, Games & PC Software",
+    description:
+      "Discover and download verified Android modded applications, premium APKs, and PC software.",
+    creator: "@awtmods",
+    images: ["/icon"],
+  },
   robots: {
     index: true,
     follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
   },
 };
 

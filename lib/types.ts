@@ -68,6 +68,7 @@ export type Application = {
   developer: string;
   category_id: string;
   category?: AppCategory;
+  platform?: 'android' | 'pc';
   short_description: string;
   description: string;
   icon_url: string;

@@ -75,6 +75,11 @@ export function Footer() {
                 </Link>
               </li>
               <li>
+                <Link href="/pc-software" className="hover:text-foreground transition-colors">
+                  PC Software
+                </Link>
+              </li>
+              <li>
                 <Link href="/categories" className="hover:text-foreground transition-colors">
                   Categories
                 </Link>

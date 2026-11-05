@@ -21,6 +21,8 @@ import {
   Eye,
   X,
   Sparkles,
+  Monitor,
+  Smartphone,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -42,6 +44,9 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
   const isEditing = !!initialApp?.id;
 
   // SECTION A: Basic Info
+  const [platform, setPlatform] = useState<"android" | "pc">(
+    (initialApp as any)?.platform || (initialApp?.category?.slug === "pc-software" ? "pc" : "android")
+  );
   const [name, setName] = useState(initialApp?.name || "");
   const [slug, setSlug] = useState(initialApp?.slug || "");
   const [packageName, setPackageName] = useState(initialApp?.package_name || "");
@@ -55,6 +60,29 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
   const [description, setDescription] = useState(
     initialApp?.description || ""
   );
+
+  const handlePlatformChange = (newPlatform: "android" | "pc") => {
+    setPlatform(newPlatform);
+    if (newPlatform === "pc") {
+      const pcCat = categories.find((c) => c.slug === "pc-software");
+      if (pcCat) {
+        setCategoryId(pcCat.id);
+      }
+      if (!androidRequirement || androidRequirement === "Android 7.0+") {
+        setAndroidRequirement("Windows 10 / 11 (64-bit)");
+      }
+      if (architecture === "arm64-v8a") {
+        setArchitecture("x64 (64-bit)");
+      }
+    } else {
+      if (androidRequirement === "Windows 10 / 11 (64-bit)") {
+        setAndroidRequirement("Android 7.0+");
+      }
+      if (architecture === "x64 (64-bit)") {
+        setArchitecture("arm64-v8a");
+      }
+    }
+  };
 
   // Mod Features Unlocked
   const [modFeatures, setModFeatures] = useState<string[]>(
@@ -84,18 +112,30 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
     setModFeatures((prev) => prev.filter((_, i) => i !== idx));
   };
 
-  const suggestedFeatures = [
-    "Premium Unlocked",
-    "Ad-Free Clean Experience",
-    "Unlimited Money / Coins",
-    "Immortal / God Mode",
-    "All Skins & Items Unlocked",
-    "Pro Filters & 4K Export",
-    "No Watermark",
-    "High Bitrate / Lossless Audio",
-    "Unlimited Energy / Lives",
-    "Offline Mode Enabled",
-  ];
+  const suggestedFeatures =
+    platform === "pc"
+      ? [
+          "Pre-Activated / Lifetime License",
+          "Clean Repack & Ad-Free",
+          "Standalone / Portable Edition",
+          "Offline Installer Included",
+          "All Plugins & Addons Unlocked",
+          "64-bit High Performance",
+          "Multi-Language Support",
+          "No Registration Required",
+        ]
+      : [
+          "Premium Unlocked",
+          "Ad-Free Clean Experience",
+          "Unlimited Money / Coins",
+          "Immortal / God Mode",
+          "All Skins & Items Unlocked",
+          "Pro Filters & 4K Export",
+          "No Watermark",
+          "High Bitrate / Lossless Audio",
+          "Unlimited Energy / Lives",
+          "Offline Mode Enabled",
+        ];
 
   // SECTION B: Images
   const [iconUrl, setIconUrl] = useState(initialApp?.icon_url || "");
@@ -435,6 +475,7 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
       package_name: packageName.trim(),
       developer: finalDeveloper,
       category_id: categoryId,
+      platform,
       short_description: finalShortDesc,
       description: finalDesc,
       icon_url: iconUrl.trim(),
@@ -501,20 +542,54 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
       <div className="rounded-3xl border border-border bg-card p-6 sm:p-8 space-y-5">
         <div className="border-b border-border/70 pb-3">
           <h2 className="text-lg font-bold text-foreground">
-            Section A — Basic Information
+            Section A — Platform & Basic Information
           </h2>
           <p className="text-xs text-muted-foreground">
-            Core metadata and naming for the application listing.
+            Target platform, core metadata, and naming for the listing.
           </p>
+        </div>
+
+        {/* Platform Selector Toggle */}
+        <div className="space-y-1.5 pb-2">
+          <label className="text-xs font-semibold uppercase text-foreground">
+            Target Platform <span className="text-destructive">*</span>
+          </label>
+          <div className="grid grid-cols-2 gap-3 max-w-md">
+            <button
+              type="button"
+              onClick={() => handlePlatformChange("android")}
+              className={`flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border text-sm font-semibold transition-all ${
+                platform === "android"
+                  ? "border-foreground bg-foreground text-background shadow-xs"
+                  : "border-border bg-secondary/50 text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Smartphone className="h-4 w-4" />
+              <span>Android APK</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handlePlatformChange("pc")}
+              className={`flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border text-sm font-semibold transition-all ${
+                platform === "pc"
+                  ? "border-foreground bg-foreground text-background shadow-xs"
+                  : "border-border bg-secondary/50 text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Monitor className="h-4 w-4" />
+              <span>PC / Windows</span>
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <label className="text-xs font-semibold uppercase text-foreground">
-              App Name <span className="text-destructive">*</span>
+              {platform === "pc" ? "Software Name" : "App Name"} <span className="text-destructive">*</span>
             </label>
             <Input
-              placeholder="e.g. Spotify Mod APK"
+              placeholder={platform === "pc" ? "e.g. Adobe Photoshop 2024" : "e.g. Spotify Mod APK"}
               value={name}
               onChange={(e) => handleNameChange(e.target.value)}
               className="rounded-xl"
@@ -526,7 +601,7 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
               Slug (URL Key) <span className="text-destructive">*</span>
             </label>
             <Input
-              placeholder="e.g. spotify-premium"
+              placeholder={platform === "pc" ? "e.g. adobe-photoshop" : "e.g. spotify-premium"}
               value={slug}
               onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/\.html$/i, ""))}
               className="rounded-xl font-mono"
@@ -538,10 +613,10 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
 
           <div className="space-y-1.5">
             <label className="text-xs font-semibold uppercase text-foreground">
-              Package Name <span className="text-destructive">*</span>
+              {platform === "pc" ? "Package / Executable ID" : "Package Name"} <span className="text-destructive">*</span>
             </label>
             <Input
-              placeholder="e.g. com.spotify.music"
+              placeholder={platform === "pc" ? "e.g. Adobe.Photoshop.exe" : "e.g. com.spotify.music"}
               value={packageName}
               onChange={(e) => setPackageName(e.target.value)}
               className="rounded-xl font-mono"
@@ -878,6 +953,7 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
               Architecture
             </label>
             <Input
+              placeholder={platform === "pc" ? "e.g. x64 (64-bit)" : "e.g. arm64-v8a"}
               value={architecture}
               onChange={(e) => setArchitecture(e.target.value)}
               className="rounded-xl font-mono text-xs"
@@ -886,9 +962,10 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
 
           <div className="space-y-1.5">
             <label className="text-xs font-semibold uppercase text-foreground">
-              Android Requirement
+              {platform === "pc" ? "OS Requirement" : "Android Requirement"}
             </label>
             <Input
+              placeholder={platform === "pc" ? "e.g. Windows 10 / 11 (64-bit)" : "e.g. Android 7.0+"}
               value={androidRequirement}
               onChange={(e) => setAndroidRequirement(e.target.value)}
               className="rounded-xl text-xs"
@@ -987,15 +1064,15 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
             <div className="space-y-1">
               <div className="text-sm font-bold text-foreground">
                 {uploadedApkUrl
-                  ? "APK Stored in Cloudflare R2"
+                  ? `${platform === "pc" ? "Software" : "APK"} Stored in Cloudflare R2`
                   : uploadingApk
                   ? `Uploading to Cloudflare R2... ${apkProgress}%`
-                  : "Direct APK Upload to Cloudflare R2"}
+                  : `Direct ${platform === "pc" ? "PC Software" : "APK"} Upload to Cloudflare R2`}
               </div>
               <p className="text-xs text-muted-foreground max-w-sm mx-auto">
                 {uploadedApkUrl
                   ? `${uploadedApkName} (${fileSize}) is uploaded and configured as your high-speed primary mirror.`
-                  : "Select or drop a signed .apk file to upload directly to your Cloudflare R2 bucket (up to 2GB)."}
+                  : `Select or drop a signed ${platform === "pc" ? ".exe, .msi, or .zip" : ".apk"} file to upload directly to your Cloudflare R2 bucket (up to 2GB).`}
               </p>
             </div>
 
@@ -1017,7 +1094,7 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
             <input
               ref={apkInputRef}
               type="file"
-              accept=".apk,.APK,application/vnd.android.package-archive,*/*"
+              accept=".apk,.APK,.exe,.EXE,.msi,.MSI,.zip,.ZIP,.rar,.RAR,.7z,.7Z,application/*"
               className="hidden"
               onChange={handleApkUpload}
               disabled={uploadingApk}
@@ -1037,7 +1114,7 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
                   className="rounded-xl text-xs gap-1.5"
                 >
                   <Upload className="h-3.5 w-3.5" />
-                  <span>Replace APK</span>
+                  <span>Replace File</span>
                 </Button>
               </div>
             ) : (
@@ -1057,12 +1134,12 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
                   ) : (
                     <>
                       <Upload className="h-4 w-4" />
-                      <span>Choose .APK File</span>
+                      <span>{platform === "pc" ? "Choose Software File (.exe, .zip)" : "Choose .APK File"}</span>
                     </>
                   )}
                 </Button>
                 <p className="text-[11px] text-muted-foreground mt-2">
-                  Or drag &amp; drop your .apk file directly into this area
+                  Or drag &amp; drop your installer file directly into this area
                 </p>
               </div>
             )}

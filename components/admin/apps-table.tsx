@@ -244,9 +244,16 @@ export function AppsTable({
 
                       {/* Category */}
                       <td className="py-3 px-4">
-                        <Badge variant="outline" className="text-[11px] font-normal">
-                          {app.category?.name || "General"}
-                        </Badge>
+                        <div className="flex flex-col gap-1 items-start">
+                          <Badge variant="outline" className="text-[11px] font-normal">
+                            {app.category?.name || "General"}
+                          </Badge>
+                          {(app.platform === "pc" || app.category?.slug === "pc-software") && (
+                            <span className="text-[9px] font-bold uppercase tracking-wider text-sky-500 bg-sky-500/10 px-1.5 py-0.5 rounded border border-sky-500/20">
+                              PC / Windows
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       {/* Status */}

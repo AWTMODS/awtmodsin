@@ -121,7 +121,11 @@ export function DownloadClient({
             >
               <Download className="h-5 w-5 sm:h-6 sm:w-6" />
               <span>
-                {downloadInitiated ? "Download Again" : "Download APK Now"}
+                {downloadInitiated
+                  ? "Download Again"
+                  : (app as any).platform === "pc" || app.category?.slug === "pc-software"
+                  ? "Download Software Now"
+                  : "Download APK Now"}
               </span>
               <ExternalLink className="h-4 w-4 sm:h-5 sm:w-5 ml-1 opacity-70" />
             </Button>

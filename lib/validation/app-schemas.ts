@@ -39,6 +39,7 @@ export const applicationSchema = z.object({
   package_name: z.string().min(3, "Package name is required (e.g. com.spotify.music)"),
   developer: z.string().min(1, "Developer name is required"),
   category_id: z.string().min(1, "Please select a category"),
+  platform: z.enum(["android", "pc"]).default("android").optional(),
   short_description: z.string().min(3, "Short description must be at least 3 characters"),
   description: z.string().min(5, "Full description must be at least 5 characters"),
   icon_url: z.string().url("Must be a valid icon URL"),

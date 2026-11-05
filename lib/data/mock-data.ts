@@ -111,6 +111,17 @@ export const initialCategories: AppCategory[] = [
     app_count: 0,
     created_at: new Date().toISOString(),
   },
+  {
+    id: "c5555555-0000-0000-0000-000000000001",
+    name: "PC Software",
+    slug: "pc-software",
+    description: "Verified Windows software, creative suites, tools, utilities, and desktop repacks",
+    icon: "Monitor",
+    sort_order: 11,
+    is_active: true,
+    app_count: 0,
+    created_at: new Date().toISOString(),
+  },
 ];
 
 // No demo data - empty real state

@@ -13,6 +13,7 @@ const navLinks = [
   { name: "Home", href: "/" },
   { name: "Apps", href: "/apps" },
   { name: "Games", href: "/games" },
+  { name: "PC Software", href: "/pc-software" },
   { name: "Categories", href: "/categories" },
   { name: "Updates", href: "/updates" },
 ];

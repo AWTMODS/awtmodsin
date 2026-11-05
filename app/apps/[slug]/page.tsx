@@ -13,6 +13,7 @@ import {
   ChevronRight,
   ShieldCheck,
   Smartphone,
+  Monitor,
   Cpu,
   FileCode,
   HardDrive,
@@ -40,11 +41,13 @@ export async function generateMetadata({ params }: AppDetailProps): Promise<Meta
   const app = await getApplicationBySlug(params.slug);
   if (!app) return { title: "App Not Found" };
 
+  const isPc = (app as any).platform === "pc" || app.category?.slug === "pc-software";
+
   return {
-    title: `${app.name} (${app.latest_version?.version_name || "Latest"}) Download APK`,
+    title: `${app.name} (${app.latest_version?.version_name || "Latest"}) ${isPc ? "Download for PC" : "Download APK"}`,
     description: app.short_description,
     openGraph: {
-      title: `${app.name} Download Modded APK | AWTMods`,
+      title: `${app.name} ${isPc ? "Download PC Software" : "Download Modded APK"} | AWTMods`,
       description: app.short_description,
       images: [{ url: app.icon_url }],
     },
@@ -79,6 +82,7 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
   const latestVersion = app.latest_version || app.versions?.[0];
   const versionHistory = app.versions || [];
   const downloadSources = latestVersion?.download_sources || [];
+  const isPc = (app as any).platform === "pc" || app.category?.slug === "pc-software";
 
   return (
     <div className="container mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -88,8 +92,8 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
           Home
         </Link>
         <ChevronRight className="h-3.5 w-3.5 shrink-0" />
-        <Link href="/apps" className="hover:text-foreground transition-colors">
-          Apps
+        <Link href={isPc ? "/pc-software" : "/apps"} className="hover:text-foreground transition-colors">
+          {isPc ? "PC Software" : "Apps"}
         </Link>
         {app.category && (
           <>
@@ -419,7 +423,7 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
             <div className="space-y-3.5 text-xs sm:text-sm">
               <div className="flex items-center justify-between py-1 border-b border-border/40">
                 <span className="text-muted-foreground flex items-center gap-2">
-                  <Smartphone className="h-4 w-4" />
+                  {isPc ? <Monitor className="h-4 w-4" /> : <Smartphone className="h-4 w-4" />}
                   Version
                 </span>
                 <span className="font-semibold text-foreground font-mono">
@@ -440,7 +444,7 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
               <div className="flex items-center justify-between py-1 border-b border-border/40">
                 <span className="text-muted-foreground flex items-center gap-2">
                   <ShieldCheck className="h-4 w-4" />
-                  Requires
+                  {isPc ? "OS Requirement" : "Requires"}
                 </span>
                 <span className="font-semibold text-foreground">
                   {app.android_requirement}

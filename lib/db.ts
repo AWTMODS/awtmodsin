@@ -58,6 +58,7 @@ export function getDbClient() {
 
 export async function getApplications(options?: {
   categorySlug?: string;
+  platform?: string;
   status?: string;
   search?: string;
   featured?: boolean;
@@ -74,6 +75,10 @@ export async function getApplications(options?: {
         "*, category:categories(*), versions:application_versions(*, download_sources(*)), screenshots(*)",
         { count: "exact" }
       );
+
+      if (options?.platform) {
+        query = query.eq("platform", options.platform);
+      }
 
       if (options?.status && options.status !== "all") {
         query = query.eq("status", options.status);
@@ -155,6 +160,10 @@ export async function getApplications(options?: {
     filtered = filtered.filter((a) => a.status === options.status);
   } else if (!options?.status) {
     filtered = filtered.filter((a) => a.status === "published");
+  }
+
+  if (options?.platform) {
+    filtered = filtered.filter((a) => (a as any).platform === options.platform);
   }
 
   if (options?.featured !== undefined) {

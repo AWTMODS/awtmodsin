@@ -10,6 +10,8 @@ import {
   FileText,
   Film,
   BookOpen,
+  Monitor,
+  Laptop,
   AppWindow,
   LucideIcon,
 } from "lucide-react";
@@ -27,6 +29,8 @@ const iconMap: Record<string, LucideIcon> = {
   FileText,
   Film,
   BookOpen,
+  Monitor,
+  Laptop,
 };
 
 interface CategoryCardProps {

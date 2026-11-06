@@ -83,7 +83,12 @@ export default async function HomePage() {
       />
 
       {/* Hero Section */}
-      <HeroSection totalApps={stats.publishedApps ?? stats.totalApps} />
+      <HeroSection
+        totalApps={stats.publishedApps ?? stats.totalApps}
+        featuredApps={featuredApps}
+        trendingApps={trendingApps}
+        categories={categories}
+      />
 
       {/* Featured Apps Section */}
       <FeaturedSection apps={featuredApps} />

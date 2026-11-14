@@ -87,6 +87,7 @@ export default async function HomePage() {
         totalApps={stats.publishedApps ?? stats.totalApps}
         featuredApps={featuredApps}
         trendingApps={trendingApps}
+        latestReleases={latestReleases}
         categories={categories}
       />
 

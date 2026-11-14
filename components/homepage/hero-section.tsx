@@ -14,6 +14,9 @@ import {
   ChevronRight,
   CheckCircle2,
   Sparkles,
+  Clock,
+  Radio,
+  Monitor,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Application, AppCategory } from "@/lib/types";
@@ -23,6 +26,7 @@ interface HeroSectionProps {
   totalApps?: number;
   featuredApps?: Application[];
   trendingApps?: Application[];
+  latestReleases?: Application[];
   categories?: AppCategory[];
 }
 
@@ -39,6 +43,33 @@ function AndroidIcon({ className = "h-4 w-4" }: { className?: string }) {
   );
 }
 
+function getRelativeTimeBadge(dateString: string | undefined | null) {
+  if (!dateString) return { text: "New", isToday: true };
+  try {
+    const d = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - d.getTime();
+    const diffHours = diffMs / (1000 * 60 * 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffHours < 24 && diffDays === 0) {
+      return { text: "Today", isToday: true };
+    }
+    if (diffDays === 1) {
+      return { text: "Yesterday", isToday: false };
+    }
+    if (diffDays > 1 && diffDays <= 7) {
+      return { text: `${diffDays}d ago`, isToday: false };
+    }
+    return {
+      text: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      isToday: false,
+    };
+  } catch {
+    return { text: "New", isToday: false };
+  }
+}
+
 const TRENDING_TAGS = [
   "Spotify",
   "Minecraft",
@@ -52,6 +83,7 @@ export function HeroSection({
   totalApps,
   featuredApps = [],
   trendingApps = [],
+  latestReleases = [],
   categories = [],
 }: HeroSectionProps) {
   const [searchQuery, setSearchQuery] = useState("");
@@ -77,17 +109,23 @@ export function HeroSection({
     }
   };
 
-  const spotlightApps = (featuredApps.length > 0 ? featuredApps : trendingApps).slice(0, 3);
+  // The last 7 published releases sorted by newest
+  const recent7 = (latestReleases.length > 0 ? latestReleases : trendingApps).slice(0, 7);
+
+  // Spotlight popular apps
+  const spotlightApps = (featuredApps.length > 0 ? featuredApps : trendingApps).slice(0, 2);
+
+  // Bottom carousel items
   const carouselApps = (trendingApps.length > 0 ? trendingApps : featuredApps).slice(0, 10);
 
   return (
-    <section className="relative overflow-hidden pt-6 pb-12 md:pt-12 md:pb-16 border-b border-border/60 bg-gradient-to-b from-background via-background to-secondary/15">
+    <section className="relative overflow-hidden pt-6 pb-12 md:pt-10 md:pb-16 border-b border-border/60 bg-gradient-to-b from-background via-background to-secondary/15">
       {/* Background ambient lighting */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-[420px] bg-neutral-200/20 dark:bg-neutral-800/15 blur-3xl rounded-full pointer-events-none -z-10" />
 
       <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-10">
-        {/* Top Hero Grid: Android Focus Copy & Android Spotlight Showcase */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-center">
+        {/* Top Hero Grid: Android Focus Copy & Dynamic Releases / Spotlight */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-start">
           {/* Left Column: Android-Optimized Copy & Search */}
           <div className="lg:col-span-7 space-y-5 text-left">
             {/* Android Badge */}
@@ -104,7 +142,7 @@ export function HeroSection({
             </h1>
 
             <p className="text-sm sm:text-base text-muted-foreground max-w-xl leading-relaxed">
-              Direct high-speed APK downloads for your Android phone or tablet. All mods are tested for safety, 100% ad-free, and require no root access.
+              Direct high-speed APK downloads for your Android phone, tablet or PC. All mods are tested for safety, 100% ad-free, and require no root access.
             </p>
 
             {/* Android Search Form */}
@@ -163,13 +201,115 @@ export function HeroSection({
             </div>
           </div>
 
-          {/* Right Column: Android Spotlight Showcase (Replaces Phone Mockup) */}
-          <div className="lg:col-span-5">
-            <div className="rounded-3xl border border-border bg-card/90 p-5 sm:p-6 shadow-xl backdrop-blur-sm space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-border/70">
+          {/* Right Column: Dynamic Latest Releases + Android Spotlight */}
+          <div className="lg:col-span-5 space-y-4">
+            {/* NEW SECTION (ABOVE OF SPOTLIGHT): Last 7 Releases Live Feed */}
+            <div className="rounded-3xl border border-border bg-card/90 p-4 sm:p-5 shadow-xl backdrop-blur-sm space-y-3">
+              <div className="flex items-center justify-between pb-2.5 border-b border-border/70">
+                <div className="flex items-center gap-2">
+                  <div className="relative flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                      <span>Latest Releases</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold border border-emerald-500/20">
+                        Last 7 Releases
+                      </span>
+                    </h2>
+                    <p className="text-[11px] text-muted-foreground">
+                      Auto-updates whenever new posts are published
+                    </p>
+                  </div>
+                </div>
+                <Link
+                  href="/apps?sort=newest"
+                  className="text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  View All &rarr;
+                </Link>
+              </div>
+
+              {/* Scrollable list of last 7 releases */}
+              <div className="space-y-2 max-h-[310px] overflow-y-auto pr-1 select-none scrollbar-thin">
+                {recent7.length > 0 ? (
+                  recent7.map((app, idx) => {
+                    const timeBadge = getRelativeTimeBadge(app.created_at || app.updated_at);
+                    const isPC = (app as any).platform === "pc" || app.category?.slug === "pc-software";
+
+                    return (
+                      <Link
+                        key={app.id || idx}
+                        href={getAppUrl(app.slug)}
+                        className="group flex items-center justify-between p-2.5 rounded-2xl border border-border/70 bg-secondary/30 hover:bg-secondary/70 hover:border-neutral-500/40 transition-all duration-200"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                          <div className="w-10 h-10 rounded-xl overflow-hidden border border-border bg-card shrink-0">
+                            <img
+                              src={app.icon_url || "/icon.svg"}
+                              alt={app.name}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                              loading="lazy"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = "/icon.svg";
+                              }}
+                            />
+                          </div>
+                          <div className="min-w-0 space-y-0.5">
+                            <h3 className="text-xs sm:text-sm font-bold text-foreground truncate group-hover:text-primary transition-colors">
+                              {app.name}
+                            </h3>
+                            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                              {timeBadge.isToday ? (
+                                <span className="inline-flex items-center px-1.5 py-0.2 rounded-md bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-extrabold text-[10px]">
+                                  🔥 {timeBadge.text}
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center px-1.5 py-0.2 rounded-md bg-secondary text-foreground/80 font-medium text-[10px] border border-border/60">
+                                  {timeBadge.text}
+                                </span>
+                              )}
+                              <span>•</span>
+                              <span className="truncate max-w-[110px] sm:max-w-[140px]">
+                                {app.category?.name || "Mod"}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="shrink-0 flex items-center">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-foreground text-background text-[11px] font-bold shadow-xs group-hover:opacity-90 transition-opacity">
+                            {isPC ? (
+                              <>
+                                <Monitor className="h-3 w-3" />
+                                <span>PC</span>
+                              </>
+                            ) : (
+                              <>
+                                <Download className="h-3 w-3" />
+                                <span>APK</span>
+                              </>
+                            )}
+                          </span>
+                        </div>
+                      </Link>
+                    );
+                  })
+                ) : (
+                  <div className="text-center py-6 text-xs text-muted-foreground">
+                    New apps will appear here automatically.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Android Spotlight Showcase (Directly below Latest Releases) */}
+            <div className="rounded-3xl border border-border bg-card/90 p-4 sm:p-5 shadow-xl backdrop-blur-sm space-y-3">
+              <div className="flex items-center justify-between pb-2.5 border-b border-border/70">
                 <div className="flex items-center gap-2">
                   <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-500 dark:text-emerald-400">
-                    <AndroidIcon className="h-4 w-4" />
+                    <AndroidIcon className="h-3.5 w-3.5" />
                   </div>
                   <div>
                     <h2 className="text-sm font-bold text-foreground">Android Spotlight</h2>
@@ -185,25 +325,28 @@ export function HeroSection({
               </div>
 
               {/* Spotlight App Cards */}
-              <div className="space-y-2.5">
+              <div className="space-y-2">
                 {spotlightApps.length > 0 ? (
                   spotlightApps.map((app) => (
                     <Link
                       key={app.id}
                       href={getAppUrl(app.slug)}
-                      className="group flex items-center justify-between p-3 rounded-2xl border border-border/70 bg-secondary/30 hover:bg-secondary/70 hover:border-neutral-500/40 transition-all duration-200"
+                      className="group flex items-center justify-between p-2.5 rounded-2xl border border-border/70 bg-secondary/30 hover:bg-secondary/70 hover:border-neutral-500/40 transition-all duration-200"
                     >
                       <div className="flex items-center gap-3 min-w-0 pr-2">
-                        <div className="w-12 h-12 rounded-xl overflow-hidden border border-border bg-card shrink-0">
+                        <div className="w-11 h-11 rounded-xl overflow-hidden border border-border bg-card shrink-0">
                           <img
                             src={app.icon_url || "/icon.svg"}
                             alt={app.name}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                             loading="lazy"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = "/icon.svg";
+                            }}
                           />
                         </div>
                         <div className="min-w-0 space-y-0.5">
-                          <h3 className="text-sm font-bold text-foreground truncate group-hover:text-primary transition-colors">
+                          <h3 className="text-xs sm:text-sm font-bold text-foreground truncate group-hover:text-primary transition-colors">
                             {app.name}
                           </h3>
                           <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -290,6 +433,9 @@ export function HeroSection({
                         alt={app.name}
                         className="w-full h-full object-cover"
                         loading="lazy"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = "/icon.svg";
+                        }}
                       />
                     </div>
                     {app.is_trending && (

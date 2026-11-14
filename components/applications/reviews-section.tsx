@@ -264,14 +264,14 @@ export function ReviewsSection({
         {/* Left Score Box */}
         <div className="md:col-span-4 text-center md:text-left flex flex-col items-center md:items-start justify-center border-b md:border-b-0 md:border-r border-border/70 pb-6 md:pb-0 md:pr-6">
           <div className="text-4xl sm:text-5xl font-black text-foreground tracking-tight">
-            {avgRating > 0 ? avgRating.toFixed(1) : "0.0"}
+            {avgRating > 0 ? avgRating.toFixed(1) : "—"}
           </div>
           <div className="flex items-center gap-1 my-2">
             {[1, 2, 3, 4, 5].map((star) => (
               <Star
                 key={star}
                 className={`h-4 w-4 sm:h-5 sm:w-5 ${
-                  star <= Math.round(avgRating)
+                  avgRating > 0 && star <= Math.round(avgRating)
                     ? "text-amber-500 fill-amber-500"
                     : "text-muted-foreground/30"
                 }`}
@@ -281,7 +281,7 @@ export function ReviewsSection({
           <p className="text-xs text-muted-foreground font-medium">
             {totalReviews > 0
               ? `Based on ${totalReviews} verified community ${totalReviews === 1 ? "review" : "reviews"}`
-              : "No ratings yet. Be the first to review!"}
+              : "No reviews yet. Be the first to review!"}
           </p>
         </div>
 

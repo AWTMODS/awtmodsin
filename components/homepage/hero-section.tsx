@@ -250,11 +250,15 @@ export function HeroSection({
                             {app.name}
                           </h3>
                           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <span className="flex items-center gap-1 font-semibold text-foreground">
-                              <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
-                              {app.rating ? Number(app.rating).toFixed(1) : "5.0"}
-                            </span>
-                            <span>•</span>
+                            {Number(app.rating) > 0 ? (
+                              <>
+                                <span className="flex items-center gap-1 font-semibold text-foreground">
+                                  <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                                  {Number(app.rating).toFixed(1)}
+                                </span>
+                                <span>•</span>
+                              </>
+                            ) : null}
                             <span className="truncate">{app.category?.name || "Android Mod"}</span>
                           </div>
                         </div>
@@ -352,12 +356,16 @@ export function HeroSection({
                     </h3>
 
                     <div className="flex items-center gap-1 text-[11px] text-muted-foreground mt-1">
-                      <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
-                      <span className="font-bold text-foreground">
-                        {app.rating ? Number(app.rating).toFixed(1) : "5.0"}
-                      </span>
-                      <span>•</span>
-                      <span className="truncate max-w-[80px]">
+                      {Number(app.rating) > 0 ? (
+                        <>
+                          <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                          <span className="font-bold text-foreground">
+                            {Number(app.rating).toFixed(1)}
+                          </span>
+                          <span>•</span>
+                        </>
+                      ) : null}
+                      <span className="truncate max-w-[90px]">
                         {isPC ? "PC" : app.category?.name || "Android"}
                       </span>
                     </div>
@@ -446,20 +454,28 @@ export function HeroSection({
                   </h3>
 
                   <div className="flex items-center gap-1 text-[11px] text-muted-foreground mt-1">
-                    <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
-                    <span className="font-bold text-foreground">
-                      {app.rating ? Number(app.rating).toFixed(1) : "5.0"}
-                    </span>
+                    {Number(app.rating) > 0 ? (
+                      <>
+                        <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                        <span className="font-bold text-foreground">
+                          {Number(app.rating).toFixed(1)}
+                        </span>
+                      </>
+                    ) : null}
                     {app.downloads_24h && app.downloads_24h > 0 ? (
                       <>
-                        <span>•</span>
+                        {Number(app.rating) > 0 ? <span>•</span> : null}
                         <span className="font-semibold text-amber-500">+{app.downloads_24h} today</span>
                       </>
                     ) : app.downloads_count && app.downloads_count > 0 ? (
                       <>
-                        <span>•</span>
+                        {Number(app.rating) > 0 ? <span>•</span> : null}
                         <span>{formatNumber(app.downloads_count)}</span>
                       </>
+                    ) : !Number(app.rating) ? (
+                      <span className="truncate max-w-[100px]">
+                        {app.category?.name || "Android Mod"}
+                      </span>
                     ) : null}
                   </div>
 

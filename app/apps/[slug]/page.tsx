@@ -328,13 +328,13 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
                 <span>
                   {app.rating && Number(app.rating) > 0
                     ? `${Number(app.rating).toFixed(1)} ★`
-                    : "0.0 ★"}
+                    : "Not Rated"}
                 </span>
               </div>
               <div className="text-[11px] text-muted-foreground group-hover:text-foreground group-hover:underline transition-colors">
                 {app.reviews_count && Number(app.reviews_count) > 0
                   ? `(${formatNumber(app.reviews_count)} Reviews)`
-                  : "(0 Reviews)"}
+                  : "Be the first to review"}
               </div>
             </div>
           </a>

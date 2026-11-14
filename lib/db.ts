@@ -387,8 +387,117 @@ export async function getFeaturedApps(): Promise<Application[]> {
 }
 
 export async function getTrendingApps(): Promise<Application[]> {
-  const { applications } = await getApplications({ trending: true, limit: 6 });
-  return applications;
+  return getTrendingAndroidApps(6);
+}
+
+/**
+ * Retrieves the top trending Android apps ranked by downloads within the last 24 hours.
+ * If 24h downloads are tied or 0, ranks by is_trending flag, total downloads, and rating.
+ */
+export async function getTrendingAndroidApps(limit: number = 10): Promise<Application[]> {
+  const supabase = getDbClient();
+  if (supabase) {
+    try {
+      const now = new Date();
+      const since24h = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+
+      // 1. Query downloads recorded within the last 24 hours
+      const { data: recentDownloads } = await supabase
+        .from("downloads")
+        .select("application_id")
+        .gte("downloaded_at", since24h);
+
+      const dl24hMap: Record<string, number> = {};
+      if (recentDownloads) {
+        recentDownloads.forEach((d: any) => {
+          if (d.application_id) {
+            dl24hMap[d.application_id] = (dl24hMap[d.application_id] || 0) + 1;
+          }
+        });
+      }
+
+      // 2. Query all published Android applications (excluding platform = 'pc')
+      const { data: appsData, error } = await supabase
+        .from("applications")
+        .select(`
+          *,
+          category:categories(*),
+          versions:application_versions(*, download_sources(*)),
+          screenshots(*)
+        `)
+        .eq("status", "published")
+        .or("platform.eq.android,platform.is.null");
+
+      if (!error && appsData) {
+        // 3. Fetch all-time download counts for these apps
+        const appIds = appsData.map((a: any) => a.id);
+        const totalDlMap: Record<string, number> = {};
+
+        if (appIds.length > 0) {
+          const { data: allDls } = await supabase
+            .from("downloads")
+            .select("application_id")
+            .in("application_id", appIds);
+
+          if (allDls) {
+            allDls.forEach((d: any) => {
+              if (d.application_id) {
+                totalDlMap[d.application_id] = (totalDlMap[d.application_id] || 0) + 1;
+              }
+            });
+          }
+        }
+
+        const mappedApps: Application[] = appsData
+          .filter((item: any) => item.category?.slug !== "pc-software" && item.platform !== "pc")
+          .map((item: any) => ({
+            ...item,
+            downloads_24h: dl24hMap[item.id] || 0,
+            downloads_count: totalDlMap[item.id] || 0,
+            latest_version:
+              item.versions?.find((v: any) => v.is_latest) || item.versions?.[0],
+          }));
+
+        // Sort by:
+        // 1. Most downloads in last 24 hours (24h velocity)
+        // 2. is_trending flag
+        // 3. Total all-time downloads
+        // 4. Rating
+        mappedApps.sort((a, b) => {
+          const dl24A = a.downloads_24h || 0;
+          const dl24B = b.downloads_24h || 0;
+          if (dl24B !== dl24A) return dl24B - dl24A;
+
+          if (b.is_trending && !a.is_trending) return 1;
+          if (!b.is_trending && a.is_trending) return -1;
+
+          const totalA = a.downloads_count || 0;
+          const totalB = b.downloads_count || 0;
+          if (totalB !== totalA) return totalB - totalA;
+
+          return (b.rating || 0) - (a.rating || 0);
+        });
+
+        return mappedApps.slice(0, limit);
+      }
+    } catch (err) {
+      console.error("Error in getTrendingAndroidApps:", err);
+    }
+  }
+
+  // Memory fallback
+  const androidApps = memoryApps
+    .filter((a) => a.status === "published" && a.platform !== "pc" && a.category?.slug !== "pc-software")
+    .map((a) => {
+      const now = Date.now();
+      const count24h = memoryDownloads.filter(
+        (d) => d.application_id === a.id && now - new Date(d.downloaded_at).getTime() <= 86400000
+      ).length;
+      return { ...a, downloads_24h: count24h };
+    })
+    .sort((a, b) => (b.downloads_24h || 0) - (a.downloads_24h || 0) || (b.is_trending ? 1 : 0) - (a.is_trending ? 1 : 0));
+
+  return androidApps.slice(0, limit);
 }
 
 export async function getLatestReleases(): Promise<Application[]> {

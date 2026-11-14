@@ -378,18 +378,18 @@ export function HeroSection({
           </div>
         )}
 
-        {/* 2. TRENDING ON ANDROID HORIZONTAL CAROUSEL (EXACT MATCH TO SCREENSHOT) */}
+        {/* 2. TRENDING ON ANDROID HORIZONTAL CAROUSEL (TOP DOWNLOADED IN LAST 24H) */}
         {carouselApps.length > 0 && (
           <div className="pt-2 border-t border-border/50 space-y-3.5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="flex h-2.5 w-2.5 rounded-full bg-amber-500" />
+                <span className="flex h-2.5 w-2.5 rounded-full bg-amber-500 animate-pulse" />
                 <h2 className="text-base sm:text-lg font-bold text-foreground flex items-center gap-1.5">
                   <span>Trending on Android</span>
                   <Flame className="h-4 w-4 text-amber-500" />
                 </h2>
                 <span className="text-xs text-muted-foreground hidden sm:inline">
-                  • Swipe to explore popular modded APKs
+                  • Top downloaded in the last 24 hours
                 </span>
               </div>
 
@@ -430,11 +430,15 @@ export function HeroSection({
                     <div className="relative w-16 h-16 sm:w-18 sm:h-18 rounded-2xl overflow-hidden border border-border/80 bg-secondary/50 shadow-sm group-hover:scale-105 transition-transform duration-200">
                       <AppIcon src={app.icon_url} alt={app.name} />
                     </div>
-                    {app.is_trending && (
+                    {app.downloads_24h && app.downloads_24h > 0 ? (
+                      <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.5 rounded-full bg-amber-500 text-[9px] font-extrabold text-black uppercase tracking-wider shadow">
+                        +{app.downloads_24h} 24h
+                      </span>
+                    ) : app.is_trending ? (
                       <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.5 rounded-full bg-amber-500 text-[9px] font-extrabold text-black uppercase tracking-wider shadow">
                         HOT
                       </span>
-                    )}
+                    ) : null}
                   </div>
 
                   <h3 className="text-xs sm:text-sm font-bold text-foreground truncate w-full group-hover:text-primary transition-colors">
@@ -446,7 +450,12 @@ export function HeroSection({
                     <span className="font-bold text-foreground">
                       {app.rating ? Number(app.rating).toFixed(1) : "5.0"}
                     </span>
-                    {app.downloads_count && app.downloads_count > 0 ? (
+                    {app.downloads_24h && app.downloads_24h > 0 ? (
+                      <>
+                        <span>•</span>
+                        <span className="font-semibold text-amber-500">+{app.downloads_24h} today</span>
+                      </>
+                    ) : app.downloads_count && app.downloads_count > 0 ? (
                       <>
                         <span>•</span>
                         <span>{formatNumber(app.downloads_count)}</span>

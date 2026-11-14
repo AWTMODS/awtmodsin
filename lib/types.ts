@@ -85,6 +85,7 @@ export type Application = {
   versions?: ApplicationVersion[];
   screenshots?: AppScreenshot[];
   downloads_count?: number;
+  downloads_24h?: number;
   mod_features?: string[];
 };
 

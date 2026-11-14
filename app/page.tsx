@@ -2,6 +2,7 @@ import {
   getSiteStats,
   getCategories,
   getApplications,
+  getTrendingAndroidApps,
   getSiteSettings,
 } from "@/lib/db";
 import { HeroSection } from "@/components/homepage/hero-section";
@@ -18,20 +19,19 @@ export default async function HomePage() {
   const [
     stats,
     { applications: publishedApps },
+    trendingApps,
     categories,
     settings,
   ] = await Promise.all([
     getSiteStats(),
-    getApplications({ limit: 30, sortBy: "newest" }),
+    getApplications({ limit: 40, sortBy: "newest" }),
+    getTrendingAndroidApps(12),
     getCategories(),
     getSiteSettings(),
   ]);
 
   const featuredApps = publishedApps.filter((a) => a.is_featured).slice(0, 4);
-  const trendingApps = [...publishedApps]
-    .sort((a, b) => (b.downloads_count || 0) - (a.downloads_count || 0))
-    .slice(0, 6);
-  const latestReleases = publishedApps.slice(0, 6);
+  const latestReleases = publishedApps.slice(0, 7);
   const pcSoftwares = publishedApps
     .filter((a) => (a as any).platform === "pc" || a.category?.slug === "pc-software")
     .slice(0, 4);

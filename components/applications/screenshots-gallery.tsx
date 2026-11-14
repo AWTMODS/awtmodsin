@@ -59,6 +59,7 @@ export function ScreenshotsGallery({
             <img
               src={activeImage}
               alt="Screenshot full preview"
+              referrerPolicy="no-referrer"
               className="max-h-[85vh] w-auto object-contain rounded-2xl"
             />
           </div>

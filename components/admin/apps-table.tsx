@@ -212,6 +212,7 @@ export function AppsTable({
                               <img
                                 src={app.icon_url}
                                 alt={app.name}
+                                referrerPolicy="no-referrer"
                                 className="absolute inset-0 h-full w-full object-cover"
                                 onError={(e) => {
                                   (e.currentTarget as HTMLElement).style.display = "none";

@@ -21,6 +21,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Application, AppCategory } from "@/lib/types";
 import { getAppUrl, formatNumber } from "@/lib/utils";
+import { AppIcon } from "@/components/applications/app-icon";
 
 interface HeroSectionProps {
   totalApps?: number;
@@ -88,7 +89,9 @@ export function HeroSection({
 }: HeroSectionProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const router = useRouter();
-  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const latestScrollRef = useRef<HTMLDivElement>(null);
+  const trendingScrollRef = useRef<HTMLDivElement>(null);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,10 +105,17 @@ export function HeroSection({
     router.push(`/search?q=${encodeURIComponent(tag)}`);
   };
 
-  const scroll = (direction: "left" | "right") => {
-    if (scrollRef.current) {
+  const scrollLatest = (direction: "left" | "right") => {
+    if (latestScrollRef.current) {
       const scrollAmount = direction === "left" ? -320 : 320;
-      scrollRef.current.scrollBy({ left: scrollAmount, behavior: "smooth" });
+      latestScrollRef.current.scrollBy({ left: scrollAmount, behavior: "smooth" });
+    }
+  };
+
+  const scrollTrending = (direction: "left" | "right") => {
+    if (trendingScrollRef.current) {
+      const scrollAmount = direction === "left" ? -320 : 320;
+      trendingScrollRef.current.scrollBy({ left: scrollAmount, behavior: "smooth" });
     }
   };
 
@@ -113,7 +123,7 @@ export function HeroSection({
   const recent7 = (latestReleases.length > 0 ? latestReleases : trendingApps).slice(0, 7);
 
   // Spotlight popular apps
-  const spotlightApps = (featuredApps.length > 0 ? featuredApps : trendingApps).slice(0, 2);
+  const spotlightApps = (featuredApps.length > 0 ? featuredApps : trendingApps).slice(0, 3);
 
   // Bottom carousel items
   const carouselApps = (trendingApps.length > 0 ? trendingApps : featuredApps).slice(0, 10);
@@ -124,8 +134,8 @@ export function HeroSection({
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-[420px] bg-neutral-200/20 dark:bg-neutral-800/15 blur-3xl rounded-full pointer-events-none -z-10" />
 
       <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-10">
-        {/* Top Hero Grid: Android Focus Copy & Dynamic Releases / Spotlight */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-start">
+        {/* Top Hero Grid: Android Focus Copy & Android Spotlight Showcase */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-center">
           {/* Left Column: Android-Optimized Copy & Search */}
           <div className="lg:col-span-7 space-y-5 text-left">
             {/* Android Badge */}
@@ -201,115 +211,13 @@ export function HeroSection({
             </div>
           </div>
 
-          {/* Right Column: Dynamic Latest Releases + Android Spotlight */}
-          <div className="lg:col-span-5 space-y-4">
-            {/* NEW SECTION (ABOVE OF SPOTLIGHT): Last 7 Releases Live Feed */}
-            <div className="rounded-3xl border border-border bg-card/90 p-4 sm:p-5 shadow-xl backdrop-blur-sm space-y-3">
-              <div className="flex items-center justify-between pb-2.5 border-b border-border/70">
-                <div className="flex items-center gap-2">
-                  <div className="relative flex h-2.5 w-2.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
-                  </div>
-                  <div>
-                    <h2 className="text-sm font-bold text-foreground flex items-center gap-1.5">
-                      <span>Latest Releases</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold border border-emerald-500/20">
-                        Last 7 Releases
-                      </span>
-                    </h2>
-                    <p className="text-[11px] text-muted-foreground">
-                      Auto-updates whenever new posts are published
-                    </p>
-                  </div>
-                </div>
-                <Link
-                  href="/apps?sort=newest"
-                  className="text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  View All &rarr;
-                </Link>
-              </div>
-
-              {/* Scrollable list of last 7 releases */}
-              <div className="space-y-2 max-h-[310px] overflow-y-auto pr-1 select-none scrollbar-thin">
-                {recent7.length > 0 ? (
-                  recent7.map((app, idx) => {
-                    const timeBadge = getRelativeTimeBadge(app.created_at || app.updated_at);
-                    const isPC = (app as any).platform === "pc" || app.category?.slug === "pc-software";
-
-                    return (
-                      <Link
-                        key={app.id || idx}
-                        href={getAppUrl(app.slug)}
-                        className="group flex items-center justify-between p-2.5 rounded-2xl border border-border/70 bg-secondary/30 hover:bg-secondary/70 hover:border-neutral-500/40 transition-all duration-200"
-                      >
-                        <div className="flex items-center gap-2.5 min-w-0 pr-2">
-                          <div className="w-10 h-10 rounded-xl overflow-hidden border border-border bg-card shrink-0">
-                            <img
-                              src={app.icon_url || "/icon.svg"}
-                              alt={app.name}
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                              loading="lazy"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).src = "/icon.svg";
-                              }}
-                            />
-                          </div>
-                          <div className="min-w-0 space-y-0.5">
-                            <h3 className="text-xs sm:text-sm font-bold text-foreground truncate group-hover:text-primary transition-colors">
-                              {app.name}
-                            </h3>
-                            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                              {timeBadge.isToday ? (
-                                <span className="inline-flex items-center px-1.5 py-0.2 rounded-md bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-extrabold text-[10px]">
-                                  🔥 {timeBadge.text}
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center px-1.5 py-0.2 rounded-md bg-secondary text-foreground/80 font-medium text-[10px] border border-border/60">
-                                  {timeBadge.text}
-                                </span>
-                              )}
-                              <span>•</span>
-                              <span className="truncate max-w-[110px] sm:max-w-[140px]">
-                                {app.category?.name || "Mod"}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="shrink-0 flex items-center">
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-foreground text-background text-[11px] font-bold shadow-xs group-hover:opacity-90 transition-opacity">
-                            {isPC ? (
-                              <>
-                                <Monitor className="h-3 w-3" />
-                                <span>PC</span>
-                              </>
-                            ) : (
-                              <>
-                                <Download className="h-3 w-3" />
-                                <span>APK</span>
-                              </>
-                            )}
-                          </span>
-                        </div>
-                      </Link>
-                    );
-                  })
-                ) : (
-                  <div className="text-center py-6 text-xs text-muted-foreground">
-                    New apps will appear here automatically.
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Android Spotlight Showcase (Directly below Latest Releases) */}
+          {/* Right Column: Android Spotlight Showcase */}
+          <div className="lg:col-span-5">
             <div className="rounded-3xl border border-border bg-card/90 p-4 sm:p-5 shadow-xl backdrop-blur-sm space-y-3">
               <div className="flex items-center justify-between pb-2.5 border-b border-border/70">
                 <div className="flex items-center gap-2">
                   <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-500 dark:text-emerald-400">
-                    <AndroidIcon className="h-3.5 w-3.5" />
+                    <AndroidIcon className="h-4 w-4" />
                   </div>
                   <div>
                     <h2 className="text-sm font-bold text-foreground">Android Spotlight</h2>
@@ -324,7 +232,7 @@ export function HeroSection({
                 </Link>
               </div>
 
-              {/* Spotlight App Cards */}
+              {/* Spotlight App Cards with Rock-Solid AppIcon */}
               <div className="space-y-2">
                 {spotlightApps.length > 0 ? (
                   spotlightApps.map((app) => (
@@ -334,16 +242,8 @@ export function HeroSection({
                       className="group flex items-center justify-between p-2.5 rounded-2xl border border-border/70 bg-secondary/30 hover:bg-secondary/70 hover:border-neutral-500/40 transition-all duration-200"
                     >
                       <div className="flex items-center gap-3 min-w-0 pr-2">
-                        <div className="w-11 h-11 rounded-xl overflow-hidden border border-border bg-card shrink-0">
-                          <img
-                            src={app.icon_url || "/icon.svg"}
-                            alt={app.name}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                            loading="lazy"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src = "/icon.svg";
-                            }}
-                          />
+                        <div className="relative w-11 h-11 rounded-xl overflow-hidden border border-border bg-card shrink-0 shadow-xs">
+                          <AppIcon src={app.icon_url} alt={app.name} />
                         </div>
                         <div className="min-w-0 space-y-0.5">
                           <h3 className="text-xs sm:text-sm font-bold text-foreground truncate group-hover:text-primary transition-colors">
@@ -378,12 +278,112 @@ export function HeroSection({
           </div>
         </div>
 
-        {/* Bottom Horizontal Swiper Strip: Trending on Android (Just like modplays.com) */}
-        {carouselApps.length > 0 && (
-          <div className="pt-4 border-t border-border/50 space-y-3.5">
+        {/* 1. LATEST RELEASES HORIZONTAL CAROUSEL (LAST 7 RELEASES) */}
+        {recent7.length > 0 && (
+          <div className="pt-2 border-t border-border/50 space-y-3.5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="flex h-2 w-2 rounded-full bg-amber-500" />
+                <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                <h2 className="text-base sm:text-lg font-bold text-foreground flex items-center gap-2">
+                  <span>Latest Releases</span>
+                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold border border-emerald-500/20">
+                    Last 7 Releases
+                  </span>
+                </h2>
+                <span className="text-xs text-muted-foreground hidden sm:inline">
+                  • Swipe to explore newly published APKs & software
+                </span>
+              </div>
+
+              {/* Navigation Arrows for Latest Releases Carousel */}
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => scrollLatest("left")}
+                  aria-label="Scroll left"
+                  className="p-1.5 rounded-xl border border-border bg-card hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => scrollLatest("right")}
+                  aria-label="Scroll right"
+                  className="p-1.5 rounded-xl border border-border bg-card hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Horizontal Touch Scroll Row for Latest Releases */}
+            <div
+              ref={latestScrollRef}
+              className="flex items-stretch gap-3.5 overflow-x-auto pb-2 scroll-smooth -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none]"
+              style={{ WebkitOverflowScrolling: "touch" }}
+            >
+              {recent7.map((app) => {
+                const timeBadge = getRelativeTimeBadge(app.created_at || app.updated_at);
+                const isPC = (app as any).platform === "pc" || app.category?.slug === "pc-software";
+
+                return (
+                  <Link
+                    key={`latest-${app.id}`}
+                    href={getAppUrl(app.slug)}
+                    className="group flex-shrink-0 w-36 sm:w-44 flex flex-col items-center text-center p-3 sm:p-3.5 rounded-2xl border border-border bg-card/80 hover:bg-card hover:border-neutral-500/50 transition-all duration-200 select-none shadow-xs"
+                  >
+                    <div className="relative mb-2">
+                      <div className="relative w-16 h-16 sm:w-18 sm:h-18 rounded-2xl overflow-hidden border border-border/80 bg-secondary/50 shadow-sm group-hover:scale-105 transition-transform duration-200">
+                        <AppIcon src={app.icon_url} alt={app.name} />
+                      </div>
+                      {timeBadge.isToday ? (
+                        <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.5 rounded-full bg-emerald-500 text-[9px] font-extrabold text-black uppercase tracking-wider shadow">
+                          TODAY
+                        </span>
+                      ) : (
+                        <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.5 rounded-full bg-neutral-800 text-neutral-200 border border-neutral-700 text-[9px] font-bold uppercase tracking-wider shadow">
+                          {timeBadge.text}
+                        </span>
+                      )}
+                    </div>
+
+                    <h3 className="text-xs sm:text-sm font-bold text-foreground truncate w-full group-hover:text-primary transition-colors">
+                      {app.name}
+                    </h3>
+
+                    <div className="flex items-center gap-1 text-[11px] text-muted-foreground mt-1">
+                      <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                      <span className="font-bold text-foreground">
+                        {app.rating ? Number(app.rating).toFixed(1) : "5.0"}
+                      </span>
+                      <span>•</span>
+                      <span className="truncate max-w-[80px]">
+                        {isPC ? "PC" : app.category?.name || "Android"}
+                      </span>
+                    </div>
+
+                    {app.mod_features && app.mod_features.length > 0 ? (
+                      <span className="mt-2 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-secondary text-foreground/90 border border-border/80 truncate max-w-full">
+                        {app.mod_features[0]}
+                      </span>
+                    ) : (
+                      <span className="mt-2 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 truncate max-w-full">
+                        {isPC ? "PC Software" : "Verified APK"}
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* 2. TRENDING ON ANDROID HORIZONTAL CAROUSEL (EXACT MATCH TO SCREENSHOT) */}
+        {carouselApps.length > 0 && (
+          <div className="pt-2 border-t border-border/50 space-y-3.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="flex h-2.5 w-2.5 rounded-full bg-amber-500" />
                 <h2 className="text-base sm:text-lg font-bold text-foreground flex items-center gap-1.5">
                   <span>Trending on Android</span>
                   <Flame className="h-4 w-4 text-amber-500" />
@@ -393,11 +393,11 @@ export function HeroSection({
                 </span>
               </div>
 
-              {/* Navigation Arrows for Desktop */}
+              {/* Navigation Arrows for Trending Carousel */}
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
-                  onClick={() => scroll("left")}
+                  onClick={() => scrollTrending("left")}
                   aria-label="Scroll left"
                   className="p-1.5 rounded-xl border border-border bg-card hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
                 >
@@ -405,7 +405,7 @@ export function HeroSection({
                 </button>
                 <button
                   type="button"
-                  onClick={() => scroll("right")}
+                  onClick={() => scrollTrending("right")}
                   aria-label="Scroll right"
                   className="p-1.5 rounded-xl border border-border bg-card hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
                 >
@@ -414,29 +414,21 @@ export function HeroSection({
               </div>
             </div>
 
-            {/* Horizontal Touch Scroll Row */}
+            {/* Horizontal Touch Scroll Row for Trending */}
             <div
-              ref={scrollRef}
+              ref={trendingScrollRef}
               className="flex items-stretch gap-3.5 overflow-x-auto pb-2 scroll-smooth -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none]"
               style={{ WebkitOverflowScrolling: "touch" }}
             >
               {carouselApps.map((app) => (
                 <Link
-                  key={app.id}
+                  key={`trending-${app.id}`}
                   href={getAppUrl(app.slug)}
                   className="group flex-shrink-0 w-36 sm:w-44 flex flex-col items-center text-center p-3 sm:p-3.5 rounded-2xl border border-border bg-card/80 hover:bg-card hover:border-neutral-500/50 transition-all duration-200 select-none shadow-xs"
                 >
                   <div className="relative mb-2">
-                    <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-2xl overflow-hidden border border-border/80 bg-secondary/50 shadow-sm group-hover:scale-105 transition-transform duration-200">
-                      <img
-                        src={app.icon_url || "/icon.svg"}
-                        alt={app.name}
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = "/icon.svg";
-                        }}
-                      />
+                    <div className="relative w-16 h-16 sm:w-18 sm:h-18 rounded-2xl overflow-hidden border border-border/80 bg-secondary/50 shadow-sm group-hover:scale-105 transition-transform duration-200">
+                      <AppIcon src={app.icon_url} alt={app.name} />
                     </div>
                     {app.is_trending && (
                       <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.5 rounded-full bg-amber-500 text-[9px] font-extrabold text-black uppercase tracking-wider shadow">

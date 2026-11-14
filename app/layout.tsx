@@ -10,6 +10,7 @@ const siteUrl =
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
+  referrer: "no-referrer",
   title: {
     default: "AWTMods — Download Modded Apps, Games & PC Software",
     template: "%s | AWTMods",

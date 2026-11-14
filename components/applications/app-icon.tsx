@@ -15,19 +15,44 @@ export function AppIcon({
   className = "absolute inset-0 h-full w-full object-cover",
   fallbackLetter,
 }: AppIconProps) {
-  const [error, setError] = useState(false);
+  const [errorLevel, setErrorLevel] = useState<number>(0);
 
-  if (!src || error) {
-    return <span>{fallbackLetter || alt.slice(0, 1)}</span>;
+  // If no source is provided at all
+  if (!src) {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-secondary text-foreground font-bold">
+        {fallbackLetter || alt.slice(0, 1).toUpperCase()}
+      </div>
+    );
+  }
+
+  // Level 0: Direct URL with no-referrer
+  // Level 1: Proxy URL through /api/image-proxy
+  // Level 2: Fallback to SVG / letter
+  const currentSrc =
+    errorLevel === 0
+      ? src
+      : errorLevel === 1
+      ? `/api/image-proxy?url=${encodeURIComponent(src)}`
+      : "/icon.svg";
+
+  if (errorLevel >= 2) {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-neutral-900 border border-neutral-800 text-white font-black text-sm select-none">
+        {fallbackLetter || alt.slice(0, 1).toUpperCase()}
+      </div>
+    );
   }
 
   return (
     <img
-      src={src}
+      src={currentSrc}
       alt={alt}
       className={className}
-      onError={() => setError(true)}
+      loading="lazy"
+      decoding="async"
+      referrerPolicy="no-referrer"
+      onError={() => setErrorLevel((prev) => prev + 1)}
     />
   );
 }
-

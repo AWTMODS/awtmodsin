@@ -39,6 +39,14 @@ export const metadata: Metadata = {
   alternates: {
     canonical: "./",
   },
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+    apple: [
+      { url: "/apple-icon.svg", sizes: "180x180", type: "image/svg+xml" },
+    ],
+  },
   openGraph: {
     title: "AWTMods — Download Modded Apps, Games & PC Software",
     description:
@@ -47,7 +55,7 @@ export const metadata: Metadata = {
     siteName: "AWTMods",
     images: [
       {
-        url: "/icon",
+        url: "/icon.svg",
         width: 512,
         height: 512,
         alt: "AWTMods Platform",
@@ -62,7 +70,7 @@ export const metadata: Metadata = {
     description:
       "Discover and download verified Android modded applications, premium APKs, and PC software.",
     creator: "@awtmods",
-    images: ["/icon"],
+    images: ["/icon.svg"],
   },
   robots: {
     index: true,

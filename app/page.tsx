@@ -63,7 +63,7 @@ export default async function HomePage() {
         "@id": `${baseUrl}/#organization`,
         name: "AWTMods",
         url: baseUrl,
-        logo: `${baseUrl}/icon`,
+        logo: `${baseUrl}/icon.svg`,
         sameAs: [
           settings?.telegramUrl || "https://t.me/awtmods",
           settings?.instagramUrl || "https://instagram.com/awtmods",

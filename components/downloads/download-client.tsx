@@ -64,7 +64,10 @@ export function DownloadClient({
     }
   };
 
-  const getProviderName = (provider: string) => {
+  const getProviderName = (provider: string, mirrorName?: string | null) => {
+    if (mirrorName && mirrorName.toLowerCase().includes("devupload")) {
+      return "DevUploads Fast CDN";
+    }
     const names: Record<string, string> = {
       mediafire: "MediaFire",
       google_drive: "Google Drive",
@@ -108,7 +111,7 @@ export function DownloadClient({
               Download {app.name}
             </h2>
             <p className="text-xs text-muted-foreground">
-              Hosted on {activeMirror ? getProviderName(activeMirror.hosting_provider) : "External Host"} • File size: {version.file_size}
+              Hosted on {activeMirror ? getProviderName(activeMirror.hosting_provider, activeMirror.mirror_name) : "External Host"} • File size: {version.file_size}
             </p>
           </div>
 
@@ -182,7 +185,7 @@ export function DownloadClient({
                 >
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-foreground">
-                      {mirror.mirror_name || getProviderName(mirror.hosting_provider)}
+                      {mirror.mirror_name || getProviderName(mirror.hosting_provider, mirror.mirror_name)}
                     </span>
                     {mirror.is_primary && (
                       <Badge variant="outline" className="text-[9px] py-0">

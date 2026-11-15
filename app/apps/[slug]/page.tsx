@@ -466,11 +466,11 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
                 >
                   <div className="flex items-center gap-3">
                     <div className="h-10 w-10 rounded-xl bg-card flex items-center justify-center font-bold text-xs uppercase border border-border">
-                      {mirror.hosting_provider.slice(0, 3)}
+                      {mirror.mirror_name?.toLowerCase().includes("devupload") ? "DEV" : mirror.hosting_provider.slice(0, 3)}
                     </div>
                     <div>
                       <div className="font-semibold text-sm text-foreground flex items-center gap-2">
-                        <span>{mirror.mirror_name || `${mirror.hosting_provider.toUpperCase()} Mirror`}</span>
+                        <span>{mirror.mirror_name || (mirror.hosting_provider === "custom" ? "DevUploads Mirror" : `${mirror.hosting_provider.toUpperCase()} Mirror`)}</span>
                         {mirror.is_primary && (
                           <Badge variant="success" className="text-[10px]">
                             Primary
@@ -478,7 +478,7 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
                         )}
                       </div>
                       <div className="text-xs text-muted-foreground capitalize">
-                        Host: {mirror.hosting_provider.replace("_", " ")}
+                        Host: {mirror.mirror_name?.toLowerCase().includes("devupload") ? "DevUploads Fast CDN" : mirror.hosting_provider.replace("_", " ")}
                       </div>
                     </div>
                   </div>

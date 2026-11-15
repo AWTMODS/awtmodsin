@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { getDbClient, getApplicationById, invalidateDbCache } from "@/lib/db";
+import { broadcastToTelegram } from "@/lib/telegram-broadcast";
 import { Application, HostingProvider } from "@/lib/types";
 
 // Classify hosting provider based on URL domain
@@ -234,6 +235,14 @@ export async function POST(req: Request) {
 
       // Fetch the updated full app with newly attached version and mirrors
       const updatedApp = await getApplicationById(appId);
+
+      // Trigger Telegram auto-post if configured
+      if (updatedApp) {
+        broadcastToTelegram({
+          app: updatedApp,
+          customMessage: releaseNotes,
+        }).catch((err) => console.warn("Telegram broadcast error:", err));
+      }
 
       // Invalidate memory cache and revalidate paths
       invalidateDbCache();

@@ -6,6 +6,7 @@ import { DownloadClient } from "@/components/downloads/download-client";
 import { ShieldCheck, HardDrive, Cpu, CheckCircle2, AlertTriangle, ArrowLeft } from "lucide-react";
 import { AppIcon } from "@/components/applications/app-icon";
 import { getAppUrl, cleanAppSlug } from "@/lib/utils";
+import { AdBanner } from "@/components/ads/ad-banner";
 
 interface DownloadPageProps {
   params: {
@@ -95,11 +96,22 @@ export default async function DownloadPage({
     <div className="container mx-auto max-w-3xl px-4 py-12 sm:px-6">
       <Link
         href={getAppUrl(app.slug)}
-        className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors mb-8"
+        className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors mb-4"
       >
         <ArrowLeft className="h-4 w-4" />
         <span>Back to {app.name}</span>
       </Link>
+
+      {/* Top Header Ad Placement (Managed from /admin/settings) */}
+      <AdBanner
+        html={settings.adHeaderBannerHtml}
+        enabled={settings.adHeaderBannerEnabled}
+        masterEnabled={settings.adsMasterEnabled}
+        mobileEnabled={settings.adsMobileEnabled}
+        desktopEnabled={settings.adsDesktopEnabled}
+        slotName="Sponsored Advertisement"
+        className="mb-6"
+      />
 
       <div className="rounded-3xl border border-border bg-card p-6 sm:p-10 shadow-lg">
         {/* App Mini Header */}
@@ -127,6 +139,15 @@ export default async function DownloadPage({
           mirrors={mirrors}
           currentMirror={selectedMirror}
           countdownSeconds={settings.countdownSeconds || 5}
+          botUsername={settings.telegramBotUsername || "awtmods_bot"}
+          vipPrice={settings.telegramVipPrice || 20}
+          adSettings={{
+            masterEnabled: settings.adsMasterEnabled,
+            countdownAdHtml: settings.adCountdownCardHtml,
+            countdownAdEnabled: settings.adCountdownCardEnabled,
+            mobileEnabled: settings.adsMobileEnabled,
+            desktopEnabled: settings.adsDesktopEnabled,
+          }}
         />
 
         {/* Installation Guidelines & Security Specs */}

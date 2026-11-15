@@ -5,7 +5,19 @@ import { SiteSettings } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Check, Save, Loader2 } from "lucide-react";
+import {
+  Check,
+  Save,
+  Loader2,
+  Send,
+  Zap,
+  Eye,
+  EyeOff,
+  DollarSign,
+  Smartphone,
+  Laptop,
+  Radio,
+} from "lucide-react";
 import { toast } from "sonner";
 
 export function SettingsManager({
@@ -15,6 +27,43 @@ export function SettingsManager({
 }) {
   const [settings, setSettings] = useState<SiteSettings>(initialSettings);
   const [saving, setSaving] = useState(false);
+  const [testingBot, setTestingBot] = useState(false);
+  const [showToken, setShowToken] = useState(false);
+
+  const handleTestTelegram = async () => {
+    if (!settings.telegramBotToken) {
+      toast.error("Please enter a Telegram Bot Token first.");
+      return;
+    }
+    setTestingBot(true);
+    try {
+      // First save settings so the server has the latest token
+      await fetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(settings),
+      });
+
+      const res = await fetch("/api/admin/telegram-broadcast", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "test",
+          targetChat: settings.telegramChannelId || "@awtmods",
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to deliver test message");
+      }
+      toast.success(data.message || "Test message sent to Telegram successfully!");
+    } catch (err: any) {
+      toast.error(err.message || "Telegram test failed");
+    } finally {
+      setTestingBot(false);
+    }
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -203,6 +252,346 @@ export function SettingsManager({
               />
               <span>Enable Direct APK Storage Uploads (R2 / S3)</span>
             </label>
+          </div>
+        </div>
+      </div>
+
+      {/* Telegram VIP & Auto-Poster Section */}
+      <div className="rounded-3xl border-2 border-sky-500/30 bg-card p-6 sm:p-8 space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-border gap-2">
+          <div className="space-y-0.5">
+            <h3 className="font-bold text-base text-foreground flex items-center gap-2">
+              <Send className="h-4 w-4 text-sky-400" />
+              <span>Telegram Bot &amp; Channel Auto-Poster</span>
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Automate channel releases and manage the @{settings.telegramBotUsername || "awtmods_bot"} VIP payment gateway.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleTestTelegram}
+            disabled={testingBot || !settings.telegramBotToken}
+            className="rounded-xl border-sky-500/40 text-xs font-semibold gap-1.5 self-start sm:self-auto hover:bg-sky-500/10 text-foreground"
+          >
+            {testingBot ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-400" />
+            ) : (
+              <Radio className="h-3.5 w-3.5 text-sky-400" />
+            )}
+            <span>Send Test Message</span>
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Bot Token */}
+          <div className="space-y-1 sm:col-span-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold uppercase text-foreground">
+                Telegram Bot Token (@BotFather)
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowToken(!showToken)}
+                className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+              >
+                {showToken ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                <span>{showToken ? "Hide Token" : "Show Token"}</span>
+              </button>
+            </div>
+            <Input
+              type={showToken ? "text" : "password"}
+              placeholder="e.g. 7123456789:AAHxyz..."
+              value={settings.telegramBotToken || ""}
+              onChange={(e) =>
+                setSettings({ ...settings, telegramBotToken: e.target.value.trim() })
+              }
+              className="rounded-xl text-xs font-mono"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Saved securely in your private database. Never exposed to public website visitors.
+            </p>
+          </div>
+
+          {/* Public Channel ID */}
+          <div className="space-y-1">
+            <label className="text-xs font-semibold uppercase text-foreground">
+              Public Auto-Post Channel
+            </label>
+            <Input
+              placeholder="@awtmods"
+              value={settings.telegramChannelId || "@awtmods"}
+              onChange={(e) =>
+                setSettings({ ...settings, telegramChannelId: e.target.value.trim() })
+              }
+              className="rounded-xl text-xs font-mono"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Channel username (e.g. @awtmods) or numeric ID (-100xxxx).
+            </p>
+          </div>
+
+          {/* Private APK Channel ID */}
+          <div className="space-y-1">
+            <label className="text-xs font-semibold uppercase text-foreground">
+              Private APK Storage Channel ID
+            </label>
+            <Input
+              placeholder="e.g. -1002345678901"
+              value={settings.telegramPrivateChannelId || ""}
+              onChange={(e) =>
+                setSettings({
+                  ...settings,
+                  telegramPrivateChannelId: e.target.value.trim(),
+                })
+              }
+              className="rounded-xl text-xs font-mono"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Where direct APKs are stored. The bot forwards files from here.
+            </p>
+          </div>
+
+          {/* Admin Chat ID */}
+          <div className="space-y-1">
+            <label className="text-xs font-semibold uppercase text-foreground">
+              Admin Telegram Chat ID (For Payment Approvals)
+            </label>
+            <Input
+              placeholder="1343548529"
+              value={settings.telegramAdminChatId || "1343548529"}
+              onChange={(e) =>
+                setSettings({
+                  ...settings,
+                  telegramAdminChatId: e.target.value.trim(),
+                })
+              }
+              className="rounded-xl text-xs font-mono"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Where the bot forwards UPI screenshots with [ Approve ] / [ Reject ] buttons.
+            </p>
+          </div>
+
+          {/* Bot Username & VIP Price */}
+          <div className="space-y-1">
+            <label className="text-xs font-semibold uppercase text-foreground">
+              Telegram VIP Bot Username
+            </label>
+            <Input
+              placeholder="awtmods_bot"
+              value={settings.telegramBotUsername || "awtmods_bot"}
+              onChange={(e) =>
+                setSettings({
+                  ...settings,
+                  telegramBotUsername: e.target.value.replace(/^@/, "").trim(),
+                })
+              }
+              className="rounded-xl text-xs font-mono"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-semibold uppercase text-foreground">
+              VIP Monthly Price (INR ₹)
+            </label>
+            <Input
+              type="number"
+              min={1}
+              value={settings.telegramVipPrice || 20}
+              onChange={(e) =>
+                setSettings({
+                  ...settings,
+                  telegramVipPrice: parseInt(e.target.value, 10) || 20,
+                })
+              }
+              className="rounded-xl text-xs font-mono"
+            />
+          </div>
+
+          {/* Auto Post Toggle */}
+          <div className="sm:col-span-2 pt-2">
+            <label className="flex items-center gap-2.5 cursor-pointer text-xs font-semibold text-foreground">
+              <input
+                type="checkbox"
+                checked={settings.telegramAutoPostEnabled !== false}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    telegramAutoPostEnabled: e.target.checked,
+                  })
+                }
+                className="h-4 w-4 rounded border-border"
+              />
+              <span>Automatically post new releases &amp; version updates to Telegram Channel</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      {/* 💰 Smart Banner & Ad Space Placement Manager */}
+      <div className="rounded-3xl border-2 border-emerald-500/30 bg-card p-6 sm:p-8 space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-border gap-2">
+          <div className="space-y-0.5">
+            <h3 className="font-bold text-base text-foreground flex items-center gap-2">
+              <DollarSign className="h-4 w-4 text-emerald-500" />
+              <span>Smart Banner &amp; Ad Space Placement Manager</span>
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Control your revenue slots (AdSense, Adsterra, Monetag, or custom sponsor banners) with zero code changes.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 text-xs font-bold text-foreground cursor-pointer">
+              <input
+                type="checkbox"
+                checked={settings.adsMasterEnabled || false}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    adsMasterEnabled: e.target.checked,
+                  })
+                }
+                className="h-4 w-4 rounded border-border text-emerald-500"
+              />
+              <span>Master Ad Switch</span>
+            </label>
+          </div>
+        </div>
+
+        {/* Device Visibility Toggles */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-2 border-b border-border">
+          <label className="flex items-center gap-2 text-xs font-medium text-foreground cursor-pointer">
+            <input
+              type="checkbox"
+              checked={settings.adsMobileEnabled !== false}
+              onChange={(e) =>
+                setSettings({
+                  ...settings,
+                  adsMobileEnabled: e.target.checked,
+                })
+              }
+              className="h-4 w-4 rounded border-border"
+            />
+            <Smartphone className="h-4 w-4 text-muted-foreground" />
+            <span>Show Ads on Mobile Devices</span>
+          </label>
+
+          <label className="flex items-center gap-2 text-xs font-medium text-foreground cursor-pointer">
+            <input
+              type="checkbox"
+              checked={settings.adsDesktopEnabled !== false}
+              onChange={(e) =>
+                setSettings({
+                  ...settings,
+                  adsDesktopEnabled: e.target.checked,
+                })
+              }
+              className="h-4 w-4 rounded border-border"
+            />
+            <Laptop className="h-4 w-4 text-muted-foreground" />
+            <span>Show Ads on Desktop</span>
+          </label>
+        </div>
+
+        {/* Ad Slots */}
+        <div className="space-y-4">
+          {/* Header Banner Slot */}
+          <div className="space-y-1.5 p-4 rounded-2xl border border-border bg-secondary/30">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-foreground">
+                Top Header Banner Ad (728x90 / Responsive)
+              </label>
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={settings.adHeaderBannerEnabled || false}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      adHeaderBannerEnabled: e.target.checked,
+                    })
+                  }
+                  className="h-3.5 w-3.5 rounded border-border"
+                />
+                <span>Active</span>
+              </label>
+            </div>
+            <Textarea
+              rows={2}
+              placeholder="<!-- Paste AdSense, Adsterra, or custom HTML banner script here -->"
+              value={settings.adHeaderBannerHtml || ""}
+              onChange={(e) =>
+                setSettings({ ...settings, adHeaderBannerHtml: e.target.value })
+              }
+              className="rounded-xl text-xs font-mono"
+            />
+          </div>
+
+          {/* Download Countdown Card Ad */}
+          <div className="space-y-1.5 p-4 rounded-2xl border border-border bg-secondary/30">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-foreground">
+                Download Page Interstitial Card (Shown During 5s Countdown)
+              </label>
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={settings.adCountdownCardEnabled || false}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      adCountdownCardEnabled: e.target.checked,
+                    })
+                  }
+                  className="h-3.5 w-3.5 rounded border-border"
+                />
+                <span>Active</span>
+              </label>
+            </div>
+            <Textarea
+              rows={2}
+              placeholder="<!-- Interstitial banner snippet or 300x250 ad tag -->"
+              value={settings.adCountdownCardHtml || ""}
+              onChange={(e) =>
+                setSettings({ ...settings, adCountdownCardHtml: e.target.value })
+              }
+              className="rounded-xl text-xs font-mono"
+            />
+          </div>
+
+          {/* In-Feed Native Card Ad */}
+          <div className="space-y-1.5 p-4 rounded-2xl border border-border bg-secondary/30">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-foreground">
+                Native In-Feed Ad (App Grid &amp; Category Listings)
+              </label>
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={settings.adInFeedBannerEnabled || false}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      adInFeedBannerEnabled: e.target.checked,
+                    })
+                  }
+                  className="h-3.5 w-3.5 rounded border-border"
+                />
+                <span>Active</span>
+              </label>
+            </div>
+            <Textarea
+              rows={2}
+              placeholder="<!-- Native in-feed ad script or sponsored card markup -->"
+              value={settings.adInFeedBannerHtml || ""}
+              onChange={(e) =>
+                setSettings({ ...settings, adInFeedBannerHtml: e.target.value })
+              }
+              className="rounded-xl text-xs font-mono"
+            />
           </div>
         </div>
       </div>

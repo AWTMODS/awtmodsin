@@ -156,6 +156,22 @@ export const initialSiteSettings: SiteSettings = {
     "custom",
     "cloudflare_r2",
   ],
+  telegramBotToken: "",
+  telegramChannelId: "@awtmods",
+  telegramPrivateChannelId: "",
+  telegramAdminChatId: "1343548529",
+  telegramAutoPostEnabled: true,
+  telegramBotUsername: "awtmods_bot",
+  telegramVipPrice: 20,
+  adsMasterEnabled: false,
+  adsMobileEnabled: true,
+  adsDesktopEnabled: true,
+  adHeaderBannerHtml: "",
+  adHeaderBannerEnabled: false,
+  adCountdownCardHtml: "",
+  adCountdownCardEnabled: false,
+  adInFeedBannerHtml: "",
+  adInFeedBannerEnabled: false,
 };
 
 // No demo reports - clean state

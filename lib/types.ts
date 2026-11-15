@@ -150,6 +150,24 @@ export type SiteSettings = {
   allowDirectUploads: boolean;
   enableChecksumVerification: boolean;
   allowedProviders: HostingProvider[];
+  // Telegram VIP & Auto-Poster Settings
+  telegramBotToken?: string;
+  telegramChannelId?: string;
+  telegramPrivateChannelId?: string;
+  telegramAdminChatId?: string;
+  telegramAutoPostEnabled?: boolean;
+  telegramBotUsername?: string;
+  telegramVipPrice?: number;
+  // Smart Banner & Ad Space Placement Manager
+  adsMasterEnabled?: boolean;
+  adsMobileEnabled?: boolean;
+  adsDesktopEnabled?: boolean;
+  adHeaderBannerHtml?: string;
+  adHeaderBannerEnabled?: boolean;
+  adCountdownCardHtml?: string;
+  adCountdownCardEnabled?: boolean;
+  adInFeedBannerHtml?: string;
+  adInFeedBannerEnabled?: boolean;
 };
 
 export type ApplicationReview = {

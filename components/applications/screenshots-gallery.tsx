@@ -6,7 +6,7 @@ import { X, ZoomIn } from "lucide-react";
 import { AppScreenshot } from "@/lib/types";
 
 interface ScreenshotsGalleryProps {
-  screenshots: AppScreenshot[];
+  screenshots: (AppScreenshot | string)[];
   appName: string;
 }
 
@@ -16,20 +16,34 @@ export function ScreenshotsGallery({
 }: ScreenshotsGalleryProps) {
   const [activeImage, setActiveImage] = useState<string | null>(null);
 
+  // Normalize screenshots whether they are string URLs or AppScreenshot objects
+  const normalizedScreenshots = (screenshots || [])
+    .map((s, index) => {
+      const url = typeof s === "string" ? s : s?.image_url;
+      const id = typeof s === "object" && s && "id" in s ? s.id : `screenshot-${index}`;
+      return { id, url };
+    })
+    .filter((s): s is { id: string; url: string } => Boolean(s.url && s.url.trim().length > 0));
+
+  if (normalizedScreenshots.length === 0) {
+    return null;
+  }
+
   return (
     <>
       {/* Horizontal scrolling gallery */}
       <div className="flex gap-4 overflow-x-auto pb-4 pt-1 snap-x snap-mandatory scrollbar-thin">
-        {screenshots.map((s, index) => (
+        {normalizedScreenshots.map((s, index) => (
           <div
             key={s.id || index}
-            onClick={() => setActiveImage(s.image_url)}
+            onClick={() => setActiveImage(s.url)}
             className="group relative h-80 w-44 sm:h-96 sm:w-52 shrink-0 cursor-pointer overflow-hidden rounded-3xl border border-border bg-card shadow-sm snap-start transition-all duration-300 hover:scale-[1.02] hover:border-neutral-400"
           >
             <Image
-              src={s.image_url}
+              src={s.url}
               alt={`${appName} screenshot ${index + 1}`}
               fill
+              unoptimized
               className="object-cover"
               sizes="(max-width: 640px) 176px, 208px"
             />

@@ -282,8 +282,8 @@ export async function POST(req: Request) {
           status: initialStatus,
           download_sources: [
             {
-              download_type: "direct",
-              hosting_provider: "other",
+              download_type: "external",
+              hosting_provider: "mediafire",
               download_url: "https://www.mediafire.com",
               mirror_name: "MediaFire Fast CDN",
               is_primary: true,
@@ -378,8 +378,8 @@ export async function POST(req: Request) {
         status: initialStatus,
         download_sources: [
           {
-            download_type: "direct",
-            hosting_provider: "other",
+            download_type: "external",
+            hosting_provider: "mediafire",
             download_url: "https://www.mediafire.com",
             mirror_name: "MediaFire Fast CDN",
             is_primary: true,

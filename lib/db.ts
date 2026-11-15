@@ -616,25 +616,101 @@ export async function getAnalyticsChartData(days: number = 30) {
 // ADMIN MUTATIONS (SAVED DIRECTLY TO DATABASE)
 // ==========================================
 
+const VALID_DOWNLOAD_TYPES = new Set(["upload", "external"]);
+const VALID_HOSTING_PROVIDERS = new Set([
+  "mediafire",
+  "google_drive",
+  "dropbox",
+  "mega",
+  "telegram",
+  "custom",
+  "cloudflare_r2",
+  "supabase_storage",
+]);
+
+function sanitizeAppPayload(data: any) {
+  const sanitized = { ...data };
+
+  // Guarantee non-null required strings for applications table
+  if (!sanitized.name) sanitized.name = "Untitled App";
+  if (!sanitized.slug) sanitized.slug = `app-${Date.now()}`;
+  if (!sanitized.package_name) sanitized.package_name = `com.awtmods.${sanitized.slug.replace(/[^a-z0-9]/gi, ".")}`;
+  if (!sanitized.developer) sanitized.developer = "AWTMods Team";
+  if (!sanitized.short_description) {
+    sanitized.short_description = `Download ${sanitized.name} with premium features unlocked for Android.`;
+  }
+  if (!sanitized.description) {
+    sanitized.description = `### Overview\n${sanitized.name} is available for download with premium mod features unlocked.`;
+  }
+  if (!sanitized.icon_url) sanitized.icon_url = "/icons/default-app.png";
+  if (!sanitized.android_requirement) sanitized.android_requirement = "Android 7.0+";
+  if (!sanitized.status) sanitized.status = "published";
+
+  // Sanitize version & download sources if present
+  if (sanitized.version) {
+    const v = { ...sanitized.version };
+    if (!v.version_name) v.version_name = "v1.0.0";
+    if (!v.version_code) v.version_code = 1;
+    if (!v.file_size) v.file_size = "50 MB";
+    if (!v.android_requirement) v.android_requirement = sanitized.android_requirement || "Android 7.0+";
+
+    if (Array.isArray(v.download_sources)) {
+      v.download_sources = v.download_sources.map((src: any, index: number) => {
+        let download_type = src.download_type;
+        if (!VALID_DOWNLOAD_TYPES.has(download_type)) {
+          download_type = "external";
+        }
+        let hosting_provider = src.hosting_provider;
+        if (!VALID_HOSTING_PROVIDERS.has(hosting_provider)) {
+          hosting_provider = "mediafire";
+        }
+        return {
+          ...src,
+          download_type,
+          hosting_provider,
+          download_url: src.download_url || "https://www.mediafire.com",
+          mirror_name: src.mirror_name || (hosting_provider === "mediafire" ? "MediaFire Fast CDN" : "Primary Mirror"),
+          is_primary: index === 0 ? true : !!src.is_primary,
+          is_active: src.is_active !== false,
+        };
+      });
+    }
+
+    sanitized.version = v;
+  }
+
+  // Sanitize screenshots array
+  if (Array.isArray(sanitized.screenshots)) {
+    sanitized.screenshots = sanitized.screenshots
+      .map((s: any) => (typeof s === "string" ? s : s?.image_url))
+      .filter((url: any) => typeof url === "string" && url.trim().length > 0);
+  }
+
+  return sanitized;
+}
+
 export async function createApplication(
   data: Partial<Application> & { version?: any }
 ): Promise<Application> {
   invalidateDbCache();
   const supabase = getDbClient();
+  const sanitized = sanitizeAppPayload(data);
 
   if (supabase) {
     try {
       const { data: result, error } = await supabase.rpc(
         "admin_save_application",
         {
-          p_app: data,
+          p_app: sanitized,
         }
       );
 
       if (!error && result?.success && result?.app) {
-        // Also keep memory updated as local cache
-        memoryApps.unshift(result.app);
-        return result.app;
+        // Fetch full application with nested relations (versions, mirrors, screenshots)
+        const fullApp = await getApplicationById(result.app.id);
+        const finalApp = fullApp || result.app;
+        memoryApps.unshift(finalApp);
+        return finalApp;
       }
       if (error) {
         console.error("Supabase RPC admin_save_application error:", error);
@@ -647,40 +723,40 @@ export async function createApplication(
   // Memory fallback if DB is not reachable
   const newId = `app-${Date.now()}`;
   const category =
-    memoryCategories.find((c) => c.id === data.category_id) || memoryCategories[0];
+    memoryCategories.find((c) => c.id === sanitized.category_id) || memoryCategories[0];
 
   const newVersion: ApplicationVersion = {
     id: `ver-${Date.now()}`,
     application_id: newId,
-    version_name: data.version?.version_name || "v1.0.0",
-    version_code: data.version?.version_code || 1,
-    file_size: data.version?.file_size || "50 MB",
-    architecture: data.version?.architecture || "arm64-v8a",
-    android_requirement: data.version?.android_requirement || "Android 7.0+",
-    sha256: data.version?.sha256 || null,
-    release_notes: data.version?.release_notes || "Initial release",
+    version_name: sanitized.version?.version_name || "v1.0.0",
+    version_code: sanitized.version?.version_code || 1,
+    file_size: sanitized.version?.file_size || "50 MB",
+    architecture: sanitized.version?.architecture || "arm64-v8a",
+    android_requirement: sanitized.version?.android_requirement || "Android 7.0+",
+    sha256: sanitized.version?.sha256 || null,
+    release_notes: sanitized.version?.release_notes || "Initial release",
     is_latest: true,
     status: "published",
     created_at: new Date().toISOString(),
-    download_sources: data.version?.download_sources || [],
+    download_sources: sanitized.version?.download_sources || [],
   };
 
   const newApp: Application = {
     id: newId,
-    name: data.name || "Untitled App",
-    slug: data.slug || `app-${Date.now()}`,
-    package_name: data.package_name || "com.awtmods.app",
-    developer: data.developer || "AWTMods Team",
+    name: sanitized.name || "Untitled App",
+    slug: sanitized.slug || `app-${Date.now()}`,
+    package_name: sanitized.package_name || "com.awtmods.app",
+    developer: sanitized.developer || "AWTMods Team",
     category_id: category.id,
     category,
-    short_description: data.short_description || "",
-    description: data.description || "",
-    icon_url: data.icon_url || "/icons/default-app.png",
-    banner_url: data.banner_url || null,
-    android_requirement: data.android_requirement || "Android 7.0+",
-    is_featured: !!data.is_featured,
-    is_trending: !!data.is_trending,
-    status: data.status || "published",
+    short_description: sanitized.short_description || "",
+    description: sanitized.description || "",
+    icon_url: sanitized.icon_url || "/icons/default-app.png",
+    banner_url: sanitized.banner_url || null,
+    android_requirement: sanitized.android_requirement || "Android 7.0+",
+    is_featured: !!sanitized.is_featured,
+    is_trending: !!sanitized.is_trending,
+    status: sanitized.status || "published",
     rating: 0,
     reviews_count: 0,
     downloads_count: 0,
@@ -688,8 +764,8 @@ export async function createApplication(
     updated_at: new Date().toISOString(),
     latest_version: newVersion,
     versions: [newVersion],
-    screenshots: (data.screenshots as any) || [],
-    mod_features: data.mod_features || [],
+    screenshots: (sanitized.screenshots as any) || [],
+    mod_features: sanitized.mod_features || [],
   };
 
   memoryApps.unshift(newApp);
@@ -702,18 +778,20 @@ export async function updateApplication(
 ): Promise<Application | null> {
   invalidateDbCache();
   const supabase = getDbClient();
+  const sanitized = sanitizeAppPayload({ id, ...updates });
 
   if (supabase) {
     try {
       const { data: result, error } = await supabase.rpc(
         "admin_save_application",
         {
-          p_app: { id, ...updates },
+          p_app: sanitized,
         }
       );
 
       if (!error && result?.success && result?.app) {
-        return result.app;
+        const fullApp = await getApplicationById(id);
+        return fullApp || result.app;
       }
 
       // If simple update and RPC returned error, fallback to direct table update

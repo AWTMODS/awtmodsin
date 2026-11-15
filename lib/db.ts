@@ -30,11 +30,15 @@ let memoryDownloads: DownloadEvent[] = [];
 let cachedCategories: { data: AppCategory[]; timestamp: number } | null = null;
 let cachedSettings: { data: SiteSettings; timestamp: number } | null = null;
 let cachedStats: { data: any; timestamp: number } | null = null;
+const cachedAppsMap = new Map<string, { data: { applications: Application[]; total: number }; timestamp: number }>();
+const cachedSlugMap = new Map<string, { data: Application | null; timestamp: number }>();
 
 export function invalidateDbCache() {
   cachedCategories = null;
   cachedSettings = null;
   cachedStats = null;
+  cachedAppsMap.clear();
+  cachedSlugMap.clear();
 }
 
 // Persistent singleton Supabase client with HTTP connection pooling
@@ -74,6 +78,13 @@ export async function getApplications(options?: {
   offset?: number;
   sortBy?: "newest" | "oldest" | "downloads" | "alphabetical";
 }): Promise<{ applications: Application[]; total: number }> {
+  const cacheKey = JSON.stringify(options || {});
+  const now = Date.now();
+  const cached = cachedAppsMap.get(cacheKey);
+  if (cached && now - cached.timestamp < 30000) {
+    return cached.data;
+  }
+
   const supabase = getDbClient();
 
   if (supabase) {
@@ -156,7 +167,9 @@ export async function getApplications(options?: {
           latest_version:
             item.versions?.find((v: any) => v.is_latest) || item.versions?.[0],
         }));
-        return { applications: apps, total: count || apps.length };
+        const result = { applications: apps, total: count || apps.length };
+        cachedAppsMap.set(cacheKey, { data: result, timestamp: now });
+        return result;
       }
     } catch {
       // Fallback
@@ -225,13 +238,19 @@ export async function getApplications(options?: {
 }
 
 export async function getApplicationBySlug(slug: string): Promise<Application | null> {
-  const supabase = getDbClient();
   const cleanSlug = slug ? slug.replace(/\.html$/i, "").trim() : "";
   const legacyAliases: Record<string, string> = {
     "spotify-premium-mod-1793814592151": "spotify-premium",
     "minecraft-pocket-edition-1793815123541": "minecraft-mod-apk",
   };
   const targetSlug = legacyAliases[cleanSlug] || cleanSlug;
+  const now = Date.now();
+  const cached = cachedSlugMap.get(targetSlug);
+  if (cached && now - cached.timestamp < 60000) {
+    return cached.data;
+  }
+
+  const supabase = getDbClient();
 
   if (supabase) {
     try {
@@ -260,12 +279,14 @@ export async function getApplicationBySlug(slug: string): Promise<Application | 
           .select("id", { count: "exact", head: true })
           .eq("application_id", data.id);
 
-        return {
+        const appData: Application = {
           ...data,
           latest_version: latest,
           versions: data.versions,
           downloads_count: dlCount || 0,
         };
+        if (data.slug) cachedSlugMap.set(data.slug, { data: appData, timestamp: Date.now() });
+        return appData;
       }
     } catch {
       // Fallback
@@ -306,12 +327,14 @@ export async function getApplicationById(id: string): Promise<Application | null
           .select("id", { count: "exact", head: true })
           .eq("application_id", data.id);
 
-        return {
+        const appData: Application = {
           ...data,
           latest_version: latest,
           versions: data.versions,
           downloads_count: dlCount || 0,
         };
+        if (data.slug) cachedSlugMap.set(data.slug, { data: appData, timestamp: Date.now() });
+        return appData;
       }
     } catch {
       // Fallback
@@ -855,6 +878,7 @@ export async function addApplicationVersion(
   appId: string,
   versionData: Partial<ApplicationVersion>
 ): Promise<ApplicationVersion | null> {
+  invalidateDbCache();
   const supabase = getDbClient();
 
   if (supabase) {

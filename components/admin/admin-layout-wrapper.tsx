@@ -38,7 +38,7 @@ export function AdminLayoutWrapper({ children }: { children: React.ReactNode }) 
             <Menu className="h-5 w-5" />
           </Button>
 
-          <Link href="/admin" className="flex items-center gap-2">
+          <Link href="/admin" prefetch={true} className="flex items-center gap-2">
             <Logo size="sm" showText={false} />
             <span className="font-extrabold text-sm tracking-tight text-foreground">
               AWT<span className="text-muted-foreground font-normal">Admin</span>
@@ -61,6 +61,7 @@ export function AdminLayoutWrapper({ children }: { children: React.ReactNode }) 
           </Link>
           <Link
             href="/admin/profile"
+            prefetch={true}
             className="h-8 w-8 rounded-full bg-secondary border border-border flex items-center justify-center font-bold text-xs text-foreground ml-0.5"
             title="Administrator Profile"
           >

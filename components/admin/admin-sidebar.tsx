@@ -90,15 +90,20 @@ function SidebarNavContent({ onClose }: { onClose?: () => void }) {
         <nav className="p-3 space-y-1 overflow-y-auto max-h-[calc(100vh-140px)] scrollbar-thin">
           {adminNavItems.map((item) => {
             const Icon = item.icon;
+            // Prevent parent route (e.g. /admin/apps) from matching child routes (e.g. /admin/apps/new)
             const isActive =
               item.href === "/admin"
                 ? pathname === "/admin"
-                : pathname.startsWith(item.href);
+                : item.href === "/admin/apps"
+                ? pathname === "/admin/apps" ||
+                  (pathname.startsWith("/admin/apps/") && !pathname.startsWith("/admin/apps/new"))
+                : pathname === item.href || pathname.startsWith(item.href + "/");
 
             return (
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch={true}
                 onClick={() => {
                   if (onClose) onClose();
                 }}

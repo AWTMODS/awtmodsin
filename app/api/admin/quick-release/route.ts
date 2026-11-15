@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
-import { getDbClient, getApplicationById } from "@/lib/db";
+import { getDbClient, getApplicationById, invalidateDbCache } from "@/lib/db";
 import { Application, HostingProvider } from "@/lib/types";
 
 // Classify hosting provider based on URL domain
@@ -229,7 +229,8 @@ export async function POST(req: Request) {
       // Fetch the updated full app with newly attached version and mirrors
       const updatedApp = await getApplicationById(appId);
 
-      // Revalidate cache across key routes
+      // Invalidate memory cache and revalidate paths
+      invalidateDbCache();
       try {
         revalidatePath("/");
         revalidatePath("/apps");

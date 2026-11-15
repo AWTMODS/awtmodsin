@@ -168,82 +168,86 @@ export function AppsTable({
   return (
     <div className="space-y-4">
       {/* Search, Filter & Action Toolbar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-        <div className="flex flex-1 items-center gap-2 max-w-md">
-          <div className="relative w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Search apps by name, developer..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-xl border border-border bg-card pl-9 pr-3 py-2 text-xs sm:text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          </div>
+      <div className="flex flex-col gap-3">
+        {/* Search Input */}
+        <div className="relative w-full">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Search apps by name, developer, package..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full rounded-xl border border-border bg-card pl-9 pr-3 py-2 text-xs sm:text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary shadow-2xs"
+          />
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Category Filter */}
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="rounded-xl border border-border bg-card px-3 py-2 text-xs sm:text-sm text-foreground focus:outline-none"
-          >
-            <option value="">All Categories</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+        {/* Filter Dropdowns & Action Buttons */}
+        <div className="flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3">
+          {/* Category & Status Filters */}
+          <div className="grid grid-cols-2 sm:flex items-center gap-2 w-full xl:w-auto">
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className="w-full sm:w-auto rounded-xl border border-border bg-card px-3 py-2 text-xs sm:text-sm text-foreground focus:outline-none truncate"
+            >
+              <option value="">All Categories</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
 
-          {/* Status Filter */}
-          <select
-            value={selectedStatus}
-            onChange={(e) => setSelectedStatus(e.target.value)}
-            className="rounded-xl border border-border bg-card px-3 py-2 text-xs sm:text-sm text-foreground focus:outline-none"
-          >
-            <option value="">All Statuses ({apps.length})</option>
-            <option value="published">
-              Published ({apps.filter((a) => a.status === "published").length})
-            </option>
-            <option value="draft">
-              Draft ({apps.filter((a) => a.status === "draft").length})
-            </option>
-            {apps.some((a) => a.status === "archived") && (
-              <option value="archived">
-                Archived ({apps.filter((a) => a.status === "archived").length})
+            <select
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+              className="w-full sm:w-auto rounded-xl border border-border bg-card px-3 py-2 text-xs sm:text-sm text-foreground focus:outline-none truncate"
+            >
+              <option value="">All Statuses ({apps.length})</option>
+              <option value="published">
+                Published ({apps.filter((a) => a.status === "published").length})
               </option>
-            )}
-          </select>
+              <option value="draft">
+                Draft ({apps.filter((a) => a.status === "draft").length})
+              </option>
+              {apps.some((a) => a.status === "archived") && (
+                <option value="archived">
+                  Archived ({apps.filter((a) => a.status === "archived").length})
+                </option>
+              )}
+            </select>
+          </div>
 
-          <Link href="/admin/versions">
+          {/* Action Buttons: Neatly arranged on mobile, never cut off */}
+          <div className="grid grid-cols-2 sm:flex items-center gap-2 w-full xl:w-auto">
+            <Link href="/admin/versions" prefetch={true} className="w-full sm:w-auto">
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full sm:w-auto rounded-xl gap-1.5 font-bold border-amber-500/30 bg-amber-500/5 text-amber-500 hover:bg-amber-500/10 shrink-0 shadow-2xs"
+              >
+                <Zap className="h-4 w-4" />
+                <span>Fast Update</span>
+              </Button>
+            </Link>
+
             <Button
               size="sm"
               variant="outline"
-              className="rounded-xl gap-1.5 font-bold border-amber-500/30 bg-amber-500/5 text-amber-500 hover:bg-amber-500/10 shrink-0 shadow-2xs"
+              onClick={() => setShowAutoModal(true)}
+              className="w-full sm:w-auto rounded-xl gap-1.5 font-bold border-primary/30 bg-primary/5 text-primary hover:bg-primary/10 shrink-0 shadow-2xs"
             >
-              <Zap className="h-4 w-4" />
-              <span>Fast Update</span>
+              <Sparkles className="h-4 w-4 text-amber-500" />
+              <span>Auto-Create</span>
             </Button>
-          </Link>
 
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setShowAutoModal(true)}
-            className="rounded-xl gap-1.5 font-bold border-primary/30 bg-primary/5 text-primary hover:bg-primary/10 shrink-0 shadow-2xs"
-          >
-            <Sparkles className="h-4 w-4 text-amber-500" />
-            <span>Auto-Create</span>
-          </Button>
-
-          <Link href="/admin/apps/new">
-            <Button size="sm" className="rounded-xl gap-1.5 font-semibold shrink-0">
-              <PlusCircle className="h-4 w-4" />
-              <span>Add New App</span>
-            </Button>
-          </Link>
+            <Link href="/admin/apps/new" prefetch={true} className="col-span-2 sm:col-span-1 w-full sm:w-auto">
+              <Button size="sm" className="w-full sm:w-auto rounded-xl gap-1.5 font-semibold shrink-0">
+                <PlusCircle className="h-4 w-4" />
+                <span>Add New App</span>
+              </Button>
+            </Link>
+          </div>
         </div>
       </div>
 

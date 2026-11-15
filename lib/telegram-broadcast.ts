@@ -79,7 +79,40 @@ export async function broadcastToTelegram(
         .replace(/^\s*f(?:i|ir)st paragraph of[^\n]*/i, "")
         .trim();
 
-    // Prepare interactive HTML caption with animated emoji support
+    // 1. Mod Features unique to each individual app
+    let modFeaturesList: string[] = [];
+    if (Array.isArray(app.mod_features) && app.mod_features.length > 0) {
+      modFeaturesList = app.mod_features.map((f) => String(f).trim()).filter(Boolean);
+    } else if (version?.release_notes) {
+      modFeaturesList = version.release_notes
+        .split(/\n|•|\*|;/)
+        .map((s) => s.trim().replace(/^[-•*]\s*/, ""))
+        .filter((s) => s.length > 2);
+    }
+
+    if (modFeaturesList.length === 0) {
+      modFeaturesList = [
+        "Premium / VIP features Unlocked",
+        "Audio and visual ads blocked",
+        "Background playback support",
+        "Smooth optimised mod version",
+      ];
+    }
+
+    const formattedModFeatures = modFeaturesList
+      .slice(0, 6)
+      .map((feat) => `<tg-emoji emoji-id="5445284980978644754">🟢</tg-emoji> ${escapeHtml(feat)}`)
+      .join("\n");
+
+    // 2. Play Store / Official Site Link
+    const storeLink =
+      app.package_name && app.package_name.includes(".") && !app.package_name.startsWith("com.awt")
+        ? `https://play.google.com/store/apps/details?id=${app.package_name}`
+        : appUrl;
+
+    const channelHandle = settings.telegramChannelId || "@awtmods";
+
+    // Prepare interactive HTML caption with animated emoji support & per-app mod features
     let caption: string;
     if (settings.telegramPostTemplate && settings.telegramPostTemplate.trim()) {
       caption = settings.telegramPostTemplate
@@ -88,24 +121,23 @@ export async function broadcastToTelegram(
         .replace(/{file_size}/g, escapeHtml(fileSize))
         .replace(/{category}/g, escapeHtml(categoryName))
         .replace(/{developer}/g, escapeHtml(developerName))
+        .replace(/{store_link}/g, storeLink)
+        .replace(/{mod_features}/g, formattedModFeatures)
+        .replace(/{channel_handle}/g, channelHandle)
         .replace(/{release_notes}/g, escapeHtml(releaseNotes.slice(0, 400)))
         .replace(/{app_url}/g, appUrl)
         .replace(/{clean_slug}/g, escapeHtml(cleanSlug))
         .replace(/{vip_link}/g, vipDeepLink);
     } else {
       caption = [
-        `<tg-emoji emoji-id="5465465412345678901">🔥</tg-emoji> <b>NEW MOD UPDATE RELEASED!</b> <tg-emoji emoji-id="5465465412345678901">🔥</tg-emoji>`,
+        `<tg-emoji emoji-id="5443026723220265219">🔘</tg-emoji> <b>${escapeHtml(app.name)} [VIP]</b>`,
+        `<tg-emoji emoji-id="5447644880824188382">🏷️</tg-emoji> <b>Version:</b> <code>${escapeHtml(versionName)}</code> <tg-emoji emoji-id="5445077613506757650">🔔</tg-emoji> <b>#update</b>`,
+        `<tg-emoji emoji-id="5427009714745517384">▶️</tg-emoji> <a href="${storeLink}">Play Store / Official Site Link</a>`,
         ``,
-        `<tg-emoji emoji-id="5443026723220265219">📱</tg-emoji> <b>App:</b> <a href="${appUrl}">${escapeHtml(app.name)}</a>`,
-        `<tg-emoji emoji-id="5447644880824188382">🏷️</tg-emoji> <b>Version:</b> <code>${escapeHtml(versionName)}</code> (${escapeHtml(fileSize)})`,
-        `<tg-emoji emoji-id="5445077613506757650">📂</tg-emoji> <b>Category:</b> ${escapeHtml(categoryName)}`,
-        `👨‍💻 <b>Developer:</b> ${escapeHtml(developerName)}`,
+        `<tg-emoji emoji-id="5465465412345678901">🔥</tg-emoji> <u><b>Features &amp; Mod Info:</b></u>`,
+        formattedModFeatures,
         ``,
-        `<tg-emoji emoji-id="5445284980978644754">✨</tg-emoji> <b>MOD FEATURES:</b>`,
-        `• ${escapeHtml(releaseNotes.slice(0, 300))}`,
-        ``,
-        `<tg-emoji emoji-id="5445284980978644754">🛡️</tg-emoji> <b>Status:</b> Safe &amp; Verified (Clean)`,
-        `<tg-emoji emoji-id="5427009714745517384">🌐</tg-emoji> <b>Website:</b> <a href="${appUrl}">awtmods.in/apps/${escapeHtml(cleanSlug)}.html</a>`,
+        `<tg-emoji emoji-id="5443026723220265219">🎉</tg-emoji> <b>Join Channel ➔</b> ${channelHandle}`,
       ].join("\n");
     }
 
@@ -113,14 +145,14 @@ export async function broadcastToTelegram(
       inline_keyboard: [
         [
           {
-            text: "📥 Download on Website",
-            url: appUrl,
+            text: "⚡ DOWNLOAD NOW (Instant VIP)",
+            url: vipDeepLink,
           },
         ],
         [
           {
-            text: "⚡ VIP Direct File (No Ads)",
-            url: vipDeepLink,
+            text: "🌐 DOWNLOAD NOW (Free Website)",
+            url: appUrl,
           },
         ],
       ],

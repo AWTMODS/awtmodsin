@@ -51,8 +51,9 @@ export async function generateMetadata({ params }: AppDetailProps): Promise<Meta
   const title = `${app.name} (${app.latest_version?.version_name || "Latest"}) ${
     isPc ? "Download for PC" : "Download Mod APK"
   }`;
+  const rawDesc = (app.short_description || "").replace(/^\s*f(?:i|ir)st paragraph of[^\n]*/i, "").trim();
   const description =
-    app.short_description ||
+    rawDesc ||
     `Download ${app.name} (${app.latest_version?.version_name || "latest version"}) ${
       isPc ? "for PC Windows" : "modded APK for Android"
     }. Clean, verified, and free high-speed download mirrors.`;
@@ -131,7 +132,7 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
         "@id": `${canonicalUrl}#software`,
         name: app.name,
         headline: `${app.name} (${latestVersion?.version_name || "Latest"})`,
-        description: app.short_description || app.description,
+        description: (app.short_description || app.description || "").replace(/^\s*f(?:i|ir)st paragraph of[^\n]*/i, "").trim(),
         image: app.icon_url,
         url: canonicalUrl,
         operatingSystem: isPc

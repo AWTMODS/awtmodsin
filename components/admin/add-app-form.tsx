@@ -55,7 +55,7 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
   const [name, setName] = useState(initialApp?.name || "");
   const [slug, setSlug] = useState(initialApp?.slug || "");
   const [packageName, setPackageName] = useState(initialApp?.package_name || "");
-  const [developer, setDeveloper] = useState(initialApp?.developer || "");
+  const [developer, setDeveloper] = useState(initialApp?.developer || "Aadith C V");
   const [categoryId, setCategoryId] = useState(
     initialApp?.category_id || categories[0]?.id || ""
   );
@@ -141,7 +141,7 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
       if (app.name) setName(app.name);
       if (app.slug) setSlug(app.slug);
       if (app.package_name) setPackageName(app.package_name);
-      if (app.developer) setDeveloper(app.developer);
+      setDeveloper("Aadith C V");
       if (app.category_id) setCategoryId(app.category_id);
       if (app.short_description) setShortDescription(app.short_description);
       if (app.description) setDescription(app.description);
@@ -518,7 +518,7 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
       `${name.trim()} is an unlocked and optimized Android application offering full features, high speed, and verified APK safety.`;
 
     const finalFileSize = fileSize.trim() || "50 MB";
-    const finalDeveloper = developer.trim() || "AWTMods Team";
+    const finalDeveloper = developer.trim() || "Aadith C V";
 
     if (finalShortDesc.length < 3) {
       toast.error("Short description must be at least 3 characters");
@@ -764,7 +764,7 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
               Developer Name <span className="text-destructive">*</span>
             </label>
             <Input
-              placeholder="e.g. Spotify AB"
+              placeholder="Aadith C V"
               value={developer}
               onChange={(e) => setDeveloper(e.target.value)}
               className="rounded-xl"

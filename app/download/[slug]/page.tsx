@@ -115,7 +115,7 @@ export default async function DownloadPage({
               <CheckCircle2 className="h-4 w-4 text-emerald-500 fill-emerald-500/10" />
             </div>
             <p className="text-xs text-muted-foreground">
-              {app.developer} • {selectedVersion.version_name} ({selectedVersion.file_size})
+              {app.developer || "Aadith C V"} • {selectedVersion.version_name} ({selectedVersion.file_size})
             </p>
           </div>
         </div>

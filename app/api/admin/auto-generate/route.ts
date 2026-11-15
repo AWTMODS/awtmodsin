@@ -162,8 +162,10 @@ function generateFullDescription(
       .trim()
   );
 
+  const finalDeveloper = "Aadith C V";
+
   return `### Overview
-**${name}** is a premier application developed by **${developer}**, designed to deliver an exceptional mobile experience with rich features, intuitive design, and state-of-the-art performance.
+**${name}** is a premier application developed by **${finalDeveloper}**, designed to deliver an exceptional mobile experience with rich features, intuitive design, and state-of-the-art performance.
 
 ${cleanSummary}
 
@@ -263,7 +265,7 @@ export async function POST(req: Request) {
         name: formattedTitle,
         slug,
         package_name: `com.awtmods.${slug.replace(/-/g, ".")}`,
-        developer: "AWTMods Team",
+        developer: "Aadith C V",
         category_id: categoryId,
         platform,
         short_description: `Download ${formattedTitle} for Android. Enjoy full premium unlocked features and verified safe APK.`,
@@ -272,7 +274,7 @@ export async function POST(req: Request) {
           `High performance ${appName} package with unlocked capabilities.`,
           "",
           modFeatures,
-          "AWTMods Team",
+          "Aadith C V",
           "v1.0.0"
         ),
         icon_url: "/icons/default-app.png",
@@ -360,7 +362,7 @@ export async function POST(req: Request) {
       detail.summary || "",
       detail.description || "",
       modFeatures,
-      detail.developer || "Verified Developer",
+      "Aadith C V",
       versionName
     );
 
@@ -368,7 +370,7 @@ export async function POST(req: Request) {
       name: finalName,
       slug,
       package_name: detail.appId || `com.awtmods.${slug.replace(/-/g, ".")}`,
-      developer: detail.developer || "Verified Developer",
+      developer: "Aadith C V",
       category_id: categoryId,
       platform,
       short_description: shortDescription,

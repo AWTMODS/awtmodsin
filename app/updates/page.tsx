@@ -65,7 +65,7 @@ export default async function UpdatesPage() {
                         {app.name}
                       </Link>
                       <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
-                        <span>{app.developer}</span>
+                        <span>{app.developer || "Aadith C V"}</span>
                         <span>•</span>
                         <span className="flex items-center gap-1">
                           <Calendar className="h-3 w-3" />

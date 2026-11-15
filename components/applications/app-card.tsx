@@ -91,7 +91,7 @@ export function AppCard({ app, className, variant = "grid" }: AppCardProps) {
           </h3>
         </Link>
         <p className="text-xs text-muted-foreground mt-0.5 font-medium truncate">
-          {app.developer || "AWTMods"}
+          {app.developer || "Aadith C V"}
         </p>
 
         <p className="text-xs text-muted-foreground mt-2.5 line-clamp-2 leading-relaxed">

@@ -142,7 +142,7 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
         fileSize: latestVersion?.file_size || "50 MB",
         author: {
           "@type": "Organization",
-          name: app.developer || "AWTMods",
+          name: app.developer || "Aadith C V",
         },
         publisher: {
           "@type": "Organization",
@@ -258,7 +258,7 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
                 <CheckCircle2 className="h-5 w-5 text-emerald-500 fill-emerald-500/10 shrink-0" />
               </div>
               <p className="text-sm font-medium text-muted-foreground">
-                {app.developer}
+                {app.developer || "Aadith C V"}
               </p>
 
               {/* Version & Specs Badges */}
@@ -597,7 +597,7 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
                   Developer
                 </span>
                 <span className="font-semibold text-foreground">
-                  {app.developer}
+                  {app.developer || "Aadith C V"}
                 </span>
               </div>
 

@@ -658,7 +658,7 @@ function sanitizeAppPayload(data: any) {
   if (!sanitized.name) sanitized.name = "Untitled App";
   if (!sanitized.slug) sanitized.slug = `app-${Date.now()}`;
   if (!sanitized.package_name) sanitized.package_name = `com.awtmods.${sanitized.slug.replace(/[^a-z0-9]/gi, ".")}`;
-  if (!sanitized.developer) sanitized.developer = "AWTMods Team";
+  if (!sanitized.developer) sanitized.developer = "Aadith C V";
   if (!sanitized.short_description) {
     sanitized.short_description = `Download ${sanitized.name} with premium features unlocked for Android.`;
   }
@@ -769,7 +769,7 @@ export async function createApplication(
     name: sanitized.name || "Untitled App",
     slug: sanitized.slug || `app-${Date.now()}`,
     package_name: sanitized.package_name || "com.awtmods.app",
-    developer: sanitized.developer || "AWTMods Team",
+    developer: sanitized.developer || "Aadith C V",
     category_id: category.id,
     category,
     short_description: sanitized.short_description || "",

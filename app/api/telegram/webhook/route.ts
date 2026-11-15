@@ -135,8 +135,15 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: true });
       }
 
-      // If NOT VIP: Send Payment instructions
+      // If NOT VIP: Send Payment instructions with Auto-Generated UPI QR Code
       const appText = targetApp ? ` for <b>${targetApp.toUpperCase()}</b>` : "";
+      const upiId = settings.telegramUpiId || "awtmods@upi";
+      const upiName = settings.telegramUpiName || "AWTMods VIP";
+      const upiNote = targetApp ? `VIP-${targetApp.slice(0, 15)}` : "AWTMods VIP";
+
+      const upiUri = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(upiName)}&am=${vipPrice}&cu=INR&tn=${encodeURIComponent(upiNote)}`;
+      const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=450x450&data=${encodeURIComponent(upiUri)}`;
+
       const paymentMsg = (
         `⚡ <b>AWTMods Direct File VIP Pass</b>\n\n` +
         `Get instant, ad-free direct APK downloads${appText} delivered straight to your chat at full 5G speed!\n\n` +
@@ -145,21 +152,44 @@ export async function POST(req: Request) {
         `• ⚡ Instant direct 1-tap APK installation\n` +
         `• 📦 Unlimited access across all 95+ apps for 30 days\n` +
         `• 🛡️ Direct Admin verification &amp; fast support\n\n` +
-        `💰 <b>Subscription Price:</b> ₹${vipPrice} / 30 Days\n` +
-        `📱 <b>Pay via UPI (GPay / PhonePe / Paytm):</b>\n` +
-        `<code>${settings.contactEmail || "awtmods@gmail.com"}</code>\n\n` +
-        `📸 <i>After paying ₹${vipPrice}, simply send the <b>Payment Screenshot</b> or UTR reference number right here!</i>`
+        `💰 <b>Price:</b> ₹${vipPrice} / 30 Days\n` +
+        `📱 <b>Payee UPI ID:</b> <code>${upiId}</code>\n` +
+        `👤 <b>Name:</b> ${upiName}\n\n` +
+        `📲 <b>Scan the QR Code above</b> with GPay, PhonePe, or Paytm.\n` +
+        `📸 <i>After paying, reply with your <b>Payment Screenshot</b> or UTR reference number right here!</i>`
       );
 
-      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: chatId,
-          text: paymentMsg,
-          parse_mode: "HTML",
-        }),
-      });
+      // Try sending with QR Photo first
+      let sentPhoto = false;
+      try {
+        const photoRes = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: chatId,
+            photo: qrCodeUrl,
+            caption: paymentMsg,
+            parse_mode: "HTML",
+          }),
+        });
+        const photoJson = await photoRes.json();
+        sentPhoto = photoJson.ok;
+      } catch (err) {
+        console.warn("sendPhoto QR failed:", err);
+      }
+
+      // Fallback to text message if photo delivery failed
+      if (!sentPhoto) {
+        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: paymentMsg,
+            parse_mode: "HTML",
+          }),
+        });
+      }
 
       return NextResponse.json({ ok: true });
     }

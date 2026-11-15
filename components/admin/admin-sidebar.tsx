@@ -16,6 +16,7 @@ import {
   ExternalLink,
   X,
   Sparkles,
+  Bot,
 } from "lucide-react";
 import { Logo } from "@/components/layout/logo";
 import { cn } from "@/lib/utils";
@@ -27,6 +28,7 @@ const adminNavItems = [
   { name: "Categories", href: "/admin/categories", icon: LayoutGrid },
   { name: "Version Management", href: "/admin/versions", icon: GitBranch },
   { name: "Mod Requests", href: "/admin/requests", icon: Sparkles },
+  { name: "Telegram Bot", href: "/admin/bot", icon: Bot },
   { name: "Analytics", href: "/admin/analytics", icon: BarChart3 },
   { name: "Reports", href: "/admin/reports", icon: AlertTriangle },
   { name: "Settings", href: "/admin/settings", icon: Settings },

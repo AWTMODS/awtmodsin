@@ -163,6 +163,8 @@ export const initialSiteSettings: SiteSettings = {
   telegramAutoPostEnabled: true,
   telegramBotUsername: "awtmods_bot",
   telegramVipPrice: 20,
+  telegramUpiId: "awtmods@upi",
+  telegramUpiName: "AWTMods VIP",
   adsMasterEnabled: false,
   adsMobileEnabled: true,
   adsDesktopEnabled: true,

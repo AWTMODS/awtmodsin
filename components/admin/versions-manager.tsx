@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/utils";
 import { Plus, Check, Trash2, GitBranch, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
+import { QuickReleaseCard } from "./quick-release-card";
 
 export function VersionsManager({
   initialApps,
@@ -22,6 +23,13 @@ export function VersionsManager({
 
   const selectedApp = apps.find((a) => a.id === selectedAppId);
   const versions = selectedApp?.versions || [];
+
+  const handleUpdateSuccess = (updatedApp: Application) => {
+    setApps((prev) =>
+      prev.map((a) => (a.id === updatedApp.id ? updatedApp : a))
+    );
+    setSelectedAppId(updatedApp.id);
+  };
 
   if (apps.length === 0) {
     return (
@@ -126,6 +134,12 @@ export function VersionsManager({
 
   return (
     <div className="space-y-6">
+      {/* 1-Click Smart Quick-Release Multi-Mirror Engine */}
+      <QuickReleaseCard
+        allApps={apps}
+        onUpdateSuccess={handleUpdateSuccess}
+      />
+
       {/* App Selector */}
       <div className="p-5 rounded-3xl border border-border bg-card shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>

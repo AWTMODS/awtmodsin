@@ -20,6 +20,7 @@ import {
   XCircle,
   Star,
   Sparkles,
+  Zap,
   Loader2,
   X,
 } from "lucide-react";
@@ -215,6 +216,17 @@ export function AppsTable({
               </option>
             )}
           </select>
+
+          <Link href="/admin/versions">
+            <Button
+              size="sm"
+              variant="outline"
+              className="rounded-xl gap-1.5 font-bold border-amber-500/30 bg-amber-500/5 text-amber-500 hover:bg-amber-500/10 shrink-0 shadow-2xs"
+            >
+              <Zap className="h-4 w-4" />
+              <span>Fast Update</span>
+            </Button>
+          </Link>
 
           <Button
             size="sm"

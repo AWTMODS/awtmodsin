@@ -168,6 +168,54 @@ export async function POST(req: Request) {
           }
         }
 
+        // Action: Clone Template from Existing App
+        if (action === "clone") {
+          const sourceAppId = rest[0];
+          const rawName = rest[1] || "New App";
+          const versionName = rest[2] || "v1";
+          const versionCode = parseInt(rest[3], 10) || 0;
+
+          const { executeCloneApplication } = await import("@/lib/telegram-auto-release");
+          const cloneResult = await executeCloneApplication({
+            sourceAppId,
+            rawName,
+            versionName,
+            versionCode,
+            fileSize: "50 MB",
+          });
+
+          if (cloneResult.success && cloneResult.app) {
+            const app = cloneResult.app;
+            const siteUrl = settings.siteUrl || "https://www.awtmods.in";
+            const appUrl = `${siteUrl}/apps/${app.slug}.html`;
+
+            await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: adminChatId,
+                message_id: cq.message?.message_id,
+                text: (
+                  `🎉 <b>${app.name} Cloned &amp; Published to Website!</b>\n\n` +
+                  `🏷️ <b>Version:</b> <code>${versionName}</code> (Version Code: <code>${app.latest_version?.version_code || 1}</code>)\n` +
+                  `🎨 <b>Features &amp; Logo:</b> Inherited from template\n` +
+                  `🌐 <b>Live at:</b> <a href="${appUrl}">${app.name} on AWTMods.in</a>\n` +
+                  `⚡ Website cache cleared instantly!`
+                ),
+                parse_mode: "HTML",
+                reply_markup: {
+                  inline_keyboard: [
+                    [
+                      { text: "🚀 Broadcast to Channel", callback_data: `broadcast_${app.id}` },
+                      { text: "🌐 View on Website", url: appUrl },
+                    ],
+                  ],
+                },
+              }),
+            }).catch(() => {});
+          }
+        }
+
         // Action: Pick Existing App Disambiguation
         if (action === "pick") {
           const appId = rest[0];
@@ -402,16 +450,25 @@ export async function POST(req: Request) {
             .trim() || rawFileName.replace(/\.apk$/i, "");
 
         // Send disambiguation buttons to Admin
-        const candidateButtons: any[][] = candidates.slice(0, 4).map((c) => [
-          {
-            text: `📱 Link to: ${c.name}`,
-            callback_data: `pick:${c.id}:${parsed.versionName}:${parsed.versionCode || 0}`,
-          },
-        ]);
+        const candidateButtons: any[][] = [];
+        candidates.slice(0, 3).forEach((c) => {
+          candidateButtons.push([
+            {
+              text: `📱 Update: ${c.name}`,
+              callback_data: `pick:${c.id}:${parsed.versionName}:${parsed.versionCode || 0}`,
+            },
+          ]);
+          candidateButtons.push([
+            {
+              text: `📋 Clone Template from: ${c.name}`,
+              callback_data: `clone:${c.id}:${cleanAppName.replace(/\s+/g, "-")}:${parsed.versionName}:${parsed.versionCode || 0}`,
+            },
+          ]);
+        });
 
         candidateButtons.push([
           {
-            text: `➕ Auto-Create "${cleanAppName}" on Website`,
+            text: `➕ Start Fresh as "${cleanAppName}"`,
             callback_data: `create:${cleanAppName.replace(/\s+/g, "-")}:${parsed.versionName}:${parsed.versionCode || 0}`,
           },
         ]);

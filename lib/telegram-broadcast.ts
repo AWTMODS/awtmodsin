@@ -112,6 +112,8 @@ export async function broadcastToTelegram(
 
     const channelHandle = settings.telegramChannelId || "@awtmods";
 
+    const downloadPageUrl = `${siteUrl}/download/${cleanSlug}`;
+
     // Prepare interactive HTML caption with animated emoji support & per-app mod features
     let caption: string;
     if (settings.telegramPostTemplate && settings.telegramPostTemplate.trim()) {
@@ -126,6 +128,7 @@ export async function broadcastToTelegram(
         .replace(/{channel_handle}/g, channelHandle)
         .replace(/{release_notes}/g, escapeHtml(releaseNotes.slice(0, 400)))
         .replace(/{app_url}/g, appUrl)
+        .replace(/{download_url}/g, downloadPageUrl)
         .replace(/{clean_slug}/g, escapeHtml(cleanSlug))
         .replace(/{vip_link}/g, vipDeepLink);
     } else {
@@ -151,8 +154,8 @@ export async function broadcastToTelegram(
         ],
         [
           {
-            text: "🌐 DOWNLOAD NOW (Free Website)",
-            url: appUrl,
+            text: "🌐 DOWNLOAD NOW (Website)",
+            url: downloadPageUrl,
           },
         ],
       ],

@@ -491,3 +491,93 @@ export async function executeAutoCreateApp(params: {
     telegramMessageLink: params.telegramMessageLink,
   });
 }
+
+// Clones logo, screenshots, category, and mod features from an existing app
+export async function executeCloneApplication(params: {
+  sourceAppId: string;
+  rawName: string;
+  versionName: string;
+  versionCode: number;
+  fileSize: string;
+  externalUrls?: { url: string; provider: HostingProvider; mirrorName: string }[];
+  telegramMessageLink?: string;
+}): Promise<{ success: boolean; app?: Application; error?: string }> {
+  const supabase = getDbClient();
+  if (!supabase) return { success: false, error: "Database client unavailable" };
+
+  const sourceApp = await getApplicationById(params.sourceAppId);
+  if (!sourceApp) return { success: false, error: "Source app not found to clone from" };
+
+  const cleanName = params.rawName
+    .replace(/\.apk$/i, "")
+    .replace(/[-_.]v[0-9]+.*$/i, "")
+    .replace(/[-_.][0-9]+(?:\.[0-9]+)+.*$/i, "")
+    .replace(/[-_.]+/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .trim();
+
+  const appDisplayName =
+    cleanName
+      .split(/\s+/)
+      .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+      .join(" ") || "New Application";
+
+  const appSlug = cleanSlug(cleanName);
+
+  // Check if app already exists by slug
+  const { data: existingApp } = await supabase
+    .from("applications")
+    .select("id")
+    .eq("slug", appSlug)
+    .maybeSingle();
+
+  let appId = existingApp?.id;
+
+  if (!appId) {
+    const { data: newApp, error: insertErr } = await supabase
+      .from("applications")
+      .insert({
+        name: appDisplayName,
+        slug: appSlug,
+        package_name: `com.awt.${appSlug.replace(/-/g, ".")}`,
+        developer: sourceApp.developer || "Aadith C V",
+        category_id: sourceApp.category_id || "c4444444-4444-4444-4444-444444444444",
+        short_description: (sourceApp.short_description || "")
+          .replace(new RegExp(sourceApp.name, "gi"), appDisplayName) ||
+          `${appDisplayName} Mod APK with unlocked premium features and clean ad-free experience.`,
+        description: (sourceApp.description || "")
+          .replace(new RegExp(sourceApp.name, "gi"), appDisplayName) ||
+          `Download the latest mod version of ${appDisplayName} with unlocked features.`,
+        icon_url: sourceApp.icon_url || "https://www.awtmods.in/icons/default-app.png",
+        banner_url: sourceApp.banner_url || null,
+        status: "published",
+        is_featured: false,
+        is_trending: false,
+        mod_features: Array.isArray(sourceApp.mod_features) && sourceApp.mod_features.length > 0
+          ? sourceApp.mod_features
+          : [
+              "Premium / VIP features Unlocked",
+              "Audio and visual ads blocked",
+              "Smooth optimised mod version",
+              "Clean & verified APK (Safe to Install)",
+            ],
+      })
+      .select()
+      .single();
+
+    if (insertErr || !newApp) {
+      console.error("Clone app create error:", insertErr);
+      return { success: false, error: insertErr?.message || "Failed to create application" };
+    }
+    appId = newApp.id;
+  }
+
+  return executeAutoApkRelease({
+    appId,
+    versionName: params.versionName,
+    versionCode: params.versionCode > 0 ? params.versionCode : 1,
+    fileSize: params.fileSize,
+    externalUrls: params.externalUrls,
+    telegramMessageLink: params.telegramMessageLink,
+  });
+}

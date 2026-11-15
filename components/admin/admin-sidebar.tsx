@@ -55,29 +55,29 @@ function SidebarNavContent({ onClose }: { onClose?: () => void }) {
     <div className="flex flex-col justify-between h-full w-full bg-card">
       {/* Top brand header */}
       <div>
-        <div className="h-16 flex items-center justify-between px-6 border-b border-border">
-          <div className="flex items-center gap-2.5">
-            <Logo size="sm" showText={false} />
-            <span className="font-extrabold text-sm tracking-tight text-foreground">
+        <div className="h-16 sm:h-18 flex items-center justify-between px-6 border-b border-border">
+          <div className="flex items-center gap-3">
+            <Logo size="md" showText={false} />
+            <span className="font-black text-base tracking-tight text-foreground">
               AWT<span className="text-muted-foreground font-normal">Admin</span>
             </span>
           </div>
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             <Link
               href="/"
               target="_blank"
-              className="text-xs text-muted-foreground hover:text-foreground p-1.5 rounded-lg hover:bg-muted transition-colors"
+              className="text-muted-foreground hover:text-foreground p-2 rounded-xl hover:bg-muted transition-colors"
               title="View Public Website"
             >
-              <ExternalLink className="h-4 w-4" />
+              <ExternalLink className="h-4.5 w-4.5" />
             </Link>
 
             {onClose && (
               <button
                 type="button"
                 onClick={onClose}
-                className="lg:hidden p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                className="lg:hidden p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                 aria-label="Close sidebar"
               >
                 <X className="h-5 w-5" />

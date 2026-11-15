@@ -25,44 +25,44 @@ export function AdminLayoutWrapper({ children }: { children: React.ReactNode }) 
   return (
     <div className="flex min-h-screen bg-background text-foreground flex-col lg:flex-row">
       {/* Mobile & Tablet Top Bar (Hidden on Desktop lg:hidden) */}
-      <header className="lg:hidden sticky top-0 z-40 w-full h-15 border-b border-border bg-card/95 backdrop-blur-md px-3 sm:px-4 flex items-center justify-between shadow-2xs">
-        <div className="flex items-center gap-2">
+      <header className="lg:hidden sticky top-0 z-40 w-full h-16 sm:h-18 border-b border-border bg-card/95 backdrop-blur-md px-4 sm:px-6 flex items-center justify-between shadow-xs transition-colors">
+        <div className="flex items-center gap-3">
           <Button
             type="button"
             variant="ghost"
             size="icon"
             onClick={() => setSidebarOpen(true)}
-            className="rounded-xl text-foreground hover:bg-muted h-9 w-9"
+            className="rounded-2xl text-foreground hover:bg-muted active:scale-95 h-11 w-11 border border-border/40"
             aria-label="Open Admin Menu"
           >
-            <Menu className="h-5 w-5" />
+            <Menu className="h-6 w-6" />
           </Button>
 
-          <Link href="/admin" prefetch={true} className="flex items-center gap-2">
-            <Logo size="sm" showText={false} />
-            <span className="font-extrabold text-sm tracking-tight text-foreground">
+          <Link href="/admin" prefetch={true} className="flex items-center gap-2.5">
+            <Logo size="md" showText={false} />
+            <span className="font-black text-base sm:text-lg tracking-tight text-foreground">
               AWT<span className="text-muted-foreground font-normal">Admin</span>
             </span>
-            <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+            <span className="text-xs uppercase font-extrabold tracking-wider px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/25">
               Console
             </span>
           </Link>
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2">
           <ThemeToggle />
           <Link
             href="/"
             target="_blank"
-            className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            className="h-10 w-10 flex items-center justify-center rounded-2xl border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             title="View Public Website"
           >
-            <ExternalLink className="h-4 w-4" />
+            <ExternalLink className="h-5 w-5" />
           </Link>
           <Link
             href="/admin/profile"
             prefetch={true}
-            className="h-8 w-8 rounded-full bg-secondary border border-border flex items-center justify-center font-bold text-xs text-foreground ml-0.5"
+            className="h-10 w-10 rounded-2xl bg-secondary border border-border/80 flex items-center justify-center font-black text-sm text-foreground shadow-2xs hover:border-primary/50 transition-colors"
             title="Administrator Profile"
           >
             A

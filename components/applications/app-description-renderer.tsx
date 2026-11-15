@@ -56,8 +56,10 @@ export function AppDescriptionRenderer({
     );
   }
 
-  // Pre-process: normalize line endings and split by horizontal rules (---)
-  const normalized = content.replace(/\r\n/g, "\n");
+  // Pre-process: normalize line endings, strip any stray "fist paragraph of ..." artifacts, and split by horizontal rules (---)
+  const normalized = content
+    .replace(/\r\n/g, "\n")
+    .replace(/^\s*f(?:i|ir)st paragraph of[^\n]*(\n+|$)/im, "");
   const rawSections = normalized.split(/\n\s*---\s*\n/g);
 
   return (
@@ -109,8 +111,8 @@ export function AppDescriptionRenderer({
         lines.forEach((line, lineIdx) => {
           const trimmed = line.trim();
 
-          // Empty line
-          if (!trimmed) {
+          // Empty line or stray scraper artifact
+          if (!trimmed || /^f(?:i|ir)st paragraph of/i.test(trimmed)) {
             flushList(`list-${sIdx}-${lineIdx}`);
             return;
           }

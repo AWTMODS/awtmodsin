@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSiteSettings } from "@/lib/db";
+import { getSiteSettings, getApplicationBySlug } from "@/lib/db";
 import { isUserVip, recordUserInteraction, activateUserVip } from "@/lib/telegram-vip";
 
 export async function POST(req: Request) {
@@ -118,16 +118,103 @@ export async function POST(req: Request) {
       const vipStatus = await isUserVip(user.id);
 
       if (vipStatus.isVip) {
-        const appName = targetApp || "your requested app";
+        if (!targetApp) {
+          await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: chatId,
+              text: (
+                `👑 <b>Welcome Back, VIP Member!</b>\n\n` +
+                `✨ Your VIP pass is active until: <code>${vipStatus.expiresAt?.slice(0, 10)}</code>\n\n` +
+                `Browse our 95+ apps on <a href="https://www.awtmods.in">AWTMods.in</a> and tap "Get Direct File" on any app to receive it instantly here!`
+              ),
+              parse_mode: "HTML",
+            }),
+          });
+          return NextResponse.json({ ok: true });
+        }
+
+        // Look up the exact app in the database
+        const app = await getApplicationBySlug(targetApp);
+        if (!app) {
+          await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: chatId,
+              text: (
+                `❌ <b>File Not Found</b>\n\n` +
+                `Sorry, we could not find an application matching "<b>${targetApp}</b>" in the AWTMods catalog.\n\n` +
+                `🔍 Browse all available apps at <a href="https://www.awtmods.in">AWTMods.in</a> or submit a request on our Mod Board!`
+              ),
+              parse_mode: "HTML",
+            }),
+          });
+          return NextResponse.json({ ok: true });
+        }
+
+        const version = app.latest_version || app.versions?.[0];
+        const tgSource = version?.download_sources?.find(
+          (s) => s.hosting_provider === "telegram" || s.download_url?.includes("t.me")
+        );
+
+        if (tgSource?.download_url) {
+          // If message ID is present, try copyMessage
+          const match = tgSource.download_url.match(/\/([0-9]+)$/);
+          const messageId = match ? parseInt(match[1], 10) : null;
+          const privateChannel = settings.telegramPrivateChannelId || settings.telegramChannelId;
+
+          let copied = false;
+          if (messageId && privateChannel) {
+            try {
+              const copyRes = await fetch(`https://api.telegram.org/bot${token}/copyMessage`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: chatId,
+                  from_chat_id: privateChannel,
+                  message_id: messageId,
+                }),
+              });
+              const copyJson = await copyRes.json();
+              copied = copyJson.ok;
+            } catch (err) {
+              console.warn("copyMessage err:", err);
+            }
+          }
+
+          if (!copied) {
+            await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: chatId,
+                text: (
+                  `⚡ <b>${app.name} (${version?.version_name || "Latest"})</b>\n\n` +
+                  `📦 Here is your direct VIP Telegram download link:\n` +
+                  `🔗 <a href="${tgSource.download_url}">${tgSource.download_url}</a>\n\n` +
+                  `<i>Enjoy 100% ad-free 5G download speed!</i>`
+                ),
+                parse_mode: "HTML",
+              }),
+            });
+          }
+          return NextResponse.json({ ok: true });
+        }
+
+        // If app is in database, but direct Telegram file is not uploaded yet
         await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             chat_id: chatId,
             text: (
-              `👑 <b>Welcome Back, VIP Member!</b>\n\n` +
-              `⚡ Preparing direct APK delivery for: <b>${appName}</b>\n` +
-              `<i>Your VIP access is active until: ${vipStatus.expiresAt?.slice(0, 10)}</i>`
+              `⚠️ <b>Direct Telegram File Pending Upload</b>\n\n` +
+              `The direct APK package for <b>${app.name} (${version?.version_name || "Latest"})</b> is currently being prepared and will be uploaded to Telegram shortly!\n\n` +
+              `🌐 In the meantime, you can download it via the website mirror:\n` +
+              `🔗 <a href="https://www.awtmods.in/apps/${app.slug}.html">Download ${app.name} on AWTMods.in</a>\n\n` +
+              `💬 You can also message Admin @AadithCV for priority file delivery!`
             ),
             parse_mode: "HTML",
           }),

@@ -164,3 +164,117 @@ export async function activateUserVip(
 
   return null;
 }
+
+/**
+ * Revokes VIP access immediately for a user
+ */
+export async function revokeUserVip(userId: number): Promise<boolean> {
+  const users = await getVipUsers();
+  const updatedList = users.map((u) => {
+    if (u.userId === userId) {
+      return {
+        ...u,
+        isVip: false,
+        vipExpiresAt: null,
+        lastActiveAt: new Date().toISOString(),
+      };
+    }
+    return u;
+  });
+
+  const supabase = getDbClient();
+  if (supabase) {
+    try {
+      const { error } = await supabase
+        .from("site_settings")
+        .upsert(
+          { setting_key: "telegram_vip_users", setting_value: updatedList },
+          { onConflict: "setting_key" }
+        );
+      return !error;
+    } catch (err) {
+      console.error("revokeUserVip error:", err);
+    }
+  }
+  return false;
+}
+
+/**
+ * Extends VIP access by adding N days to existing expiration or now
+ */
+export async function extendUserVip(userId: number, daysToAdd = 30): Promise<VipUser | null> {
+  const users = await getVipUsers();
+  const existing = users.find((u) => u.userId === userId);
+
+  let currentExpire = Date.now();
+  if (existing?.vipExpiresAt) {
+    const parsed = new Date(existing.vipExpiresAt).getTime();
+    if (parsed > currentExpire) {
+      currentExpire = parsed;
+    }
+  }
+
+  const newExpire = new Date(currentExpire + daysToAdd * 24 * 60 * 60 * 1000).toISOString();
+
+  let updatedUser: VipUser;
+  if (existing) {
+    updatedUser = {
+      ...existing,
+      isVip: true,
+      vipExpiresAt: newExpire,
+      lastActiveAt: new Date().toISOString(),
+    };
+  } else {
+    updatedUser = {
+      userId,
+      isVip: true,
+      vipExpiresAt: newExpire,
+      lastActiveAt: new Date().toISOString(),
+    };
+  }
+
+  const updatedList = [
+    updatedUser,
+    ...users.filter((u) => u.userId !== userId),
+  ];
+
+  const supabase = getDbClient();
+  if (supabase) {
+    try {
+      await supabase
+        .from("site_settings")
+        .upsert(
+          { setting_key: "telegram_vip_users", setting_value: updatedList },
+          { onConflict: "setting_key" }
+        );
+      return updatedUser;
+    } catch (err) {
+      console.error("extendUserVip error:", err);
+    }
+  }
+  return null;
+}
+
+/**
+ * Permanently removes a user record from the VIP database
+ */
+export async function deleteVipUser(userId: number): Promise<boolean> {
+  const users = await getVipUsers();
+  const updatedList = users.filter((u) => u.userId !== userId);
+
+  const supabase = getDbClient();
+  if (supabase) {
+    try {
+      const { error } = await supabase
+        .from("site_settings")
+        .upsert(
+          { setting_key: "telegram_vip_users", setting_value: updatedList },
+          { onConflict: "setting_key" }
+        );
+      return !error;
+    } catch (err) {
+      console.error("deleteVipUser error:", err);
+    }
+  }
+  return false;
+}

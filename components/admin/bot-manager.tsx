@@ -25,6 +25,14 @@ import {
   ExternalLink,
   Smartphone,
   Sparkles,
+  Plus,
+  Search,
+  Trash2,
+  UserCheck,
+  UserX,
+  CalendarPlus,
+  X,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDate } from "@/lib/utils";
@@ -41,6 +49,129 @@ export function BotManager({ initialSettings, initialVipUsers }: BotManagerProps
   const [testingBot, setTestingBot] = useState(false);
   const [connectingWebhook, setConnectingWebhook] = useState(false);
   const [showToken, setShowToken] = useState(false);
+  const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
+
+  // VIP User Filter & Search State
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "expired">("all");
+
+  // Manual Add Modal State
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addUserId, setAddUserId] = useState("");
+  const [addFullName, setAddFullName] = useState("");
+  const [addUsername, setAddUsername] = useState("");
+  const [addDays, setAddDays] = useState("30");
+  const [addingUser, setAddingUser] = useState(false);
+
+  // User Actions
+  const handleUserAction = async (
+    userId: number,
+    action: "grant" | "revoke" | "extend" | "delete",
+    days = 30
+  ) => {
+    setActionLoadingId(userId);
+    try {
+      const res = await fetch("/api/admin/bot/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, action, days }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Action failed");
+
+      if (action === "delete") {
+        setVipUsers((prev) => prev.filter((u) => u.userId !== userId));
+        toast.success(`User ${userId} deleted from VIP list`);
+      } else if (data.user) {
+        setVipUsers((prev) =>
+          prev.map((u) => (u.userId === userId ? data.user : u))
+        );
+        toast.success(
+          action === "grant"
+            ? `Granted ${days} days VIP to user ${userId}!`
+            : action === "extend"
+            ? `Extended VIP by ${days} days!`
+            : `Revoked VIP access for user ${userId}`
+        );
+      } else {
+        // Fallback local update
+        if (action === "revoke") {
+          setVipUsers((prev) =>
+            prev.map((u) => (u.userId === userId ? { ...u, isVip: false } : u))
+          );
+          toast.success(`Revoked VIP access`);
+        }
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update VIP user");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleManualAddSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const parsedId = parseInt(addUserId.trim(), 10);
+    if (isNaN(parsedId)) {
+      toast.error("Please enter a valid numeric Telegram User ID");
+      return;
+    }
+
+    setAddingUser(true);
+    try {
+      const res = await fetch("/api/admin/bot/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "grant",
+          userId: parsedId,
+          days: parseInt(addDays, 10) || 30,
+          fullName: addFullName.trim(),
+          username: addUsername.replace(/^@/, "").trim(),
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to grant VIP");
+
+      if (data.user) {
+        setVipUsers((prev) => [
+          data.user,
+          ...prev.filter((u) => u.userId !== parsedId),
+        ]);
+      }
+
+      setShowAddModal(false);
+      setAddUserId("");
+      setAddFullName("");
+      setAddUsername("");
+      setAddDays("30");
+      toast.success(`VIP access granted to User ID ${parsedId}!`);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to add VIP user");
+    } finally {
+      setAddingUser(false);
+    }
+  };
+
+  // Filtered Users
+  const filteredUsers = vipUsers.filter((u) => {
+    if (statusFilter === "active" && !u.isVip) return false;
+    if (statusFilter === "expired" && u.isVip) return false;
+    if (!searchQuery.trim()) return true;
+
+    const q = searchQuery.toLowerCase();
+    return (
+      String(u.userId).includes(q) ||
+      (u.fullName && u.fullName.toLowerCase().includes(q)) ||
+      (u.username && u.username.toLowerCase().includes(q)) ||
+      (u.pendingApp && u.pendingApp.toLowerCase().includes(q))
+    );
+  });
+
+  const activeVipCount = vipUsers.filter((u) => u.isVip).length;
+  const estimatedRevenue = activeVipCount * (settings.telegramVipPrice || 20);
 
   // Compute live UPI QR Code
   const upiId = settings.telegramUpiId || "awtmods@upi";
@@ -459,24 +590,98 @@ export function BotManager({ initialSettings, initialVipUsers }: BotManagerProps
         </div>
       </form>
 
-      {/* 👑 Active VIP Subscribers Table */}
-      <div className="rounded-3xl border border-border bg-card p-6 sm:p-8 space-y-4">
-        <div className="flex items-center justify-between pb-3 border-b border-border">
+      {/* 👑 Active VIP Subscribers Table & Control Hub */}
+      <div className="rounded-3xl border border-border bg-card p-6 sm:p-8 space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-border gap-4">
           <div className="space-y-0.5">
             <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
               <Users className="h-5 w-5 text-amber-500" />
-              <span>Registered Telegram VIP Subscribers ({vipUsers.length})</span>
+              <span>VIP Subscribers &amp; Access Controls ({vipUsers.length})</span>
             </h3>
             <p className="text-xs text-muted-foreground">
-              Users who have accessed or subscribed to the direct Telegram bot delivery.
+              Full administrative control: Manually grant, extend, or revoke VIP access per user.
             </p>
+          </div>
+
+          <Button
+            onClick={() => setShowAddModal(true)}
+            size="sm"
+            className="rounded-2xl font-bold text-xs gap-1.5 self-start sm:self-auto shadow-sm"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Manually Grant VIP</span>
+          </Button>
+        </div>
+
+        {/* Live Metrics Strip */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="rounded-2xl border border-border bg-secondary/30 p-4">
+            <span className="text-[11px] font-semibold text-muted-foreground block">
+              Active VIP Members
+            </span>
+            <div className="text-2xl font-black text-emerald-500 font-mono mt-0.5">
+              {activeVipCount}
+            </div>
+            <span className="text-[10px] text-muted-foreground">
+              Uncapped 5G direct Telegram downloads
+            </span>
+          </div>
+
+          <div className="rounded-2xl border border-border bg-secondary/30 p-4">
+            <span className="text-[11px] font-semibold text-muted-foreground block">
+              Monthly Run-Rate (MRR)
+            </span>
+            <div className="text-2xl font-black text-foreground font-mono mt-0.5">
+              ₹{estimatedRevenue}
+            </div>
+            <span className="text-[10px] text-muted-foreground">
+              At ₹{settings.telegramVipPrice || 20}/mo per subscriber
+            </span>
+          </div>
+
+          <div className="rounded-2xl border border-border bg-secondary/30 p-4">
+            <span className="text-[11px] font-semibold text-muted-foreground block">
+              Total Bot Registrations
+            </span>
+            <div className="text-2xl font-black text-foreground font-mono mt-0.5">
+              {vipUsers.length}
+            </div>
+            <span className="text-[10px] text-muted-foreground">
+              Users who have accessed @{settings.telegramBotUsername || "awtmods_bot"}
+            </span>
           </div>
         </div>
 
-        {vipUsers.length === 0 ? (
-          <div className="py-10 text-center rounded-2xl border border-dashed border-border bg-secondary/30">
+        {/* Search & Filter Toolbar */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              placeholder="Search by User ID, Name, Username..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 h-10 rounded-xl text-xs"
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as any)}
+              className="h-10 px-3 rounded-xl border border-border bg-secondary text-xs font-semibold text-foreground focus:outline-none"
+            >
+              <option value="all">All Users ({vipUsers.length})</option>
+              <option value="active">Active VIP ({activeVipCount})</option>
+              <option value="expired">Expired / Pending ({vipUsers.length - activeVipCount})</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Users Table */}
+        {filteredUsers.length === 0 ? (
+          <div className="py-12 text-center rounded-2xl border border-dashed border-border bg-secondary/20">
             <p className="text-xs text-muted-foreground">
-              No VIP users registered yet. When users tap /start on @{settings.telegramBotUsername || "awtmods_bot"}, they will appear here automatically.
+              No matching Telegram users found.
             </p>
           </div>
         ) : (
@@ -484,48 +689,212 @@ export function BotManager({ initialSettings, initialVipUsers }: BotManagerProps
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="border-b border-border text-muted-foreground text-[11px] font-bold uppercase tracking-wider">
-                  <th className="py-2.5 px-3">User</th>
+                  <th className="py-2.5 px-3">Subscriber</th>
                   <th className="py-2.5 px-3">Telegram ID</th>
                   <th className="py-2.5 px-3">Requested App</th>
                   <th className="py-2.5 px-3">VIP Status</th>
                   <th className="py-2.5 px-3">Expires At</th>
+                  <th className="py-2.5 px-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60">
-                {vipUsers.map((u) => (
-                  <tr key={u.userId} className="hover:bg-muted/30 transition-colors">
-                    <td className="py-3 px-3 font-semibold text-foreground">
-                      {u.fullName || "User"} {u.username ? `(@${u.username})` : ""}
-                    </td>
-                    <td className="py-3 px-3 font-mono text-muted-foreground">
-                      {u.userId}
-                    </td>
-                    <td className="py-3 px-3">
-                      <span className="font-mono text-xs text-foreground uppercase">
-                        {u.pendingApp || "General"}
-                      </span>
-                    </td>
-                    <td className="py-3 px-3">
-                      {u.isVip ? (
-                        <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-[10px]">
-                          Active VIP
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-muted-foreground text-[10px]">
-                          Pending Payment
-                        </Badge>
-                      )}
-                    </td>
-                    <td className="py-3 px-3 text-muted-foreground">
-                      {u.vipExpiresAt ? formatDate(u.vipExpiresAt) : "—"}
-                    </td>
-                  </tr>
-                ))}
+                {filteredUsers.map((u) => {
+                  const isLoading = actionLoadingId === u.userId;
+                  return (
+                    <tr key={u.userId} className="hover:bg-muted/30 transition-colors">
+                      <td className="py-3 px-3">
+                        <div className="font-semibold text-foreground">
+                          {u.fullName || "User"}
+                        </div>
+                        {u.username && (
+                          <div className="text-[11px] text-muted-foreground">
+                            @{u.username}
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-3 px-3 font-mono text-muted-foreground">
+                        {u.userId}
+                      </td>
+                      <td className="py-3 px-3">
+                        <span className="font-mono text-xs text-foreground uppercase">
+                          {u.pendingApp || "General"}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3">
+                        {u.isVip ? (
+                          <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-[10px]">
+                            Active VIP
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-muted-foreground text-[10px]">
+                            Expired / Pending
+                          </Badge>
+                        )}
+                      </td>
+                      <td className="py-3 px-3 text-muted-foreground">
+                        {u.vipExpiresAt ? formatDate(u.vipExpiresAt) : "—"}
+                      </td>
+                      <td className="py-3 px-3 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {/* Extend / Grant +30 Days */}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={isLoading}
+                            onClick={() => handleUserAction(u.userId, "extend", 30)}
+                            className="h-8 px-2.5 rounded-lg text-[11px] font-semibold border-border hover:bg-emerald-500/10 text-foreground"
+                            title="Extend VIP by 30 days"
+                          >
+                            <CalendarPlus className="h-3.5 w-3.5 text-emerald-500 mr-1" />
+                            <span>+30d</span>
+                          </Button>
+
+                          {/* Revoke VIP */}
+                          {u.isVip && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={isLoading}
+                              onClick={() => handleUserAction(u.userId, "revoke")}
+                              className="h-8 px-2 rounded-lg text-[11px] font-semibold border-border hover:bg-amber-500/10 text-amber-600"
+                              title="Revoke VIP Access"
+                            >
+                              <UserX className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+
+                          {/* Delete User Record */}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={isLoading}
+                            onClick={() => {
+                              if (confirm(`Remove user ${u.userId} from VIP records?`)) {
+                                handleUserAction(u.userId, "delete");
+                              }
+                            }}
+                            className="h-8 px-2 rounded-lg text-[11px] font-semibold border-border hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                            title="Delete User Record"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
       </div>
+
+      {/* Manually Add / Grant VIP Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="relative w-full max-w-md rounded-3xl border border-border bg-card p-6 sm:p-8 text-left shadow-2xl space-y-5 animate-in zoom-in-95 duration-200">
+            <button
+              onClick={() => setShowAddModal(false)}
+              className="absolute top-5 right-5 p-2 rounded-full bg-secondary hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+
+            <div className="space-y-1">
+              <span className="text-[10px] font-extrabold uppercase tracking-widest text-amber-500 block">
+                VIP Manual Override
+              </span>
+              <h3 className="text-xl font-bold text-foreground">
+                Grant VIP Access Manually
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Manually activate VIP status for any user who paid offline or requires complimentary access.
+              </p>
+            </div>
+
+            <form onSubmit={handleManualAddSubmit} className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold uppercase text-foreground">
+                  Telegram User ID (Numeric) *
+                </label>
+                <Input
+                  required
+                  placeholder="e.g. 1343548529"
+                  value={addUserId}
+                  onChange={(e) => setAddUserId(e.target.value.trim())}
+                  className="rounded-xl text-xs font-mono"
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  Users can find their ID by messaging @userinfobot on Telegram.
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold uppercase text-foreground">
+                  Subscriber Full Name (Optional)
+                </label>
+                <Input
+                  placeholder="e.g. Rahul Sharma"
+                  value={addFullName}
+                  onChange={(e) => setAddFullName(e.target.value)}
+                  className="rounded-xl text-xs"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold uppercase text-foreground">
+                  Telegram Username (Optional)
+                </label>
+                <Input
+                  placeholder="e.g. rahul_dev"
+                  value={addUsername}
+                  onChange={(e) => setAddUsername(e.target.value.trim())}
+                  className="rounded-xl text-xs font-mono"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold uppercase text-foreground">
+                  VIP Duration (Days) *
+                </label>
+                <Input
+                  type="number"
+                  min={1}
+                  required
+                  value={addDays}
+                  onChange={(e) => setAddDays(e.target.value)}
+                  className="rounded-xl text-xs font-mono"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowAddModal(false)}
+                  className="rounded-xl text-xs px-5"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={addingUser}
+                  className="rounded-xl text-xs font-bold px-6 shadow-md"
+                >
+                  {addingUser ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                      <span>Activating...</span>
+                    </>
+                  ) : (
+                    <span>Grant VIP Pass</span>
+                  )}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

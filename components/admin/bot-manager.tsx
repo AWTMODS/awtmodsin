@@ -578,14 +578,16 @@ export function BotManager({ initialSettings, initialVipUsers }: BotManagerProps
                     setSettings({
                       ...settings,
                       telegramPostTemplate: [
-                        `<tg-emoji emoji-id="5443026723220265219">🔘</tg-emoji> <b>{app_name} [VIP]</b>`,
-                        `<tg-emoji emoji-id="5447644880824188382">🏷️</tg-emoji> <b>Version:</b> <code>{version}</code> <tg-emoji emoji-id="5445077613506757650">🔔</tg-emoji> <b>#update</b>`,
-                        `<tg-emoji emoji-id="5427009714745517384">▶️</tg-emoji> <a href="{store_link}">Play Store / Official Site Link</a>`,
+                        `<tg-emoji emoji-id="4956420911310832630">👑</tg-emoji> <b>{app_name}</b> <tg-emoji emoji-id="4956739572114392015">💎</tg-emoji> <b>[VIP]</b>`,
+                        `<tg-emoji emoji-id="4958529074533238201">ℹ️</tg-emoji> <b>Version:</b> <code>{version}</code> <tg-emoji emoji-id="4956290155326473271">🔔</tg-emoji> <b>#update</b>`,
+                        `<tg-emoji emoji-id="4958689671950369798">🔗</tg-emoji> <a href="{store_link}">Play Store / Official Site Link</a>`,
                         ``,
-                        `<tg-emoji emoji-id="5465465412345678901">🔥</tg-emoji> <u><b>Features &amp; Mod Info:</b></u>`,
+                        `<u><b>Features &amp; Mod Info:</b></u> <tg-emoji emoji-id="4956606007221421405">❤️‍🔥</tg-emoji>`,
                         `{mod_features}`,
                         ``,
-                        `<tg-emoji emoji-id="5443026723220265219">🎉</tg-emoji> <b>Join Channel ➔</b> {channel_handle}`,
+                        `<tg-emoji emoji-id="4958534696645428119">‼️</tg-emoji> <i>Clean &amp; 100% Virus-Free APK (Verified &amp; Safe to Install)</i>`,
+                        ``,
+                        `<tg-emoji emoji-id="4958714479681471536">⭐️</tg-emoji> <b>Join Channel ➔</b> {channel_handle}`,
                       ].join("\n"),
                     })
                   }

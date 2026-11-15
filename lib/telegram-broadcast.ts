@@ -101,7 +101,7 @@ export async function broadcastToTelegram(
 
     const formattedModFeatures = modFeaturesList
       .slice(0, 6)
-      .map((feat) => `<tg-emoji emoji-id="5445284980978644754">🟢</tg-emoji> ${escapeHtml(feat)}`)
+      .map((feat) => `<tg-emoji emoji-id="4956649845952611245">🟢</tg-emoji> ${escapeHtml(feat)}`)
       .join("\n");
 
     // 2. Play Store / Official Site Link
@@ -116,8 +116,13 @@ export async function broadcastToTelegram(
 
     // Prepare interactive HTML caption with animated emoji support & per-app mod features
     let caption: string;
-    if (settings.telegramPostTemplate && settings.telegramPostTemplate.trim()) {
-      caption = settings.telegramPostTemplate
+    const hasValidTemplate =
+      settings.telegramPostTemplate &&
+      settings.telegramPostTemplate.trim() &&
+      settings.telegramPostTemplate.includes("{app_name}");
+
+    if (hasValidTemplate) {
+      caption = settings.telegramPostTemplate!
         .replace(/{app_name}/g, escapeHtml(app.name))
         .replace(/{version}/g, escapeHtml(versionName))
         .replace(/{file_size}/g, escapeHtml(fileSize))
@@ -133,14 +138,16 @@ export async function broadcastToTelegram(
         .replace(/{vip_link}/g, vipDeepLink);
     } else {
       caption = [
-        `<tg-emoji emoji-id="5443026723220265219">🔘</tg-emoji> <b>${escapeHtml(app.name)} [VIP]</b>`,
-        `<tg-emoji emoji-id="5447644880824188382">🏷️</tg-emoji> <b>Version:</b> <code>${escapeHtml(versionName)}</code> <tg-emoji emoji-id="5445077613506757650">🔔</tg-emoji> <b>#update</b>`,
-        `<tg-emoji emoji-id="5427009714745517384">▶️</tg-emoji> <a href="${storeLink}">Play Store / Official Site Link</a>`,
+        `<tg-emoji emoji-id="4956420911310832630">👑</tg-emoji> <b>${escapeHtml(app.name)}</b> <tg-emoji emoji-id="4956739572114392015">💎</tg-emoji> <b>[VIP]</b>`,
+        `<tg-emoji emoji-id="4958529074533238201">ℹ️</tg-emoji> <b>Version:</b> <code>${escapeHtml(versionName)}</code> <tg-emoji emoji-id="4956290155326473271">🔔</tg-emoji> <b>#update</b>`,
+        `<tg-emoji emoji-id="4958689671950369798">🔗</tg-emoji> <a href="${storeLink}">Play Store / Official Site Link</a>`,
         ``,
-        `<tg-emoji emoji-id="5465465412345678901">🔥</tg-emoji> <u><b>Features &amp; Mod Info:</b></u>`,
+        `<u><b>Features &amp; Mod Info:</b></u> <tg-emoji emoji-id="4956606007221421405">❤️‍🔥</tg-emoji>`,
         formattedModFeatures,
         ``,
-        `<tg-emoji emoji-id="5443026723220265219">🎉</tg-emoji> <b>Join Channel ➔</b> ${channelHandle}`,
+        `<tg-emoji emoji-id="4958534696645428119">‼️</tg-emoji> <i>Clean &amp; 100% Virus-Free APK (Verified &amp; Safe to Install)</i>`,
+        ``,
+        `<tg-emoji emoji-id="4958714479681471536">⭐️</tg-emoji> <b>Join Channel ➔</b> ${channelHandle}`,
       ].join("\n");
     }
 

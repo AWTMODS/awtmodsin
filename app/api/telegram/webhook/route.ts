@@ -125,16 +125,27 @@ export async function POST(req: Request) {
 
         // Action: Auto-Create New App
         if (action === "newapp" || action === "create") {
-          const rawName = rest[0] || "New App";
-          const versionName = rest[1] || "v1";
-          const versionCode = parseInt(rest[2], 10) || 0;
+          const { executeAutoCreateApp, getPendingApkRelease } = await import("@/lib/telegram-auto-release");
+          const pending = await getPendingApkRelease(rest[0]);
 
-          const { executeAutoCreateApp } = await import("@/lib/telegram-auto-release");
+          const rawName = pending?.cleanAppName || pending?.rawFileName || rest[0] || "New App";
+          const versionName = pending?.versionName || rest[1] || "v1";
+          const versionCode = pending?.versionCode || parseInt(rest[2], 10) || 0;
+          const fileSize = pending?.fileSize || "50 MB";
+          const externalUrls = pending?.externalUrls || [];
+          const telegramMessageLink = pending?.telegramMessageLink || undefined;
+          const fileId = pending?.fileId || undefined;
+          const releaseNotes = pending?.releaseNotes || undefined;
+
           const createResult = await executeAutoCreateApp({
             rawName,
             versionName,
             versionCode,
-            fileSize: "50 MB",
+            fileSize,
+            externalUrls,
+            telegramMessageLink,
+            fileId,
+            releaseNotes,
           });
 
           if (createResult.success && createResult.app) {
@@ -151,6 +162,7 @@ export async function POST(req: Request) {
                 text: (
                   `🎉 <b>${app.name} Created &amp; Published to Website!</b>\n\n` +
                   `🏷️ <b>Version:</b> <code>${versionName}</code> (Version Code: <code>${app.latest_version?.version_code || 1}</code>)\n` +
+                  `📦 <b>Size:</b> ${fileSize}\n` +
                   `🌐 <b>Live on:</b> <a href="${appUrl}">${app.name} on AWTMods.in</a>\n` +
                   `⚡ Website cache cleared instantly!`
                 ),
@@ -170,18 +182,29 @@ export async function POST(req: Request) {
 
         // Action: Clone Template from Existing App
         if (action === "clone") {
-          const sourceAppId = rest[0];
-          const rawName = rest[1] || "New App";
-          const versionName = rest[2] || "v1";
-          const versionCode = parseInt(rest[3], 10) || 0;
+          const { executeCloneApplication, getPendingApkRelease } = await import("@/lib/telegram-auto-release");
+          const pending = await getPendingApkRelease(rest[0]);
 
-          const { executeCloneApplication } = await import("@/lib/telegram-auto-release");
+          const sourceAppId = pending ? rest[1] : rest[0];
+          const rawName = pending?.cleanAppName || pending?.rawFileName || rest[1] || "New App";
+          const versionName = pending?.versionName || rest[2] || "v1";
+          const versionCode = pending?.versionCode || parseInt(rest[3], 10) || 0;
+          const fileSize = pending?.fileSize || "50 MB";
+          const externalUrls = pending?.externalUrls || [];
+          const telegramMessageLink = pending?.telegramMessageLink || undefined;
+          const fileId = pending?.fileId || undefined;
+          const releaseNotes = pending?.releaseNotes || undefined;
+
           const cloneResult = await executeCloneApplication({
             sourceAppId,
             rawName,
             versionName,
             versionCode,
-            fileSize: "50 MB",
+            fileSize,
+            externalUrls,
+            telegramMessageLink,
+            fileId,
+            releaseNotes,
           });
 
           if (cloneResult.success && cloneResult.app) {
@@ -198,6 +221,7 @@ export async function POST(req: Request) {
                 text: (
                   `🎉 <b>${app.name} Cloned &amp; Published to Website!</b>\n\n` +
                   `🏷️ <b>Version:</b> <code>${versionName}</code> (Version Code: <code>${app.latest_version?.version_code || 1}</code>)\n` +
+                  `📦 <b>Size:</b> ${fileSize}\n` +
                   `🎨 <b>Features &amp; Logo:</b> Inherited from template\n` +
                   `🌐 <b>Live at:</b> <a href="${appUrl}">${app.name} on AWTMods.in</a>\n` +
                   `⚡ Website cache cleared instantly!`
@@ -218,9 +242,17 @@ export async function POST(req: Request) {
 
         // Action: Pick Existing App Disambiguation
         if (action === "pick") {
-          const appId = rest[0];
-          const versionName = rest[1] || "v1";
-          const versionCode = parseInt(rest[2], 10) || 0;
+          const { executeAutoApkRelease, getPendingApkRelease } = await import("@/lib/telegram-auto-release");
+          const pending = await getPendingApkRelease(rest[0]);
+
+          const appId = pending ? rest[1] : rest[0];
+          const versionName = pending?.versionName || rest[1] || "v1";
+          const versionCode = pending?.versionCode || parseInt(rest[2], 10) || 0;
+          const fileSize = pending?.fileSize || "50 MB";
+          const externalUrls = pending?.externalUrls || [];
+          const telegramMessageLink = pending?.telegramMessageLink || undefined;
+          const fileId = pending?.fileId || undefined;
+          const releaseNotes = pending?.releaseNotes || undefined;
 
           const app = await getApplicationById(appId);
           if (app) {
@@ -228,7 +260,11 @@ export async function POST(req: Request) {
               appId,
               versionName,
               versionCode,
-              fileSize: "50 MB",
+              fileSize,
+              externalUrls,
+              telegramMessageLink,
+              fileId,
+              releaseNotes,
             });
 
             if (releaseRes.success) {
@@ -244,6 +280,7 @@ export async function POST(req: Request) {
                   text: (
                     `✅ <b>${app.name} Auto-Updated to ${versionName}!</b>\n\n` +
                     `🏷️ <b>Version Code:</b> <code>${releaseRes.app?.latest_version?.version_code || 1}</code>\n` +
+                    `📦 <b>Size:</b> ${fileSize}\n` +
                     `🌐 <b>Live on:</b> <a href="${appUrl}">${app.name}</a> (Cache Cleared!)`
                   ),
                   parse_mode: "HTML",
@@ -378,6 +415,7 @@ export async function POST(req: Request) {
           releaseNotes: parsed.releaseNotes,
           externalUrls: parsed.externalUrls,
           telegramMessageLink,
+          fileId: doc?.file_id,
         });
 
         if (releaseRes.success) {
@@ -449,27 +487,43 @@ export async function POST(req: Request) {
             .replace(/([a-z])([A-Z])/g, "$1 $2")
             .trim() || rawFileName.replace(/\.apk$/i, "");
 
+        // Persist pending metadata so callback queries preserve file_id & external mirrors
+        const { savePendingApkRelease } = await import("@/lib/telegram-auto-release");
+        const pendingKey = await savePendingApkRelease({
+          rawFileName,
+          cleanAppName,
+          versionName: parsed.versionName,
+          versionCode: parsed.versionCode,
+          fileSize: parsed.fileSize,
+          fileId: doc?.file_id || null,
+          telegramMessageLink: telegramMessageLink || null,
+          externalUrls: parsed.externalUrls || [],
+          releaseNotes: parsed.releaseNotes || "",
+          sourceChatId: chatId,
+          sourceMessageId: message.message_id,
+        });
+
         // Send disambiguation buttons to Admin
         const candidateButtons: any[][] = [];
         candidates.slice(0, 3).forEach((c) => {
           candidateButtons.push([
             {
               text: `📱 Update: ${c.name}`,
-              callback_data: `pick:${c.id}:${parsed.versionName}:${parsed.versionCode || 0}`,
+              callback_data: `pick:${pendingKey}:${c.id}`,
             },
           ]);
           candidateButtons.push([
             {
               text: `📋 Clone Template from: ${c.name}`,
-              callback_data: `clone:${c.id}:${cleanAppName.replace(/\s+/g, "-")}:${parsed.versionName}:${parsed.versionCode || 0}`,
+              callback_data: `clone:${pendingKey}:${c.id}`,
             },
           ]);
         });
 
         candidateButtons.push([
           {
-            text: `➕ Start Fresh as "${cleanAppName}"`,
-            callback_data: `create:${cleanAppName.replace(/\s+/g, "-")}:${parsed.versionName}:${parsed.versionCode || 0}`,
+            text: `➕ Auto-Create "${cleanAppName}" on Website`,
+            callback_data: `create:${pendingKey}`,
           },
         ]);
 
@@ -506,6 +560,21 @@ export async function POST(req: Request) {
             .replace(/([a-z])([A-Z])/g, "$1 $2")
             .trim() || rawFileName.replace(/\.apk$/i, "");
 
+        const { savePendingApkRelease } = await import("@/lib/telegram-auto-release");
+        const pendingKey = await savePendingApkRelease({
+          rawFileName,
+          cleanAppName,
+          versionName: parsed.versionName,
+          versionCode: parsed.versionCode,
+          fileSize: parsed.fileSize,
+          fileId: doc?.file_id || null,
+          telegramMessageLink: telegramMessageLink || null,
+          externalUrls: parsed.externalUrls || [],
+          releaseNotes: parsed.releaseNotes || "",
+          sourceChatId: chatId,
+          sourceMessageId: message.message_id,
+        });
+
         const codeInfo =
           parsed.versionCode > 0
             ? `(Code: <code>${parsed.versionCode}</code>)`
@@ -531,7 +600,7 @@ export async function POST(req: Request) {
                 [
                   {
                     text: `➕ Auto-Create "${cleanAppName}" on Website`,
-                    callback_data: `create:${cleanAppName.replace(/\s+/g, "-")}:${parsed.versionName}:${parsed.versionCode || 0}`,
+                    callback_data: `create:${pendingKey}`,
                   },
                 ],
               ],
@@ -630,63 +699,116 @@ export async function POST(req: Request) {
           (s) => s.hosting_provider === "telegram" || s.download_url?.includes("t.me")
         );
 
-        if (tgSource?.download_url) {
-          const match = tgSource.download_url.match(/\/([0-9]+)$/);
-          const messageId = match ? parseInt(match[1], 10) : null;
-          const privateChannel = settings.telegramPrivateChannelId || settings.telegramChannelId;
+        let fileSent = false;
 
-          let copied = false;
-          if (messageId && privateChannel) {
+        // 1. Send Document directly into chat via Telegram file_id (instant & guaranteed APK delivery)
+        if (tgSource?.storage_key) {
+          try {
+            const docRes = await fetch(`https://api.telegram.org/bot${token}/sendDocument`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: chatId,
+                document: tgSource.storage_key,
+                caption: (
+                  `⚡ <b>VIP Direct Download Delivered!</b>\n\n` +
+                  `📦 <b>App:</b> ${app.name}\n` +
+                  `🏷️ <b>Version:</b> ${version?.version_name || "Latest"}\n` +
+                  `📊 <b>Size:</b> ${version?.file_size || "APK"}\n\n` +
+                  `👑 <i>Thank you for being an AWTMods VIP Member! Tap above to install directly to your device.</i>`
+                ),
+                parse_mode: "HTML",
+              }),
+            });
+            const docJson = await docRes.json();
+            fileSent = docJson.ok;
+          } catch (err) {
+            console.warn("sendDocument by file_id error:", err);
+          }
+        }
+
+        // 2. If storage_key wasn't set or sendDocument failed, try copyMessage from storage channel
+        if (!fileSent && tgSource?.download_url) {
+          const cMatch = tgSource.download_url.match(/t\.me\/c\/([0-9]+)\/([0-9]+)/);
+          const pubMatch = tgSource.download_url.match(/t\.me\/([a-zA-Z0-9_]+)\/([0-9]+)/);
+          const privateChannel = settings.telegramPrivateChannelId || "-1004449242945";
+
+          let fromChatId: string | number = privateChannel;
+          let messageId: number | null = null;
+
+          if (cMatch) {
+            fromChatId = `-100${cMatch[1]}`;
+            messageId = parseInt(cMatch[2], 10);
+          } else if (pubMatch && !["c", "joinchat", "addstickers", "awtmods"].includes(pubMatch[1].toLowerCase())) {
+            fromChatId = `@${pubMatch[1]}`;
+            messageId = parseInt(pubMatch[2], 10);
+          } else {
+            const lastNumMatch = tgSource.download_url.match(/\/([0-9]+)$/);
+            if (lastNumMatch) {
+              messageId = parseInt(lastNumMatch[1], 10);
+            }
+          }
+
+          if (messageId && fromChatId) {
             try {
               const copyRes = await fetch(`https://api.telegram.org/bot${token}/copyMessage`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                   chat_id: chatId,
-                  from_chat_id: privateChannel,
+                  from_chat_id: fromChatId,
                   message_id: messageId,
+                  caption: (
+                    `⚡ <b>VIP Direct Download Delivered!</b>\n\n` +
+                    `📦 <b>App:</b> ${app.name}\n` +
+                    `🏷️ <b>Version:</b> ${version?.version_name || "Latest"}\n\n` +
+                    `👑 <i>Thank you for being an AWTMods VIP Member! Tap above to install directly.</i>`
+                  ),
+                  parse_mode: "HTML",
                 }),
               });
               const copyJson = await copyRes.json();
-              copied = copyJson.ok;
+              fileSent = copyJson.ok;
             } catch (err) {
               console.warn("copyMessage err:", err);
             }
           }
-
-          if (!copied) {
-            await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                chat_id: chatId,
-                text: (
-                  `⚡ <b>VIP Direct Download</b>\n\n` +
-                  `📦 <b>App:</b> ${app.name}\n` +
-                  `🏷️ <b>Version:</b> ${version?.version_name || "Latest"}\n\n` +
-                  `🔗 <a href="${tgSource.download_url}">Tap here to download directly from Telegram</a>`
-                ),
-                parse_mode: "HTML",
-              }),
-            });
-          }
-          return NextResponse.json({ ok: true });
         }
 
-        // If app is in database, but direct Telegram file is not uploaded yet
+        if (fileSent) {
+          return NextResponse.json({ ok: true, delivered: true });
+        }
+
+        // 3. If direct Telegram file is not in storage yet:
+        // Provide the direct external mirror or website link — NEVER just open the general channel!
+        const mirror = version?.download_sources?.find(
+          (s) => s.download_url && !s.download_url.includes("t.me")
+        );
+        const siteUrl = settings.siteUrl || "https://www.awtmods.in";
+        const fastMirrorUrl = mirror?.download_url || `${siteUrl}/download/${app.slug}`;
+
         await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             chat_id: chatId,
             text: (
-              `⚠️ <b>Direct Telegram File Pending Upload</b>\n\n` +
-              `The direct APK package for <b>${app.name} (${version?.version_name || "Latest"})</b> is currently being prepared and will be uploaded to Telegram shortly!\n\n` +
-              `🌐 In the meantime, you can download it via the website mirror:\n` +
-              `🔗 <a href="https://www.awtmods.in/apps/${app.slug}.html">Download ${app.name} on AWTMods.in</a>\n\n` +
-              `💬 You can also message Admin @AadithCV for priority file delivery!`
+              `⚡ <b>VIP Priority Download</b>\n\n` +
+              `📦 <b>App:</b> ${app.name}\n` +
+              `🏷️ <b>Version:</b> ${version?.version_name || "Latest"}\n` +
+              `📊 <b>Size:</b> ${version?.file_size || "APK"}\n\n` +
+              `⚠️ The direct Telegram file for this update is currently syncing to our VIP node.\n` +
+              `🚀 In the meantime, you can download it immediately with zero wait times:\n\n` +
+              `🔗 <a href="${fastMirrorUrl}"><b>Click here for Instant Download (${mirror?.mirror_name || "Fast Mirror"})</b></a>`
             ),
             parse_mode: "HTML",
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  { text: "🚀 Open Fast Download Mirror", url: fastMirrorUrl },
+                ],
+              ],
+            },
           }),
         });
         return NextResponse.json({ ok: true });
@@ -700,6 +822,21 @@ export async function POST(req: Request) {
 
       const upiUri = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(upiName)}&am=${vipPrice}&cu=INR&tn=${encodeURIComponent(upiNote)}`;
       const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=450x450&data=${encodeURIComponent(upiUri)}`;
+
+      const downloadPageUrl = targetApp
+        ? `https://www.awtmods.in/download/${targetApp}`
+        : "https://www.awtmods.in";
+
+      const paymentMarkup = {
+        inline_keyboard: [
+          [
+            {
+              text: "🌐 Free Download on Website",
+              url: downloadPageUrl,
+            },
+          ],
+        ],
+      };
 
       const paymentMsg = (
         `⚡ <b>AWTMods Direct File VIP Pass</b>\n\n` +
@@ -727,6 +864,7 @@ export async function POST(req: Request) {
             photo: qrCodeUrl,
             caption: paymentMsg,
             parse_mode: "HTML",
+            reply_markup: paymentMarkup,
           }),
         });
         const photoJson = await photoRes.json();
@@ -744,6 +882,7 @@ export async function POST(req: Request) {
             chat_id: chatId,
             text: paymentMsg,
             parse_mode: "HTML",
+            reply_markup: paymentMarkup,
           }),
         });
       }

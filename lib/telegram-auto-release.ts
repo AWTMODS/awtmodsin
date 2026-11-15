@@ -299,6 +299,7 @@ export async function executeAutoApkRelease(params: {
   releaseNotes?: string;
   externalUrls?: { url: string; provider: HostingProvider; mirrorName: string }[];
   telegramMessageLink?: string;
+  fileId?: string;
 }): Promise<{ success: boolean; app?: Application; error?: string }> {
   const supabase = getDbClient();
   if (!supabase) return { success: false, error: "Database client unavailable" };
@@ -340,12 +341,13 @@ export async function executeAutoApkRelease(params: {
   }
 
   // 2. Telegram VIP Direct File Source
-  if (params.telegramMessageLink) {
+  if (params.telegramMessageLink || params.fileId) {
     downloadSources.push({
       download_type: "external",
       hosting_provider: "telegram",
-      download_url: params.telegramMessageLink,
-      mirror_name: "Telegram VIP Fast Channel",
+      download_url: params.telegramMessageLink || "https://t.me/awtmods",
+      storage_key: params.fileId || null,
+      mirror_name: "Telegram VIP Direct File",
       is_primary: downloadSources.length === 0,
       is_active: true,
     });
@@ -357,6 +359,7 @@ export async function executeAutoApkRelease(params: {
       download_type: "external",
       hosting_provider: "telegram",
       download_url: "https://t.me/awtmods",
+      storage_key: null,
       mirror_name: "Telegram Fast Channel",
       is_primary: true,
       is_active: true,
@@ -406,6 +409,21 @@ export async function executeAutoApkRelease(params: {
   }
 
   const updatedApp = await getApplicationById(params.appId);
+  const latestVer = updatedApp?.latest_version || updatedApp?.versions?.[0];
+
+  // If a Telegram fileId is provided, persist it directly to the version's telegram download_source
+  if (params.fileId && latestVer?.id) {
+    try {
+      await supabase
+        .from("download_sources")
+        .update({ storage_key: params.fileId })
+        .eq("version_id", latestVer.id)
+        .eq("hosting_provider", "telegram");
+    } catch (keyErr) {
+      console.warn("Could not persist storage_key:", keyErr);
+    }
+  }
+
   return { success: true, app: updatedApp || undefined };
 }
 
@@ -417,6 +435,8 @@ export async function executeAutoCreateApp(params: {
   fileSize: string;
   externalUrls?: { url: string; provider: HostingProvider; mirrorName: string }[];
   telegramMessageLink?: string;
+  fileId?: string;
+  releaseNotes?: string;
 }): Promise<{ success: boolean; app?: Application; error?: string }> {
   const supabase = getDbClient();
   if (!supabase) return { success: false, error: "Database client unavailable" };
@@ -489,6 +509,8 @@ export async function executeAutoCreateApp(params: {
     fileSize: params.fileSize,
     externalUrls: params.externalUrls,
     telegramMessageLink: params.telegramMessageLink,
+    fileId: params.fileId,
+    releaseNotes: params.releaseNotes,
   });
 }
 
@@ -501,6 +523,8 @@ export async function executeCloneApplication(params: {
   fileSize: string;
   externalUrls?: { url: string; provider: HostingProvider; mirrorName: string }[];
   telegramMessageLink?: string;
+  fileId?: string;
+  releaseNotes?: string;
 }): Promise<{ success: boolean; app?: Application; error?: string }> {
   const supabase = getDbClient();
   if (!supabase) return { success: false, error: "Database client unavailable" };
@@ -579,5 +603,66 @@ export async function executeCloneApplication(params: {
     fileSize: params.fileSize,
     externalUrls: params.externalUrls,
     telegramMessageLink: params.telegramMessageLink,
+    fileId: params.fileId,
+    releaseNotes: params.releaseNotes,
   });
+}
+
+export interface PendingApkRelease {
+  rawFileName: string;
+  cleanAppName: string;
+  versionName: string;
+  versionCode: number;
+  fileSize: string;
+  fileId?: string | null;
+  telegramMessageLink?: string | null;
+  externalUrls?: { url: string; provider: HostingProvider; mirrorName: string }[];
+  releaseNotes?: string;
+  sourceChatId?: number;
+  sourceMessageId?: number;
+  createdAt?: number;
+}
+
+/**
+ * Temporarily persists pending APK metadata in Supabase site_settings so inline keyboard
+ * callback queries have access to the exact fileId, DevUploads mirrors, and sizes.
+ */
+export async function savePendingApkRelease(data: PendingApkRelease): Promise<string> {
+  const supabase = getDbClient();
+  const shortId = Math.random().toString(36).substring(2, 8);
+  if (supabase) {
+    await supabase.from("site_settings").upsert({
+      setting_key: `tg_pending_${shortId}`,
+      setting_value: { ...data, createdAt: Date.now() },
+      updated_at: new Date().toISOString(),
+    });
+  }
+  return shortId;
+}
+
+/**
+ * Retrieves and cleans up pending APK metadata when the admin selects a release action.
+ */
+export async function getPendingApkRelease(shortId: string): Promise<PendingApkRelease | null> {
+  const supabase = getDbClient();
+  if (!supabase || !shortId) return null;
+  try {
+    const { data } = await supabase
+      .from("site_settings")
+      .select("setting_value")
+      .eq("setting_key", `tg_pending_${shortId}`)
+      .maybeSingle();
+
+    if (data?.setting_value) {
+      // Clean up after reading
+      await supabase
+        .from("site_settings")
+        .delete()
+        .eq("setting_key", `tg_pending_${shortId}`);
+      return data.setting_value as PendingApkRelease;
+    }
+  } catch (err) {
+    console.warn("getPendingApkRelease err:", err);
+  }
+  return null;
 }

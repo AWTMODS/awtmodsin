@@ -137,6 +137,17 @@ function generateModFeatures(title: string, genre: string = ""): string[] {
   ];
 }
 
+function decodeHtmlEntities(str: string): string {
+  if (!str) return "";
+  return str
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, " ");
+}
+
 function generateFullDescription(
   name: string,
   rawSummary: string,
@@ -145,9 +156,11 @@ function generateFullDescription(
   developer: string,
   version: string
 ): string {
-  const cleanSummary = (rawSummary || rawDescription.slice(0, 200) || "")
-    .replace(/<[^>]*>/g, "")
-    .trim();
+  const cleanSummary = decodeHtmlEntities(
+    (rawSummary || rawDescription.slice(0, 200) || "")
+      .replace(/<[^>]*>/g, "")
+      .trim()
+  );
 
   return `### Overview
 **${name}** is a premier application developed by **${developer}**, designed to deliver an exceptional mobile experience with rich features, intuitive design, and state-of-the-art performance.
@@ -335,10 +348,12 @@ export async function POST(req: Request) {
       ? detail.screenshots.slice(0, 6)
       : [];
 
-    const shortDescription = (detail.summary || `${cleanTitleBase} modded application for Android with unlocked features.`)
-      .replace(/<[^>]*>/g, "")
-      .trim()
-      .slice(0, 160);
+    const shortDescription = decodeHtmlEntities(
+      (detail.summary || `${cleanTitleBase} modded application for Android with unlocked features.`)
+        .replace(/<[^>]*>/g, "")
+        .trim()
+        .slice(0, 160)
+    );
 
     const fullDescription = generateFullDescription(
       finalName,

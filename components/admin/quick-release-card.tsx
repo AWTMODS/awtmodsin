@@ -310,15 +310,15 @@ export function QuickReleaseCard({
                 </div>
               )}
 
-              <div>
+              <div className="min-w-0 flex-1 max-w-full">
                 <div className="text-[10px] uppercase font-bold text-muted-foreground">
                   Target Application
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 max-w-full">
                   <select
                     value={selectedAppId}
                     onChange={(e) => handleAppChange(e.target.value)}
-                    className="font-bold text-sm bg-background border border-border rounded-lg px-2.5 py-1 text-foreground focus:outline-none"
+                    className="font-bold text-xs sm:text-sm bg-background border border-border rounded-lg px-2.5 py-1 text-foreground focus:outline-none w-full max-w-[210px] sm:max-w-xs md:max-w-md truncate"
                   >
                     {candidates.length > 0 ? (
                       candidates.map((a) => (

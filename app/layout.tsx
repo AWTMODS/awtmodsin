@@ -106,7 +106,9 @@ export default function RootLayout({
             <Footer />
           </div>
           <Toaster
-            position="bottom-right"
+            position="top-right"
+            richColors
+            closeButton
             toastOptions={{
               style: {
                 background: "var(--card)",

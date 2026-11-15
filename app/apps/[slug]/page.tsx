@@ -29,6 +29,7 @@ import { AppIcon } from "@/components/applications/app-icon";
 import { ScreenshotsGallery } from "@/components/applications/screenshots-gallery";
 import { ShareButton } from "@/components/applications/share-button";
 import { ReviewsSection } from "@/components/applications/reviews-section";
+import { AppDescriptionRenderer } from "@/components/applications/app-description-renderer";
 import { formatDate, formatNumber, getAppUrl, getDownloadUrl, cleanAppSlug } from "@/lib/utils";
 
 interface AppDetailProps {
@@ -396,9 +397,7 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
             <h2 className="text-xl font-bold text-foreground">
               About This App
             </h2>
-            <p className="text-sm sm:text-base text-muted-foreground leading-relaxed whitespace-pre-line">
-              {app.description}
-            </p>
+            <AppDescriptionRenderer content={app.description} appName={app.name} />
 
             {/* Features Checklist (2 columns) */}
             {((app.mod_features && app.mod_features.length > 0) || !app.mod_features) && (

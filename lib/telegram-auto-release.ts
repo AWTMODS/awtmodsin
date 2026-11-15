@@ -197,33 +197,80 @@ export async function matchApplicationByApk(
     return { matchedApp: withAwtSlug[0] as any, candidates: [withAwtSlug[0] as any] };
   }
 
-  // 4. Search query on name & slug
-  const query = baseName
-    .replace(/awt/gi, "")
-    .replace(/[-_.]+/g, " ")
-    .trim();
-
-  const { data: searchCandidates } = await supabase
+  // 4. Exact name match
+  const { data: exactName } = await supabase
     .from("applications")
     .select(`
       id, name, slug, icon_url, package_name, status,
       versions:application_versions(id, version_name, version_code, is_latest)
     `)
-    .or(`name.ilike.%${query}%,slug.ilike.%${query}%`)
-    .limit(4);
+    .ilike("name", baseName)
+    .limit(1);
 
-  if (searchCandidates && searchCandidates.length > 0) {
-    // If only 1 result or top result exact name match
-    if (searchCandidates.length === 1) {
-      return { matchedApp: searchCandidates[0] as any, candidates: searchCandidates as any };
+  if (exactName && exactName.length > 0) {
+    return { matchedApp: exactName[0] as any, candidates: [exactName[0] as any] };
+  }
+
+  // 5. Search query on name & slug
+  const query = baseName
+    .replace(/awt/gi, "")
+    .replace(/[-_.]+/g, " ")
+    .trim();
+
+  if (query.length >= 3) {
+    const { data: searchCandidates } = await supabase
+      .from("applications")
+      .select(`
+        id, name, slug, icon_url, package_name, status,
+        versions:application_versions(id, version_name, version_code, is_latest)
+      `)
+      .or(`name.ilike.%${query}%,slug.ilike.%${query}%`)
+      .limit(4);
+
+    if (searchCandidates && searchCandidates.length > 0) {
+      if (searchCandidates.length === 1) {
+        return { matchedApp: searchCandidates[0] as any, candidates: searchCandidates as any };
+      }
+      const exact = searchCandidates.find(
+        (c: any) =>
+          c.name.toLowerCase() === baseName.toLowerCase() ||
+          c.name.toLowerCase() === query.toLowerCase()
+      );
+      if (exact) {
+        return { matchedApp: exact as any, candidates: searchCandidates as any };
+      }
+      return { matchedApp: null, candidates: searchCandidates as any };
     }
-    const exactName = searchCandidates.find(
-      (c: any) => c.name.toLowerCase() === baseName.toLowerCase() || c.name.toLowerCase() === query.toLowerCase()
+  }
+
+  // 6. Split compound words (e.g. "InstaUltra" -> ["Insta", "Ultra"])
+  const splitWords = baseName
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/[-_.]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(
+      (w) =>
+        w.length >= 3 &&
+        !["awt", "mod", "apk", "pro", "app", "ultra", "plus", "mini"].includes(w.toLowerCase())
     );
-    if (exactName) {
-      return { matchedApp: exactName as any, candidates: searchCandidates as any };
+
+  for (const word of splitWords) {
+    const { data: wordCandidates } = await supabase
+      .from("applications")
+      .select(`
+        id, name, slug, icon_url, package_name, status,
+        versions:application_versions(id, version_name, version_code, is_latest)
+      `)
+      .or(`name.ilike.%${word}%,slug.ilike.%${word}%`)
+      .limit(4);
+
+    if (wordCandidates && wordCandidates.length > 0) {
+      if (wordCandidates.length === 1) {
+        return { matchedApp: wordCandidates[0] as any, candidates: wordCandidates as any };
+      }
+      return { matchedApp: null, candidates: wordCandidates as any };
     }
-    return { matchedApp: null, candidates: searchCandidates as any };
   }
 
   return { matchedApp: null, candidates: [] };

@@ -122,7 +122,75 @@ export async function POST(req: Request) {
           }
         }
 
-        // Action: Pick App Disambiguation
+        // Action: Auto-Create New App
+        if (action === "newapp") {
+          const [rawSlug, versionName, versionCode] = rest;
+          const cleanNewSlug = rawSlug.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+          const appDisplayName = rawSlug
+            .replace(/([a-z])([A-Z])/g, "$1 $2")
+            .replace(/[-_.]+/g, " ")
+            .split(" ")
+            .map((s: string) => s.charAt(0).toUpperCase() + s.slice(1))
+            .join(" ");
+
+          const supabase = (await import("@/lib/db")).getDbClient();
+          if (supabase) {
+            const { data: newApp } = await supabase
+              .from("applications")
+              .insert({
+                name: appDisplayName,
+                slug: cleanNewSlug,
+                package_name: `com.awt.${cleanNewSlug.replace(/-/g, ".")}`,
+                developer: "Aadith C V",
+                category_id: "72dfab0d-c014-411a-965a-8b8719b33100",
+                short_description: `${appDisplayName} Mod APK with unlocked premium features and clean ad-free experience.`,
+                description: `Download the latest mod version of ${appDisplayName} with unlocked features.`,
+                icon_url: "https://www.awtmods.in/icons/default-app.png",
+                status: "published",
+                is_featured: false,
+                is_trending: false,
+                mod_features: [
+                  "Premium features Unlocked",
+                  "Ad-Free Clean Experience",
+                  "Direct High-Speed APK",
+                ],
+              })
+              .select()
+              .single();
+
+            if (newApp) {
+              const releaseRes = await executeAutoApkRelease({
+                appId: newApp.id,
+                versionName,
+                versionCode: parseInt(versionCode, 10) || 1,
+                fileSize: "50 MB",
+              });
+
+              await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: adminChatId,
+                  message_id: cq.message?.message_id,
+                  text: (
+                    `🎉 <b>New App "${appDisplayName}" Created & Published!</b>\n\n` +
+                    `🏷️ Version: <code>${versionName}</code> (Version Code: <code>${releaseRes.app?.latest_version?.version_code || versionCode}</code>)\n` +
+                    `🌐 Live at: <a href="https://www.awtmods.in/apps/${cleanNewSlug}.html">awtmods.in/apps/${cleanNewSlug}.html</a>`
+                  ),
+                  parse_mode: "HTML",
+                  reply_markup: {
+                    inline_keyboard: [
+                      [
+                        { text: "🚀 Broadcast to Channel", callback_data: `broadcast_${newApp.id}` },
+                        { text: "🌐 View on Website", url: `https://www.awtmods.in/apps/${cleanNewSlug}.html` },
+                      ],
+                    ],
+                  },
+                }),
+              }).catch(() => {});
+            }
+          }
+        }
         if (action === "pick") {
           const [appId, versionName, versionCode] = rest;
           const app = await getApplicationById(appId);
@@ -266,6 +334,8 @@ export async function POST(req: Request) {
         caption
       );
 
+      const replyChatId = isChannel ? adminChatId : chatId;
+
       if (matchedApp) {
         // Execute the automated release
         const releaseRes = await executeAutoApkRelease({
@@ -310,7 +380,7 @@ export async function POST(req: Request) {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              chat_id: adminChatId,
+              chat_id: replyChatId,
               text: successText,
               parse_mode: "HTML",
               reply_markup: {
@@ -338,10 +408,16 @@ export async function POST(req: Request) {
         }
       } else if (candidates.length > 0) {
         // Send disambiguation buttons to Admin
-        const candidateButtons = candidates.slice(0, 4).map((c) => [
+        const candidateButtons: any[][] = candidates.slice(0, 4).map((c) => [
           {
             text: `📱 Link to: ${c.name}`,
             callback_data: `pick_${c.id}_${parsed.versionName}_${parsed.versionCode}`,
+          },
+        ]);
+        candidateButtons.push([
+          {
+            text: `➕ Auto-Create "${rawFileName.replace(/\.apk$/i, "")}" on Website`,
+            callback_data: `newapp_${rawFileName.replace(/\.apk$/i, "")}_${parsed.versionName}_${parsed.versionCode}`,
           },
         ]);
 
@@ -349,13 +425,13 @@ export async function POST(req: Request) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            chat_id: adminChatId,
+            chat_id: replyChatId,
             text: (
               `❓ <b>Which application should this update be linked to?</b>\n\n` +
               `📁 <b>File:</b> <code>${rawFileName}</code>\n` +
               `🏷️ <b>Version:</b> <code>${parsed.versionName}</code> (Code: <code>${parsed.versionCode}</code>)\n` +
               `📦 <b>Size:</b> ${parsed.fileSize}\n\n` +
-              `Found ${candidates.length} matching candidates:`
+              `Found ${candidates.length} matching candidate(s):`
             ),
             parse_mode: "HTML",
             reply_markup: { inline_keyboard: candidateButtons },
@@ -363,6 +439,36 @@ export async function POST(req: Request) {
         });
 
         return NextResponse.json({ ok: true, pendingPick: true });
+      } else {
+        // No candidates found in database -> prompt to auto-create
+        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: replyChatId,
+            text: (
+              `⚠️ <b>App Not Found in Catalog</b>\n\n` +
+              `📁 <b>File:</b> <code>${rawFileName}</code>\n` +
+              `🏷️ <b>Version:</b> <code>${parsed.versionName}</code> (Code: <code>${parsed.versionCode}</code>)\n` +
+              `📦 <b>Size:</b> ${parsed.fileSize}\n\n` +
+              `No existing app in your catalog matches "<b>${rawFileName.replace(/\.apk$/i, "")}</b>".\n\n` +
+              `Would you like to automatically create it as a new app?`
+            ),
+            parse_mode: "HTML",
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: `➕ Auto-Create "${rawFileName.replace(/\.apk$/i, "")}" on Website`,
+                    callback_data: `newapp_${rawFileName.replace(/\.apk$/i, "")}_${parsed.versionName}_${parsed.versionCode}`,
+                  },
+                ],
+              ],
+            },
+          }),
+        });
+
+        return NextResponse.json({ ok: true, notFound: true });
       }
     }
 

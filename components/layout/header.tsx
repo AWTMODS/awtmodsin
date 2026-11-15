@@ -27,6 +27,11 @@ export function Header() {
     setMobileMenuOpen(false);
   }, [pathname]);
 
+  // Hide public navigation header inside admin console
+  if (pathname?.startsWith("/admin")) {
+    return null;
+  }
+
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/60 bg-background/85 backdrop-blur-md transition-colors">
       <div className="container mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">

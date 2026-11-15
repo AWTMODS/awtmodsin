@@ -1,8 +1,18 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Logo } from "./logo";
 import { Send, Instagram, Youtube, Twitter } from "lucide-react";
 
 export function Footer() {
+  const pathname = usePathname();
+
+  // Hide public footer inside admin console
+  if (pathname?.startsWith("/admin")) {
+    return null;
+  }
+
   return (
     <footer className="border-t border-border bg-card text-card-foreground transition-colors mt-auto">
       <div className="container mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">

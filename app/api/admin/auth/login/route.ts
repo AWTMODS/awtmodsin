@@ -28,16 +28,26 @@ function getSupabaseAdmin() {
 
 export async function POST(req: Request) {
   try {
-    const { email, password, rememberMe } = await req.json();
+    const { email, username, identifier, password, rememberMe } = await req.json();
+    const rawIdentifier = (identifier || username || email || "").trim();
 
-    if (!email || !password) {
+    if (!rawIdentifier || !password) {
       return NextResponse.json(
-        { error: "Email and password are required" },
+        { error: "Username or email and password are required" },
         { status: 400 }
       );
     }
 
-    const cleanEmail = email.toLowerCase().trim();
+    let cleanEmail = rawIdentifier.toLowerCase();
+    // If the administrator entered a username instead of full email, map dynamically
+    if (!cleanEmail.includes("@")) {
+      if (cleanEmail === "admin" || cleanEmail === "superadmin") {
+        cleanEmail = "admin@awtmods.in";
+      } else {
+        cleanEmail = `${cleanEmail}@awtmods.in`;
+      }
+    }
+
     // 30 days if rememberMe is true, otherwise 24 hours
     const sessionMaxAge = rememberMe ? 86400 * 30 : 86400 * 1;
 

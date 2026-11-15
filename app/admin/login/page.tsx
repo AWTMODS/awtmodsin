@@ -6,11 +6,11 @@ import Link from "next/link";
 import { Logo } from "@/components/layout/logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Lock, Mail, ArrowRight, Loader2 } from "lucide-react";
+import { Lock, User, ArrowRight, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 export default function AdminLoginPage() {
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -18,9 +18,11 @@ export default function AdminLoginPage() {
 
   useEffect(() => {
     try {
-      const savedEmail = localStorage.getItem("awtmods_admin_remember_email");
-      if (savedEmail) {
-        setEmail(savedEmail);
+      const savedUser =
+        localStorage.getItem("awtmods_admin_remember_identifier") ||
+        localStorage.getItem("awtmods_admin_remember_email");
+      if (savedUser) {
+        setIdentifier(savedUser);
         setRememberMe(true);
       }
     } catch {
@@ -36,7 +38,12 @@ export default function AdminLoginPage() {
       const res = await fetch("/api/admin/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, rememberMe }),
+        body: JSON.stringify({
+          identifier,
+          email: identifier,
+          password,
+          rememberMe,
+        }),
       });
 
       const data = await res.json();
@@ -47,8 +54,9 @@ export default function AdminLoginPage() {
 
       try {
         if (rememberMe) {
-          localStorage.setItem("awtmods_admin_remember_email", email.trim());
+          localStorage.setItem("awtmods_admin_remember_identifier", identifier.trim());
         } else {
+          localStorage.removeItem("awtmods_admin_remember_identifier");
           localStorage.removeItem("awtmods_admin_remember_email");
         }
       } catch {
@@ -83,15 +91,16 @@ export default function AdminLoginPage() {
         <form onSubmit={handleLogin} className="space-y-4 pt-2">
           <div className="space-y-1.5">
             <label className="text-xs font-semibold uppercase text-foreground">
-              Admin Email
+              Username or Email
             </label>
             <div className="relative">
-              <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                type="email"
-                placeholder="admin@awtmods.in"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                type="text"
+                placeholder="Enter username or email"
+                autoComplete="username"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
                 required
                 className="pl-10 rounded-xl"
               />
@@ -107,6 +116,7 @@ export default function AdminLoginPage() {
               <Input
                 type="password"
                 placeholder="••••••••••••"
+                autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required

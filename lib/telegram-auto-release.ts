@@ -1,4 +1,4 @@
-import { getDbClient, getApplicationById, invalidateDbCache } from "@/lib/db";
+import { getDbClient, getApplicationById, getApplicationBySlug, invalidateDbCache } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { HostingProvider, Application } from "@/lib/types";
 
@@ -529,7 +529,13 @@ export async function executeCloneApplication(params: {
   const supabase = getDbClient();
   if (!supabase) return { success: false, error: "Database client unavailable" };
 
-  const sourceApp = await getApplicationById(params.sourceAppId);
+  let sourceApp = await getApplicationById(params.sourceAppId);
+  if (!sourceApp) {
+    sourceApp = await getApplicationBySlug("awt-instagram");
+  }
+  if (!sourceApp) {
+    sourceApp = await getApplicationBySlug("instagram");
+  }
   if (!sourceApp) return { success: false, error: "Source app not found to clone from" };
 
   const cleanName = params.rawName

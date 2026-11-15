@@ -151,22 +151,47 @@ export async function broadcastToTelegram(
       ].join("\n");
     }
 
-    const replyMarkup = {
-      inline_keyboard: [
-        [
-          {
-            text: "⚡ DOWNLOAD NOW (Instant VIP)",
-            url: vipDeepLink,
-          },
-        ],
-        [
-          {
-            text: "🌐 DOWNLOAD NOW (Website)",
-            url: downloadPageUrl,
-          },
-        ],
+    // 1. DevUploads & external mirrors detection for channel post buttons
+    const devUploadsMirror = version?.download_sources?.find(
+      (s) =>
+        s.download_url &&
+        (s.download_url.includes("devuploads.com") ||
+          s.hosting_provider === "custom" ||
+          s.mirror_name?.toLowerCase().includes("devuploads"))
+    ) || version?.download_sources?.find(
+      (s) => s.download_url && !s.download_url.includes("t.me")
+    );
+
+    const inlineKeyboard: any[][] = [
+      [
+        {
+          text: "⚡ DOWNLOAD NOW (Instant VIP)",
+          url: vipDeepLink,
+        },
       ],
-    };
+    ];
+
+    if (devUploadsMirror?.download_url) {
+      const mirrorLabel = devUploadsMirror.download_url.includes("devuploads.com")
+        ? "📥 Free Download (DevUploads)"
+        : `📥 Free Download (${devUploadsMirror.mirror_name || "Fast Mirror"})`;
+
+      inlineKeyboard.push([
+        {
+          text: mirrorLabel,
+          url: devUploadsMirror.download_url,
+        },
+      ]);
+    }
+
+    inlineKeyboard.push([
+      {
+        text: "🌐 DOWNLOAD NOW (Website)",
+        url: downloadPageUrl,
+      },
+    ]);
+
+    const replyMarkup = { inline_keyboard: inlineKeyboard };
 
     // Helper to send photo or message with auto-fallback for custom emojis
     const sendWithFallback = async (usePhoto: boolean) => {
@@ -329,5 +354,180 @@ export async function testTelegramConnection(
       success: false,
       error: err.message || "Failed to reach Telegram API",
     };
+  }
+}
+
+/**
+ * Sends an interactive Draft Broadcast Preview to the Admin with 1-tap Approve & Edit buttons
+ */
+export async function sendDraftPreviewToAdmin(
+  app: Application,
+  adminChatId: number | string
+): Promise<TelegramBroadcastResult> {
+  try {
+    const settings = await getSiteSettings();
+    const token = settings.telegramBotToken || process.env.TELEGRAM_BOT_TOKEN;
+    if (!token) {
+      return { success: false, error: "Bot token missing" };
+    }
+
+    const version = app.latest_version || app.versions?.[0];
+    const cleanSlug = cleanAppSlug(app.slug);
+    const siteUrl = settings.siteUrl || "https://www.awtmods.in";
+    const appUrl = `${siteUrl}/apps/${cleanSlug}.html`;
+    const channelId = settings.telegramChannelId || "@awtmods";
+    const botUsername = settings.telegramBotUsername || "awtmods_bot";
+    const vipDeepLink = `https://t.me/${botUsername}?start=dl_${cleanSlug.slice(0, 50)}`;
+    const downloadPageUrl = `${siteUrl}/download/${cleanSlug}`;
+
+    const versionName = version?.version_name || "Latest";
+    const versionCode = version?.version_code || 1;
+    const fileSize = version?.file_size || "50 MB";
+
+    let modFeaturesList: string[] = [];
+    if (Array.isArray(app.mod_features) && app.mod_features.length > 0) {
+      modFeaturesList = app.mod_features.map((f) => String(f).trim()).filter(Boolean);
+    } else if (version?.release_notes) {
+      modFeaturesList = version.release_notes
+        .split(/\n|•|\*|;/)
+        .map((s) => s.trim().replace(/^[-•*]\s*/, ""))
+        .filter((s) => s.length > 2);
+    }
+    if (modFeaturesList.length === 0) {
+      modFeaturesList = [
+        "Premium / VIP features Unlocked",
+        "Audio and visual ads blocked",
+        "Smooth optimised mod version",
+        "Clean & verified APK (Safe to Install)",
+      ];
+    }
+
+    const formattedModFeatures = modFeaturesList
+      .slice(0, 6)
+      .map((feat) => `<tg-emoji emoji-id="4956649845952611245">🟢</tg-emoji> ${escapeHtml(feat)}`)
+      .join("\n");
+
+    const storeLink =
+      app.package_name && app.package_name.includes(".") && !app.package_name.startsWith("com.awt")
+        ? `https://play.google.com/store/apps/details?id=${app.package_name}`
+        : appUrl;
+
+    const devUploadsMirror = version?.download_sources?.find(
+      (s) =>
+        s.download_url &&
+        (s.download_url.includes("devuploads.com") ||
+          s.hosting_provider === "custom" ||
+          s.mirror_name?.toLowerCase().includes("devuploads"))
+    ) || version?.download_sources?.find(
+      (s) => s.download_url && !s.download_url.includes("t.me")
+    );
+
+    const postDraft = [
+      `<tg-emoji emoji-id="4956420911310832630">👑</tg-emoji> <b>${escapeHtml(app.name)}</b> <tg-emoji emoji-id="4956739572114392015">💎</tg-emoji> <b>[VIP]</b>`,
+      `<tg-emoji emoji-id="4958529074533238201">ℹ️</tg-emoji> <b>Version:</b> <code>${escapeHtml(versionName)}</code> <tg-emoji emoji-id="4956290155326473271">🔔</tg-emoji> <b>#update</b>`,
+      `<tg-emoji emoji-id="4958689671950369798">🔗</tg-emoji> <a href="${storeLink}">Play Store / Official Site Link</a>`,
+      ``,
+      `<u><b>Features &amp; Mod Info:</b></u> <tg-emoji emoji-id="4956606007221421405">❤️‍🔥</tg-emoji>`,
+      formattedModFeatures,
+      ``,
+      `<tg-emoji emoji-id="4958534696645428119">‼️</tg-emoji> <i>Clean &amp; 100% Virus-Free APK (Verified &amp; Safe to Install)</i>`,
+      ``,
+      `<tg-emoji emoji-id="4958714479681471536">⭐️</tg-emoji> <b>Join Channel ➔</b> ${channelId}`,
+    ].join("\n");
+
+    const devUploadsButtonText = devUploadsMirror?.download_url
+      ? (devUploadsMirror.download_url.includes("devuploads.com") ? "📥 Free Download (DevUploads)" : `📥 Free Download (${devUploadsMirror.mirror_name || "Fast Mirror"})`)
+      : "❌ None Linked";
+
+    const previewMessageText = [
+      `📋 <b>CHANNEL BROADCAST DRAFT PREVIEW</b>`,
+      `<i>Review how this post will look before sending to <b>${channelId}</b>:</i>`,
+      `━━━━━━━━━━━━━━━━━━━━`,
+      postDraft,
+      `━━━━━━━━━━━━━━━━━━━━`,
+      `🔘 <b>Post Buttons to be Attached:</b>`,
+      `1. ⚡ DOWNLOAD NOW (Instant VIP)`,
+      `2. ${devUploadsButtonText}`,
+      `3. 🌐 DOWNLOAD NOW (Website)`,
+      ``,
+      `🏷️ <b>Version Code:</b> <code>${versionCode}</code> | 📦 <b>Size:</b> ${fileSize}`,
+    ].join("\n");
+
+    const adminButtons = [
+      [
+        {
+          text: "🚀 Approve & Broadcast to Channel",
+          callback_data: `wiz_approve:${app.id}`,
+        },
+      ],
+      [
+        {
+          text: "🔢 Edit Version Code",
+          callback_data: `wiz_code:${app.id}`,
+        },
+        {
+          text: "🖼️ Change Logo Photo",
+          callback_data: `wiz_logo:${app.id}`,
+        },
+      ],
+      [
+        {
+          text: "📝 Edit Mod Features",
+          callback_data: `wiz_feat:${app.id}`,
+        },
+        {
+          text: "🌐 View Live App",
+          url: appUrl,
+        },
+      ],
+    ];
+
+    let photoUrl = app.icon_url;
+    if (photoUrl && photoUrl.startsWith("/")) {
+      photoUrl = `${siteUrl}${photoUrl}`;
+    }
+
+    let sent = false;
+    if (
+      photoUrl &&
+      (photoUrl.startsWith("http://") || photoUrl.startsWith("https://")) &&
+      !photoUrl.includes("default-app.png")
+    ) {
+      try {
+        const photoRes = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: adminChatId,
+            photo: photoUrl,
+            caption: previewMessageText.slice(0, 1024),
+            parse_mode: "HTML",
+            reply_markup: { inline_keyboard: adminButtons },
+          }),
+        });
+        const photoData = await photoRes.json();
+        sent = photoData.ok;
+      } catch (err) {
+        console.warn("Draft preview photo failed:", err);
+      }
+    }
+
+    if (!sent) {
+      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: adminChatId,
+          text: previewMessageText,
+          parse_mode: "HTML",
+          reply_markup: { inline_keyboard: adminButtons },
+        }),
+      });
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    console.error("sendDraftPreviewToAdmin error:", err);
+    return { success: false, error: err.message };
   }
 }

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSiteSettings, getApplicationBySlug, getApplicationById } from "@/lib/db";
+import { getSiteSettings, getApplicationBySlug, getApplicationById, getDbClient, invalidateDbCache } from "@/lib/db";
 import { isUserVip, recordUserInteraction, activateUserVip } from "@/lib/telegram-vip";
 import { broadcastToTelegram } from "@/lib/telegram-broadcast";
 import {
@@ -93,31 +93,141 @@ export async function POST(req: Request) {
         }
 
         // Action: Broadcast to Channel
-        if (action === "broadcast") {
-          const appId = rest.join("_");
+        if (action === "broadcast" || action === "wiz_approve") {
+          const appId = rest[0] || rest.join("_");
           const app = await getApplicationById(appId);
           if (app) {
-            await broadcastToTelegram({ app }).catch((err) =>
+            const bRes = await broadcastToTelegram({ app, force: true }).catch((err) =>
               console.warn("Broadcast callback err:", err)
             );
 
-            await fetch(`https://api.telegram.org/bot${token}/editMessageReplyMarkup`, {
+            const channelId = settings.telegramChannelId || "@awtmods";
+            const channelClean = channelId.replace(/^@/, "");
+            const postLink = bRes?.messageId
+              ? `https://t.me/${channelClean}/${bRes.messageId}`
+              : `https://t.me/${channelClean}`;
+
+            await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 chat_id: adminChatId,
-                message_id: cq.message?.message_id,
+                text: (
+                  `🎉 <b>POST APPROVED &amp; BROADCAST LIVE!</b>\n\n` +
+                  `📱 <b>App:</b> ${app.name}\n` +
+                  `📢 <b>Channel:</b> ${channelId}\n\n` +
+                  `✅ <i>The post with your custom animated emojis, logo, and DevUploads mirror is live!</i>`
+                ),
+                parse_mode: "HTML",
                 reply_markup: {
                   inline_keyboard: [
                     [
-                      { text: "✅ Broadcast Sent to Channel!", callback_data: "none" },
+                      { text: "📢 View Post on Telegram", url: postLink },
                       {
-                        text: "🌐 View on Website",
+                        text: "🌐 View Live App",
                         url: `${settings.siteUrl || "https://www.awtmods.in"}/apps/${app.slug}.html`,
                       },
                     ],
                   ],
                 },
+              }),
+            }).catch(() => {});
+          }
+        }
+
+        // Action: Wizard Edit Version Code Prompt
+        if (action === "wiz_code") {
+          const appId = rest[0];
+          const app = await getApplicationById(appId);
+          if (app) {
+            const supabase = getDbClient();
+            if (supabase) {
+              await supabase.from("site_settings").upsert(
+                {
+                  setting_key: `admin_wizard_${adminChatId}`,
+                  setting_value: { step: "waiting_for_version_code", appId, appName: app.name },
+                  updated_at: new Date().toISOString(),
+                },
+                { onConflict: "setting_key" }
+              );
+            }
+
+            await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: adminChatId,
+                text: (
+                  `🔢 <b>Edit Version Code for ${app.name}</b>\n\n` +
+                  `Current Version Code: <code>${app.latest_version?.version_code || 1}</code>\n\n` +
+                  `Please reply with the new Version Code integer (e.g. <code>18</code> or <code>105</code>):`
+                ),
+                parse_mode: "HTML",
+              }),
+            }).catch(() => {});
+          }
+        }
+
+        // Action: Wizard Edit Logo Prompt
+        if (action === "wiz_logo") {
+          const appId = rest[0];
+          const app = await getApplicationById(appId);
+          if (app) {
+            const supabase = getDbClient();
+            if (supabase) {
+              await supabase.from("site_settings").upsert(
+                {
+                  setting_key: `admin_wizard_${adminChatId}`,
+                  setting_value: { step: "waiting_for_logo", appId, appName: app.name },
+                  updated_at: new Date().toISOString(),
+                },
+                { onConflict: "setting_key" }
+              );
+            }
+
+            await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: adminChatId,
+                text: (
+                  `🖼️ <b>Upload New App Logo for ${app.name}</b>\n\n` +
+                  `Please send or forward any square image/photo right here to set as the official logo:`
+                ),
+                parse_mode: "HTML",
+              }),
+            }).catch(() => {});
+          }
+        }
+
+        // Action: Wizard Edit Mod Features Prompt
+        if (action === "wiz_feat") {
+          const appId = rest[0];
+          const app = await getApplicationById(appId);
+          if (app) {
+            const supabase = getDbClient();
+            if (supabase) {
+              await supabase.from("site_settings").upsert(
+                {
+                  setting_key: `admin_wizard_${adminChatId}`,
+                  setting_value: { step: "waiting_for_features", appId, appName: app.name },
+                  updated_at: new Date().toISOString(),
+                },
+                { onConflict: "setting_key" }
+              );
+            }
+
+            await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: adminChatId,
+                text: (
+                  `📝 <b>Edit Mod Features for ${app.name}</b>\n\n` +
+                  `Reply with your custom features (one per line, e.g.):\n\n` +
+                  `<code>• Premium VIP Unlocked\n• Audio and visual ads blocked\n• Background playback support\n• Unlimited shuffle unlocked</code>`
+                ),
+                parse_mode: "HTML",
               }),
             }).catch(() => {});
           }
@@ -164,19 +274,15 @@ export async function POST(req: Request) {
                   `🏷️ <b>Version:</b> <code>${versionName}</code> (Version Code: <code>${app.latest_version?.version_code || 1}</code>)\n` +
                   `📦 <b>Size:</b> ${fileSize}\n` +
                   `🌐 <b>Live on:</b> <a href="${appUrl}">${app.name} on AWTMods.in</a>\n` +
-                  `⚡ Website cache cleared instantly!`
+                  `⚡ Generating Channel Draft Preview below...`
                 ),
                 parse_mode: "HTML",
-                reply_markup: {
-                  inline_keyboard: [
-                    [
-                      { text: "🚀 Broadcast to Channel", callback_data: `broadcast_${app.id}` },
-                      { text: "🌐 View on Website", url: appUrl },
-                    ],
-                  ],
-                },
               }),
             }).catch(() => {});
+
+            // Send Interactive Draft Preview with 1-Tap Approve button
+            const { sendDraftPreviewToAdmin } = await import("@/lib/telegram-broadcast");
+            await sendDraftPreviewToAdmin(app, adminChatId).catch(() => {});
           }
         }
 
@@ -224,19 +330,15 @@ export async function POST(req: Request) {
                   `📦 <b>Size:</b> ${fileSize}\n` +
                   `🎨 <b>Features &amp; Logo:</b> Inherited from template\n` +
                   `🌐 <b>Live at:</b> <a href="${appUrl}">${app.name} on AWTMods.in</a>\n` +
-                  `⚡ Website cache cleared instantly!`
+                  `⚡ Generating Channel Draft Preview below...`
                 ),
                 parse_mode: "HTML",
-                reply_markup: {
-                  inline_keyboard: [
-                    [
-                      { text: "🚀 Broadcast to Channel", callback_data: `broadcast_${app.id}` },
-                      { text: "🌐 View on Website", url: appUrl },
-                    ],
-                  ],
-                },
               }),
             }).catch(() => {});
+
+            // Send Interactive Draft Preview with 1-Tap Approve button
+            const { sendDraftPreviewToAdmin } = await import("@/lib/telegram-broadcast");
+            await sendDraftPreviewToAdmin(app, adminChatId).catch(() => {});
           }
         }
 
@@ -281,22 +383,16 @@ export async function POST(req: Request) {
                     `✅ <b>${app.name} Auto-Updated to ${versionName}!</b>\n\n` +
                     `🏷️ <b>Version Code:</b> <code>${releaseRes.app?.latest_version?.version_code || 1}</code>\n` +
                     `📦 <b>Size:</b> ${fileSize}\n` +
-                    `🌐 <b>Live on:</b> <a href="${appUrl}">${app.name}</a> (Cache Cleared!)`
+                    `🌐 <b>Live on:</b> <a href="${appUrl}">${app.name}</a> (Cache Cleared!)\n` +
+                    `⚡ Generating Channel Draft Preview below...`
                   ),
                   parse_mode: "HTML",
-                  reply_markup: {
-                    inline_keyboard: [
-                      [
-                        { text: "🚀 Broadcast to Channel", callback_data: `broadcast_${app.id}` },
-                        {
-                          text: "🌐 View on Website",
-                          url: appUrl,
-                        },
-                      ],
-                    ],
-                  },
                 }),
               }).catch(() => {});
+
+              // Send Interactive Draft Preview with 1-Tap Approve button
+              const { sendDraftPreviewToAdmin } = await import("@/lib/telegram-broadcast");
+              await sendDraftPreviewToAdmin(releaseRes.app || app, adminChatId).catch(() => {});
             }
           }
         }
@@ -340,6 +436,126 @@ export async function POST(req: Request) {
       isChannel ||
       String(chatId) === String(settings.telegramPrivateChannelId) ||
       String(chatId) === String(settings.telegramChannelId);
+
+    // ==========================================================
+    // 2.5 INTERACTIVE ADMIN WIZARD INPUT HANDLER
+    // ==========================================================
+    const supabase = getDbClient();
+    if (supabase && (chatId === adminChatId || user?.id === adminChatId) && !doc) {
+      const { data: wizData } = await supabase
+        .from("site_settings")
+        .select("setting_value")
+        .eq("setting_key", `admin_wizard_${adminChatId}`)
+        .maybeSingle();
+
+      const wiz = wizData?.setting_value;
+      if (wiz && wiz.appId && wiz.step) {
+        // Step 1: Version Code input
+        if (wiz.step === "waiting_for_version_code" && text) {
+          const newCode = parseInt(text.replace(/[^0-9]/g, ""), 10);
+          if (newCode > 0) {
+            const app = await getApplicationById(wiz.appId);
+            const ver = app?.latest_version || app?.versions?.[0];
+            if (ver?.id) {
+              await supabase
+                .from("application_versions")
+                .update({ version_code: newCode })
+                .eq("id", ver.id);
+              await supabase
+                .from("site_settings")
+                .delete()
+                .eq("setting_key", `admin_wizard_${adminChatId}`);
+              invalidateDbCache();
+              const updatedApp = await getApplicationById(wiz.appId);
+              if (updatedApp) {
+                const { sendDraftPreviewToAdmin } = await import("@/lib/telegram-broadcast");
+                await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    chat_id: adminChatId,
+                    text: `✅ <b>Version Code updated to <code>${newCode}</code>!</b>\nHere is your updated Channel Broadcast Preview:`,
+                    parse_mode: "HTML",
+                  }),
+                });
+                await sendDraftPreviewToAdmin(updatedApp, adminChatId);
+                return NextResponse.json({ ok: true, wizardUpdated: "version_code" });
+              }
+            }
+          }
+        }
+
+        // Step 2: Logo photo input
+        if (wiz.step === "waiting_for_logo" && photo && photo.length > 0) {
+          const bestPhoto = photo[photo.length - 1];
+          const fileRes = await fetch(
+            `https://api.telegram.org/bot${token}/getFile?file_id=${bestPhoto.file_id}`
+          );
+          const fileJson = await fileRes.json();
+          if (fileJson.ok && fileJson.result?.file_path) {
+            const newLogoUrl = `https://api.telegram.org/file/bot${token}/${fileJson.result.file_path}`;
+            await supabase
+              .from("applications")
+              .update({ icon_url: newLogoUrl })
+              .eq("id", wiz.appId);
+            await supabase
+              .from("site_settings")
+              .delete()
+              .eq("setting_key", `admin_wizard_${adminChatId}`);
+            invalidateDbCache();
+            const updatedApp = await getApplicationById(wiz.appId);
+            if (updatedApp) {
+              const { sendDraftPreviewToAdmin } = await import("@/lib/telegram-broadcast");
+              await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: adminChatId,
+                  text: `✅ <b>Official App Logo Updated!</b>\nHere is your updated Channel Broadcast Preview:`,
+                  parse_mode: "HTML",
+                }),
+              });
+              await sendDraftPreviewToAdmin(updatedApp, adminChatId);
+              return NextResponse.json({ ok: true, wizardUpdated: "logo" });
+            }
+          }
+        }
+
+        // Step 3: Mod Features input
+        if (wiz.step === "waiting_for_features" && text) {
+          const rawLines = text
+            .split("\n")
+            .map((s: string) => s.trim().replace(/^[-•*🟢✅]\s*/, ""))
+            .filter((s: string) => s.length > 1);
+          if (rawLines.length > 0) {
+            await supabase
+              .from("applications")
+              .update({ mod_features: rawLines })
+              .eq("id", wiz.appId);
+            await supabase
+              .from("site_settings")
+              .delete()
+              .eq("setting_key", `admin_wizard_${adminChatId}`);
+            invalidateDbCache();
+            const updatedApp = await getApplicationById(wiz.appId);
+            if (updatedApp) {
+              const { sendDraftPreviewToAdmin } = await import("@/lib/telegram-broadcast");
+              await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: adminChatId,
+                  text: `✅ <b>Mod Features Updated! (${rawLines.length} features)</b>\nHere is your updated Channel Broadcast Preview:`,
+                  parse_mode: "HTML",
+                }),
+              });
+              await sendDraftPreviewToAdmin(updatedApp, adminChatId);
+              return NextResponse.json({ ok: true, wizardUpdated: "features" });
+            }
+          }
+        }
+      }
+    }
 
     // ==========================================================
     // 3. AUTOMATIC APK RELEASE & FORWARD DETECTOR (NO MANUAL ADMIN)
@@ -470,6 +686,12 @@ export async function POST(req: Request) {
             }),
           });
 
+          // Also generate and send the visual Draft Preview with 1-tap Approve & Edit buttons
+          const { sendDraftPreviewToAdmin } = await import("@/lib/telegram-broadcast");
+          await sendDraftPreviewToAdmin(releaseRes.app || matchedApp, adminChatId).catch((err) =>
+            console.warn("Draft preview after matched release err:", err)
+          );
+
           return NextResponse.json({
             ok: true,
             released: true,
@@ -519,6 +741,19 @@ export async function POST(req: Request) {
             },
           ]);
         });
+
+        // Dedicated 1-Tap Clone from AWT Instagram if not already listed
+        const hasAwtInsta = candidates.some(
+          (c) => c.id === "9976c40c-b6ff-44d9-a43d-412c5cd899a4" || c.slug === "awt-instagram"
+        );
+        if (!hasAwtInsta) {
+          candidateButtons.push([
+            {
+              text: `📋 1-Tap Clone from: AWT Instagram`,
+              callback_data: `clone:${pendingKey}:9976c40c-b6ff-44d9-a43d-412c5cd899a4`,
+            },
+          ]);
+        }
 
         candidateButtons.push([
           {
@@ -597,6 +832,12 @@ export async function POST(req: Request) {
             parse_mode: "HTML",
             reply_markup: {
               inline_keyboard: [
+                [
+                  {
+                    text: `📋 1-Tap Clone from: AWT Instagram`,
+                    callback_data: `clone:${pendingKey}:9976c40c-b6ff-44d9-a43d-412c5cd899a4`,
+                  },
+                ],
                 [
                   {
                     text: `➕ Auto-Create "${cleanAppName}" on Website`,

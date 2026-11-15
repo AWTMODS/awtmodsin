@@ -1162,6 +1162,130 @@ export async function getApplicationReviews(
   return [];
 }
 
+// ==========================================
+// COMMUNITY MOD REQUESTS ENGINE
+// ==========================================
+
+export async function getModRequests(): Promise<import("./types").ModRequest[]> {
+  const supabase = getDbClient();
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from("site_settings")
+        .select("setting_value")
+        .eq("setting_key", "community_mod_requests")
+        .single();
+
+      if (!error && data?.setting_value && Array.isArray(data.setting_value)) {
+        return data.setting_value as import("./types").ModRequest[];
+      }
+    } catch {
+      // Fallback
+    }
+  }
+  return [];
+}
+
+export async function createModRequest(newReq: {
+  app_name: string;
+  package_name?: string;
+  features_requested: string;
+  requester_name?: string;
+}): Promise<import("./types").ModRequest> {
+  const allRequests = await getModRequests();
+  const created: import("./types").ModRequest = {
+    id: `req-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    app_name: newReq.app_name.trim(),
+    package_name: newReq.package_name?.trim() || undefined,
+    features_requested: newReq.features_requested.trim(),
+    requester_name: newReq.requester_name?.trim() || "Community Member",
+    upvotes: 1,
+    status: "pending",
+    created_at: new Date().toISOString(),
+  };
+
+  const updatedList = [created, ...allRequests];
+  const supabase = getDbClient();
+  if (supabase) {
+    try {
+      await supabase
+        .from("site_settings")
+        .upsert(
+          { setting_key: "community_mod_requests", setting_value: updatedList },
+          { onConflict: "setting_key" }
+        );
+    } catch (err) {
+      console.error("createModRequest error:", err);
+    }
+  }
+
+  return created;
+}
+
+export async function upvoteModRequest(id: string): Promise<number> {
+  const allRequests = await getModRequests();
+  let newUpvotes = 1;
+  const updatedList = allRequests.map((r) => {
+    if (r.id === id) {
+      newUpvotes = (r.upvotes || 0) + 1;
+      return { ...r, upvotes: newUpvotes };
+    }
+    return r;
+  });
+
+  const supabase = getDbClient();
+  if (supabase) {
+    try {
+      await supabase
+        .from("site_settings")
+        .upsert(
+          { setting_key: "community_mod_requests", setting_value: updatedList },
+          { onConflict: "setting_key" }
+        );
+    } catch (err) {
+      console.error("upvoteModRequest error:", err);
+    }
+  }
+
+  return newUpvotes;
+}
+
+export async function updateModRequestStatus(
+  id: string,
+  status: import("./types").ModRequestStatus,
+  completedAppSlug?: string
+): Promise<boolean> {
+  const allRequests = await getModRequests();
+  const updatedList = allRequests.map((r) => {
+    if (r.id === id) {
+      return {
+        ...r,
+        status,
+        ...(completedAppSlug ? { completed_app_slug: completedAppSlug } : {}),
+      };
+    }
+    return r;
+  });
+
+  const supabase = getDbClient();
+  if (supabase) {
+    try {
+      const { error } = await supabase
+        .from("site_settings")
+        .upsert(
+          { setting_key: "community_mod_requests", setting_value: updatedList },
+          { onConflict: "setting_key" }
+        );
+      return !error;
+    } catch (err) {
+      console.error("updateModRequestStatus error:", err);
+    }
+  }
+
+  return false;
+}
+
+
 export async function createApplicationReview(data: {
   applicationId: string;
   userName: string;

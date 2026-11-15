@@ -10,6 +10,7 @@ import { formatDate } from "@/lib/utils";
 import { Plus, Check, Trash2, GitBranch, ExternalLink, RotateCcw, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { QuickReleaseCard } from "./quick-release-card";
+import { ApkInspector, ApkInspectionData } from "./apk-inspector";
 
 export function VersionsManager({
   initialApps,
@@ -270,6 +271,15 @@ export function VersionsManager({
           <h3 className="font-bold text-base text-foreground pb-2 border-b border-border">
             Publish New Version
           </h3>
+
+          {/* Instant APK Binary Inspector */}
+          <ApkInspector
+            onParsed={(data) => {
+              if (data.versionName) setNewVersionName(data.versionName);
+              if (data.versionCode) setNewVersionCode(String(data.versionCode));
+              if (data.fileSize) setNewFileSize(data.fileSize);
+            }}
+          />
 
           <form onSubmit={handleAddVersion} className="space-y-4">
             <div className="space-y-1">

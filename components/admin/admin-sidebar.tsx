@@ -15,6 +15,7 @@ import {
   LogOut,
   ExternalLink,
   X,
+  Sparkles,
 } from "lucide-react";
 import { Logo } from "@/components/layout/logo";
 import { cn } from "@/lib/utils";
@@ -25,6 +26,7 @@ const adminNavItems = [
   { name: "Add New App", href: "/admin/apps/new", icon: PlusCircle },
   { name: "Categories", href: "/admin/categories", icon: LayoutGrid },
   { name: "Version Management", href: "/admin/versions", icon: GitBranch },
+  { name: "Mod Requests", href: "/admin/requests", icon: Sparkles },
   { name: "Analytics", href: "/admin/analytics", icon: BarChart3 },
   { name: "Reports", href: "/admin/reports", icon: AlertTriangle },
   { name: "Settings", href: "/admin/settings", icon: Settings },

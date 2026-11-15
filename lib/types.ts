@@ -170,6 +170,20 @@ export type SiteSettings = {
   adInFeedBannerEnabled?: boolean;
 };
 
+export type ModRequestStatus = 'pending' | 'in_progress' | 'completed' | 'dismissed';
+
+export type ModRequest = {
+  id: string;
+  app_name: string;
+  package_name?: string;
+  features_requested: string;
+  upvotes: number;
+  status: ModRequestStatus;
+  requester_name?: string;
+  completed_app_slug?: string;
+  created_at: string;
+};
+
 export type ApplicationReview = {
   id: string;
   application_id: string;

@@ -15,6 +15,7 @@ const navLinks = [
   { name: "Games", href: "/games" },
   { name: "PC Software", href: "/pc-software" },
   { name: "Categories", href: "/categories" },
+  { name: "Requests", href: "/requests" },
   { name: "Updates", href: "/updates" },
 ];
 

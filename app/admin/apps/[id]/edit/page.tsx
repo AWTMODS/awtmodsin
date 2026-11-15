@@ -1,6 +1,7 @@
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import { getApplicationById, getCategories } from "@/lib/db";
 import { AddAppForm } from "@/components/admin/add-app-form";
 
@@ -41,7 +42,16 @@ export default async function EditAppPage({
         </div>
       </div>
 
-      <AddAppForm categories={categories} initialApp={app} />
+      <Suspense
+        fallback={
+          <div className="flex items-center justify-center py-20 text-muted-foreground gap-2">
+            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+            <span className="text-sm">Loading editor...</span>
+          </div>
+        }
+      >
+        <AddAppForm categories={categories} initialApp={app} />
+      </Suspense>
     </div>
   );
 }

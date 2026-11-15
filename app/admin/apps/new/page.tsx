@@ -1,7 +1,8 @@
+import { Suspense } from "react";
 import { getCategories } from "@/lib/db";
 import { AddAppForm } from "@/components/admin/add-app-form";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 
 export const metadata = {
   title: "Publish New Application | AWTMods Admin",
@@ -29,7 +30,16 @@ export default async function NewAppPage() {
         </div>
       </div>
 
-      <AddAppForm categories={categories} />
+      <Suspense
+        fallback={
+          <div className="flex items-center justify-center py-20 text-muted-foreground gap-2">
+            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+            <span className="text-sm">Loading application form...</span>
+          </div>
+        }
+      >
+        <AddAppForm categories={categories} />
+      </Suspense>
     </div>
   );
 }

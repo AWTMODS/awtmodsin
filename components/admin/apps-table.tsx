@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Application, AppCategory } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +19,9 @@ import {
   CheckCircle,
   XCircle,
   Star,
+  Sparkles,
+  Loader2,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -32,10 +36,59 @@ export function AppsTable({
   categories,
   defaultStatus = "",
 }: AppsTableProps) {
+  const router = useRouter();
   const [apps, setApps] = useState<Application[]>(initialApps);
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedStatus, setSelectedStatus] = useState(defaultStatus);
+
+  // Auto-Generate Quick Modal States
+  const [showAutoModal, setShowAutoModal] = useState(false);
+  const [quickQuery, setQuickQuery] = useState("");
+  const [quickStatus, setQuickStatus] = useState<"published" | "draft">("published");
+  const [quickLoading, setQuickLoading] = useState(false);
+
+  const handleQuickCreate = async () => {
+    const q = quickQuery.trim();
+    if (!q) {
+      toast.error("Please enter an application name");
+      return;
+    }
+    setQuickLoading(true);
+    try {
+      const res = await fetch("/api/admin/auto-generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: q,
+          createImmediately: true,
+          status: quickStatus,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success || !data.app) {
+        throw new Error(data.error || "Failed to auto-create application");
+      }
+
+      setApps((prev) => [data.app, ...prev]);
+      setShowAutoModal(false);
+      setQuickQuery("");
+      toast.success(
+        `✨ Successfully created "${data.app.name}" (${quickStatus})!`,
+        {
+          action: {
+            label: "Edit Post",
+            onClick: () => router.push(`/admin/apps/${data.app.id}/edit`),
+          },
+        }
+      );
+    } catch (err: any) {
+      toast.error(err.message || "Failed to auto-create app");
+    } finally {
+      setQuickLoading(false);
+    }
+  };
 
   const filteredApps = apps.filter((app) => {
     const matchesSearch =
@@ -162,6 +215,16 @@ export function AppsTable({
               </option>
             )}
           </select>
+
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setShowAutoModal(true)}
+            className="rounded-xl gap-1.5 font-bold border-primary/30 bg-primary/5 text-primary hover:bg-primary/10 shrink-0 shadow-2xs"
+          >
+            <Sparkles className="h-4 w-4 text-amber-500" />
+            <span>Auto-Create</span>
+          </Button>
 
           <Link href="/admin/apps/new">
             <Button size="sm" className="rounded-xl gap-1.5 font-semibold shrink-0">
@@ -325,6 +388,125 @@ export function AppsTable({
           </table>
         </div>
       </div>
+
+      {/* Auto-Create Quick Modal Dialog */}
+      {showAutoModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div className="bg-card border border-border rounded-3xl p-6 sm:p-7 max-w-lg w-full space-y-5 shadow-2xl relative">
+            <button
+              onClick={() => setShowAutoModal(false)}
+              className="absolute right-5 top-5 p-1 rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-2xl bg-primary text-primary-foreground shadow-xs">
+                <Sparkles className="h-5 w-5 text-amber-300" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-foreground">
+                  Auto-Generate App Post
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Type any app name to auto-fetch official images, description, & specs.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-4 pt-1">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase text-foreground">
+                  Application Name or Store URL
+                </label>
+                <input
+                  autoFocus
+                  type="text"
+                  placeholder="e.g. Spotify Mod, Subway Surfers, CapCut, Minecraft..."
+                  value={quickQuery}
+                  onChange={(e) => setQuickQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !quickLoading) {
+                      e.preventDefault();
+                      handleQuickCreate();
+                    }
+                  }}
+                  disabled={quickLoading}
+                  className="w-full h-11 px-4 text-sm rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase text-foreground">
+                  Post Initial Status
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setQuickStatus("published")}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold border transition-colors flex items-center justify-center gap-2 ${
+                      quickStatus === "published"
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-secondary/60 text-muted-foreground border-border hover:bg-secondary"
+                    }`}
+                  >
+                    <CheckCircle className="h-3.5 w-3.5" />
+                    <span>Published (Live)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setQuickStatus("draft")}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold border transition-colors flex items-center justify-center gap-2 ${
+                      quickStatus === "draft"
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-secondary/60 text-muted-foreground border-border hover:bg-secondary"
+                    }`}
+                  >
+                    <span>Draft (Review First)</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="pt-2 flex flex-col sm:flex-row gap-2.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setShowAutoModal(false);
+                    router.push(
+                      `/admin/apps/new?autoQuery=${encodeURIComponent(quickQuery.trim())}`
+                    );
+                  }}
+                  disabled={quickLoading || !quickQuery.trim()}
+                  className="rounded-xl flex-1 h-11 text-xs font-bold"
+                >
+                  <Edit className="h-3.5 w-3.5 mr-1.5" />
+                  <span>Open in Editor</span>
+                </Button>
+
+                <Button
+                  type="button"
+                  onClick={handleQuickCreate}
+                  disabled={quickLoading || !quickQuery.trim()}
+                  className="rounded-xl flex-1 h-11 text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground"
+                >
+                  {quickLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+                      <span>Creating Post...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4 mr-1.5 text-amber-400" />
+                      <span>Instant Create</span>
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useRef, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { AppCategory, HostingProvider, Application } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -40,8 +40,13 @@ interface MirrorForm {
 
 export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [submitting, setSubmitting] = useState(false);
   const isEditing = !!initialApp?.id;
+
+  // AI / Auto Post Generator State
+  const [autoQuery, setAutoQuery] = useState(searchParams?.get("autoQuery") || "");
+  const [autoGenerating, setAutoGenerating] = useState(false);
 
   // SECTION A: Basic Info
   const [platform, setPlatform] = useState<"android" | "pc">(
@@ -112,6 +117,66 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
     setModFeatures((prev) => prev.filter((_, i) => i !== idx));
   };
 
+  const handleAutoGenerate = async (queryOverride?: string) => {
+    const q = (queryOverride || autoQuery).trim();
+    if (!q) {
+      toast.error("Please enter an application name to search");
+      return;
+    }
+
+    setAutoGenerating(true);
+    try {
+      const res = await fetch("/api/admin/auto-generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: q, platform }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success || !data.appData) {
+        throw new Error(data.error || "Failed to fetch application details");
+      }
+
+      const app = data.appData;
+      if (app.name) setName(app.name);
+      if (app.slug) setSlug(app.slug);
+      if (app.package_name) setPackageName(app.package_name);
+      if (app.developer) setDeveloper(app.developer);
+      if (app.category_id) setCategoryId(app.category_id);
+      if (app.short_description) setShortDescription(app.short_description);
+      if (app.description) setDescription(app.description);
+      if (app.icon_url) setIconUrl(app.icon_url);
+      if (app.banner_url) setBannerUrl(app.banner_url);
+      if (Array.isArray(app.screenshots) && app.screenshots.length > 0) {
+        setScreenshots(app.screenshots);
+      }
+      if (Array.isArray(app.mod_features) && app.mod_features.length > 0) {
+        setModFeatures(app.mod_features);
+      }
+      if (app.android_requirement) setAndroidRequirement(app.android_requirement);
+      if (app.version) {
+        if (app.version.version_name) setVersionName(app.version.version_name);
+        if (app.version.file_size) setFileSize(app.version.file_size);
+        if (app.version.architecture) setArchitecture(app.version.architecture);
+        if (app.version.release_notes) setReleaseNotes(app.version.release_notes);
+      }
+
+      toast.success(`✨ Successfully generated post for "${app.name}"!`);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to auto-generate app");
+    } finally {
+      setAutoGenerating(false);
+    }
+  };
+
+  useEffect(() => {
+    const queryParam = searchParams?.get("autoQuery");
+    if (queryParam && !isEditing) {
+      setAutoQuery(queryParam);
+      handleAutoGenerate(queryParam);
+    }
+  }, [searchParams]);
+
   const suggestedFeatures =
     platform === "pc"
       ? [
@@ -139,6 +204,7 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
 
   // SECTION B: Images
   const [iconUrl, setIconUrl] = useState(initialApp?.icon_url || "");
+  const [bannerUrl, setBannerUrl] = useState(initialApp?.banner_url || "");
   const [screenshots, setScreenshots] = useState<string[]>(
     initialApp?.screenshots?.map((s) => (typeof s === "string" ? s : s.image_url)) || []
   );
@@ -479,6 +545,7 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
       short_description: finalShortDesc,
       description: finalDesc,
       icon_url: iconUrl.trim(),
+      banner_url: bannerUrl.trim() || null,
       android_requirement: androidRequirement,
       is_featured: isFeatured,
       is_trending: isTrending,
@@ -538,6 +605,75 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
 
   return (
     <div className="space-y-8 max-w-5xl">
+      {/* AI / Auto Post Generator Bar */}
+      {!isEditing && (
+        <div className="rounded-3xl border-2 border-primary/25 bg-gradient-to-r from-primary/10 via-card to-amber-500/10 p-6 sm:p-7 space-y-4 shadow-sm relative overflow-hidden">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-primary text-primary-foreground shadow-xs">
+                <Sparkles className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+                  Auto-Generate Application Post
+                  <Badge variant="secondary" className="text-[10px] uppercase font-bold tracking-wider bg-primary/15 text-primary">
+                    AI Auto-Fill
+                  </Badge>
+                </h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Type any app name (e.g. <em>Spotify, CapCut, Subway Surfers, Minecraft</em>) or Google Play link to auto-fetch official images, screenshots, package details, and generated descriptions.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-2.5">
+            <div className="relative flex-1">
+              <Input
+                placeholder="Enter app name (e.g. Spotify Mod, CapCut, Subway Surfers) or Google Play URL..."
+                value={autoQuery}
+                onChange={(e) => setAutoQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleAutoGenerate();
+                  }
+                }}
+                disabled={autoGenerating}
+                className="rounded-xl h-11 pl-4 pr-10 text-sm bg-background border-border/80 shadow-2xs"
+              />
+              {autoQuery && (
+                <button
+                  type="button"
+                  onClick={() => setAutoQuery("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            <Button
+              type="button"
+              onClick={() => handleAutoGenerate()}
+              disabled={autoGenerating || !autoQuery.trim()}
+              className="rounded-xl h-11 px-5 font-bold gap-2 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm"
+            >
+              {autoGenerating ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Fetching & Generating...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4" />
+                  <span>Generate Post</span>
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* SECTION A: Basic Info */}
       <div className="rounded-3xl border border-border bg-card p-6 sm:p-8 space-y-5">
         <div className="border-b border-border/70 pb-3">

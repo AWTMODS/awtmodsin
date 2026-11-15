@@ -1115,24 +1115,34 @@ export async function updateSiteSettings(
   updates: Partial<SiteSettings>
 ): Promise<SiteSettings> {
   invalidateDbCache();
-  const supabase = getDbClient();
 
-  if (supabase) {
-    try {
-      for (const [key, value] of Object.entries(updates)) {
-        await supabase
-          .from("site_settings")
-          .upsert({ setting_key: key, setting_value: value }, { onConflict: "setting_key" });
-      }
-    } catch {
-      // Fallback
-    }
-  }
-
+  // Optimistically synchronize in-memory settings & cache immediately
   memorySettings = {
     ...memorySettings,
     ...updates,
   };
+  cachedSettings = { data: memorySettings, timestamp: Date.now() };
+
+  const supabase = getDbClient();
+
+  if (supabase) {
+    try {
+      const rows = Object.entries(updates).map(([key, value]) => ({
+        setting_key: key,
+        setting_value: value,
+      }));
+
+      if (rows.length > 0) {
+        // High-speed single batch upsert (1 network trip instead of 25 sequential trips)
+        await supabase
+          .from("site_settings")
+          .upsert(rows, { onConflict: "setting_key" });
+      }
+    } catch (err) {
+      console.error("updateSiteSettings batch upsert error:", err);
+    }
+  }
+
   return memorySettings;
 }
 

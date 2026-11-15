@@ -28,7 +28,38 @@ export function SettingsManager({
   const [settings, setSettings] = useState<SiteSettings>(initialSettings);
   const [saving, setSaving] = useState(false);
   const [testingBot, setTestingBot] = useState(false);
+  const [connectingWebhook, setConnectingWebhook] = useState(false);
   const [showToken, setShowToken] = useState(false);
+
+  const handleConnectWebhook = async () => {
+    if (!settings.telegramBotToken) {
+      toast.error("Please enter a Telegram Bot Token first.");
+      return;
+    }
+    setConnectingWebhook(true);
+    try {
+      // First save settings
+      await fetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(settings),
+      });
+
+      const res = await fetch("/api/telegram/set-webhook", {
+        method: "POST",
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to set webhook");
+      }
+      toast.success(data.message || "Webhook activated successfully! Bot runs 24/7 with No VPS.");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to connect webhook");
+    } finally {
+      setConnectingWebhook(false);
+    }
+  };
 
   const handleTestTelegram = async () => {
     if (!settings.telegramBotToken) {
@@ -268,21 +299,40 @@ export function SettingsManager({
               Automate channel releases and manage the @{settings.telegramBotUsername || "awtmods_bot"} VIP payment gateway.
             </p>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleTestTelegram}
-            disabled={testingBot || !settings.telegramBotToken}
-            className="rounded-xl border-sky-500/40 text-xs font-semibold gap-1.5 self-start sm:self-auto hover:bg-sky-500/10 text-foreground"
-          >
-            {testingBot ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-400" />
-            ) : (
-              <Radio className="h-3.5 w-3.5 text-sky-400" />
-            )}
-            <span>Send Test Message</span>
-          </Button>
+          <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleConnectWebhook}
+              disabled={connectingWebhook || !settings.telegramBotToken}
+              className="rounded-xl border-emerald-500/40 text-xs font-semibold gap-1.5 hover:bg-emerald-500/10 text-foreground"
+              title="Connects Telegram to Vercel via Serverless Webhooks - Runs 24/7 with zero VPS"
+            >
+              {connectingWebhook ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-400" />
+              ) : (
+                <Zap className="h-3.5 w-3.5 text-emerald-400 fill-current" />
+              )}
+              <span>Activate 24/7 Webhook (No VPS)</span>
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleTestTelegram}
+              disabled={testingBot || !settings.telegramBotToken}
+              className="rounded-xl border-sky-500/40 text-xs font-semibold gap-1.5 hover:bg-sky-500/10 text-foreground"
+            >
+              {testingBot ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-400" />
+              ) : (
+                <Radio className="h-3.5 w-3.5 text-sky-400" />
+              )}
+              <span>Send Test Message</span>
+            </Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

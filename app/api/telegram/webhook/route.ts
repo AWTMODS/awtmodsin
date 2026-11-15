@@ -1,0 +1,249 @@
+import { NextResponse } from "next/server";
+import { getSiteSettings } from "@/lib/db";
+import { isUserVip, recordUserInteraction, activateUserVip } from "@/lib/telegram-vip";
+
+export async function POST(req: Request) {
+  try {
+    const settings = await getSiteSettings();
+    const token = settings.telegramBotToken || process.env.TELEGRAM_BOT_TOKEN;
+    const adminChatId = settings.telegramAdminChatId
+      ? parseInt(settings.telegramAdminChatId, 10)
+      : 1343548529;
+    const vipPrice = settings.telegramVipPrice || 20;
+
+    if (!token) {
+      return NextResponse.json({ error: "Bot token not configured" }, { status: 400 });
+    }
+
+    const body = await req.json();
+
+    // 1. Handle Callback Query (Admin tapped [ Approve ] or [ Reject ])
+    if (body.callback_query) {
+      const cq = body.callback_query;
+      const data = cq.data || ""; // e.g. "approve_12345" or "reject_12345"
+      const fromId = cq.from?.id;
+
+      // Ensure only Admin can approve/reject
+      if (fromId === adminChatId) {
+        const [action, targetUserIdStr] = data.split("_");
+        const targetUserId = parseInt(targetUserIdStr, 10);
+
+        if (action === "approve") {
+          await activateUserVip(targetUserId, 30);
+
+          // Update Admin message
+          await fetch(`https://api.telegram.org/bot${token}/editMessageCaption`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: adminChatId,
+              message_id: cq.message?.message_id,
+              caption: `${cq.message?.caption || ""}\n\n✅ <b>APPROVED BY ADMIN!</b> User VIP active for 30 days.`,
+              parse_mode: "HTML",
+            }),
+          }).catch(() => {});
+
+          // Notify User
+          await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: targetUserId,
+              text: (
+                `🎉 <b>Payment Verified! Your VIP Pass is now ACTIVE for 30 Days!</b>\n\n` +
+                `⚡ You now have unlimited direct APK downloads with zero ads.\n` +
+                `Whenever you download from <a href="https://www.awtmods.in">AWTMods.in</a>, tap the VIP button to get direct files instantly!`
+              ),
+              parse_mode: "HTML",
+              disable_web_page_preview: false,
+            }),
+          }).catch(() => {});
+        } else if (action === "reject") {
+          await fetch(`https://api.telegram.org/bot${token}/editMessageCaption`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: adminChatId,
+              message_id: cq.message?.message_id,
+              caption: `${cq.message?.caption || ""}\n\n❌ <b>REJECTED BY ADMIN.</b>`,
+              parse_mode: "HTML",
+            }),
+          }).catch(() => {});
+
+          await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: targetUserId,
+              text: `❌ <b>Payment verification was not approved.</b>\nPlease ensure you sent the correct ₹${vipPrice} screenshot, or contact admin @AadithCV for help.`,
+              parse_mode: "HTML",
+            }),
+          }).catch(() => {});
+        }
+      }
+
+      // Answer callback query so Telegram spinner stops
+      await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ callback_query_id: cq.id }),
+      }).catch(() => {});
+
+      return NextResponse.json({ ok: true });
+    }
+
+    // 2. Handle Messages
+    const message = body.message;
+    if (!message) {
+      return NextResponse.json({ ok: true });
+    }
+
+    const chatId = message.chat.id;
+    const user = message.from;
+    const text = (message.text || "").trim();
+    const photo = message.photo;
+
+    // Check if user is asking for /start
+    if (text.startsWith("/start")) {
+      const parts = text.split(" ");
+      const rawArg = parts[1] || "";
+      const targetApp = rawArg.startsWith("dl_") ? rawArg.replace("dl_", "") : null;
+
+      await recordUserInteraction(user.id, {
+        username: user.username,
+        fullName: [user.first_name, user.last_name].filter(Boolean).join(" "),
+        pendingApp: targetApp,
+      });
+
+      const vipStatus = await isUserVip(user.id);
+
+      if (vipStatus.isVip) {
+        const appName = targetApp || "your requested app";
+        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: (
+              `👑 <b>Welcome Back, VIP Member!</b>\n\n` +
+              `⚡ Preparing direct APK delivery for: <b>${appName}</b>\n` +
+              `<i>Your VIP access is active until: ${vipStatus.expiresAt?.slice(0, 10)}</i>`
+            ),
+            parse_mode: "HTML",
+          }),
+        });
+        return NextResponse.json({ ok: true });
+      }
+
+      // If NOT VIP: Send Payment instructions
+      const appText = targetApp ? ` for <b>${targetApp.toUpperCase()}</b>` : "";
+      const paymentMsg = (
+        `⚡ <b>AWTMods Direct File VIP Pass</b>\n\n` +
+        `Get instant, ad-free direct APK downloads${appText} delivered straight to your chat at full 5G speed!\n\n` +
+        `✨ <b>VIP BENEFITS:</b>\n` +
+        `• 🚫 Zero Ads &amp; Zero Link Shorteners\n` +
+        `• ⚡ Instant direct 1-tap APK installation\n` +
+        `• 📦 Unlimited access across all 95+ apps for 30 days\n` +
+        `• 🛡️ Direct Admin verification &amp; fast support\n\n` +
+        `💰 <b>Subscription Price:</b> ₹${vipPrice} / 30 Days\n` +
+        `📱 <b>Pay via UPI (GPay / PhonePe / Paytm):</b>\n` +
+        `<code>${settings.contactEmail || "awtmods@gmail.com"}</code>\n\n` +
+        `📸 <i>After paying ₹${vipPrice}, simply send the <b>Payment Screenshot</b> or UTR reference number right here!</i>`
+      );
+
+      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: paymentMsg,
+          parse_mode: "HTML",
+        }),
+      });
+
+      return NextResponse.json({ ok: true });
+    }
+
+    // Handle Payment Proof (User uploaded photo or sent UTR message)
+    if (photo || (text && !text.startsWith("/"))) {
+      const userStatus = await isUserVip(user.id);
+      if (userStatus.isVip) {
+        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: "✅ You are already an active VIP member! Enjoy unlimited direct downloads.",
+          }),
+        });
+        return NextResponse.json({ ok: true });
+      }
+
+      const adminCaption = (
+        `🚨 <b>NEW VIP PAYMENT SUBMISSION!</b>\n\n` +
+        `👤 <b>User:</b> ${user.first_name || ""} ${user.last_name || ""} (@${user.username || "No handle"})\n` +
+        `🆔 <b>User ID:</b> <code>${user.id}</code>\n` +
+        `📱 <b>Requested App:</b> ${userStatus.pendingApp || "General VIP Pass"}\n` +
+        `💰 <b>Amount:</b> ₹${vipPrice}\n` +
+        `⏰ <b>Submitted:</b> ${new Date().toISOString().replace("T", " ").slice(0, 19)} UTC`
+      );
+
+      const inlineKeyboard = {
+        inline_keyboard: [
+          [
+            { text: "✅ Approve VIP (30 Days)", callback_data: `approve_${user.id}` },
+            { text: "❌ Reject", callback_data: `reject_${user.id}` },
+          ],
+        ],
+      };
+
+      // Forward to Admin
+      if (photo && photo.length > 0) {
+        const largestPhotoId = photo[photo.length - 1].file_id;
+        await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: adminChatId,
+            photo: largestPhotoId,
+            caption: adminCaption,
+            parse_mode: "HTML",
+            reply_markup: inlineKeyboard,
+          }),
+        }).catch((err) => console.error("Admin photo forward err:", err));
+      } else {
+        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: adminChatId,
+            text: `${adminCaption}\n\n📝 <b>Message:</b>\n${text}`,
+            parse_mode: "HTML",
+            reply_markup: inlineKeyboard,
+          }),
+        }).catch((err) => console.error("Admin text forward err:", err));
+      }
+
+      // Reply to User
+      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: (
+            `⏳ <b>Payment proof received!</b>\n\n` +
+            `Admin is verifying your transaction. Once approved (usually within 2-5 minutes), your VIP pass will activate automatically!`
+          ),
+          parse_mode: "HTML",
+        }),
+      });
+
+      return NextResponse.json({ ok: true });
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (err: any) {
+    console.error("Telegram webhook error:", err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}

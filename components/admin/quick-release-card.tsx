@@ -443,7 +443,7 @@ export function QuickReleaseCard({
                     <option value="mega">Mega Cloud</option>
                     <option value="google_drive">Google Drive</option>
                     <option value="dropbox">Dropbox</option>
-                    <option value="custom">Custom / Direct</option>
+                    <option value="custom">DevUploads / ExaStash / Direct</option>
                   </select>
 
                   {/* Mirror Label */}

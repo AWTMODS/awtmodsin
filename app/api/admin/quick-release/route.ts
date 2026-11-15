@@ -6,6 +6,9 @@ import { Application, HostingProvider } from "@/lib/types";
 // Classify hosting provider based on URL domain
 function detectHostingProvider(url: string): { provider: HostingProvider; mirrorName: string } {
   const lower = url.toLowerCase();
+  if (lower.includes("exastash.com")) {
+    return { provider: "custom", mirrorName: "ExaStash Cloud CDN" };
+  }
   if (lower.includes("devuploads.com") || lower.includes("devupload.com") || lower.includes("hyp.sh") || lower.includes("dlinks.me")) {
     return { provider: "custom", mirrorName: "DevUploads Fast Mirror" };
   }

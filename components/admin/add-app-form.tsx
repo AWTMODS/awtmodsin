@@ -1353,7 +1353,7 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
                       <option value="dropbox">Dropbox</option>
                       <option value="mega">MEGA</option>
                       <option value="telegram">Telegram</option>
-                      <option value="custom">Custom URL</option>
+                      <option value="custom">DevUploads / ExaStash / Custom</option>
                     </select>
                   </div>
 
@@ -1385,9 +1385,28 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
                       onChange={(e) => {
                         const val = e.target.value;
                         setMirrors((prev) =>
-                          prev.map((m, i) =>
-                            i === index ? { ...m, download_url: val } : m
-                          )
+                          prev.map((m, i) => {
+                            if (i !== index) return m;
+                            let detectedName = m.mirror_name;
+                            let detectedProvider = m.hosting_provider;
+                            if (val.toLowerCase().includes("exastash.com")) {
+                              detectedProvider = "custom";
+                              if (!m.mirror_name || m.mirror_name === "Primary Mirror") {
+                                detectedName = "ExaStash Cloud CDN";
+                              }
+                            } else if (val.toLowerCase().includes("devuploads.com")) {
+                              detectedProvider = "custom";
+                              if (!m.mirror_name || m.mirror_name === "Primary Mirror") {
+                                detectedName = "DevUploads Fast Mirror";
+                              }
+                            }
+                            return {
+                              ...m,
+                              download_url: val,
+                              hosting_provider: detectedProvider,
+                              mirror_name: detectedName,
+                            };
+                          })
                         );
                       }}
                       className="rounded-xl text-xs font-mono"

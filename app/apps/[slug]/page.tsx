@@ -48,14 +48,12 @@ export async function generateMetadata({ params }: AppDetailProps): Promise<Meta
   const canonicalSlug = `${cleanAppSlug(app.slug)}.html`;
   const canonicalUrl = `${baseUrl}/apps/${canonicalSlug}`;
 
-  const title = `${app.name} (${app.latest_version?.version_name || "Latest"}) ${
-    isPc ? "Download for PC" : "Download Mod APK"
-  }`;
+  const title = `${app.name} (${app.latest_version?.version_name || "Latest"}) ${isPc ? "Download for PC" : "Download Mod APK"
+    }`;
   const rawDesc = (app.short_description || "").replace(/^\s*f(?:i|ir)st paragraph of[^\n]*/i, "").trim();
   const description =
     rawDesc ||
-    `Download ${app.name} (${app.latest_version?.version_name || "latest version"}) ${
-      isPc ? "for PC Windows" : "modded APK for Android"
+    `Download ${app.name} (${app.latest_version?.version_name || "latest version"}) ${isPc ? "for PC Windows" : "modded APK for Android"
     }. Clean, verified, and free high-speed download mirrors.`;
 
   return {
@@ -158,14 +156,14 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
         },
         ...(Number(app.rating) > 0
           ? {
-              aggregateRating: {
-                "@type": "AggregateRating",
-                ratingValue: Number(app.rating).toFixed(1),
-                reviewCount: Math.max(1, Number(app.reviews_count) || 1),
-                bestRating: "5",
-                worstRating: "1",
-              },
-            }
+            aggregateRating: {
+              "@type": "AggregateRating",
+              ratingValue: Number(app.rating).toFixed(1),
+              reviewCount: Math.max(1, Number(app.reviews_count) || 1),
+              bestRating: "5",
+              worstRating: "1",
+            },
+          }
           : {}),
       },
       {
@@ -186,27 +184,27 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
           },
           ...(app.category
             ? [
-                {
-                  "@type": "ListItem",
-                  position: 3,
-                  name: app.category.name,
-                  item: `${baseUrl}/categories/${app.category.slug}`,
-                },
-                {
-                  "@type": "ListItem",
-                  position: 4,
-                  name: app.name,
-                  item: canonicalUrl,
-                },
-              ]
+              {
+                "@type": "ListItem",
+                position: 3,
+                name: app.category.name,
+                item: `${baseUrl}/categories/${app.category.slug}`,
+              },
+              {
+                "@type": "ListItem",
+                position: 4,
+                name: app.name,
+                item: canonicalUrl,
+              },
+            ]
             : [
-                {
-                  "@type": "ListItem",
-                  position: 3,
-                  name: app.name,
-                  item: canonicalUrl,
-                },
-              ]),
+              {
+                "@type": "ListItem",
+                position: 3,
+                name: app.name,
+                item: canonicalUrl,
+              },
+            ]),
         ],
       },
     ],
@@ -410,11 +408,11 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
                   {(app.mod_features && app.mod_features.length > 0
                     ? app.mod_features
                     : [
-                        "Premium Unlocked",
-                        "Ad-Free Clean Experience",
-                        "Verified Safe APK Build",
-                        "Optimized & Battery Efficient",
-                      ]
+                      "Premium Unlocked",
+                      "Ad-Free Clean Experience",
+                      "Verified Safe APK Build",
+                      "Optimized & Battery Efficient",
+                    ]
                   ).map((feature, idx) => (
                     <div key={idx} className="flex items-center gap-2">
                       <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
@@ -466,11 +464,22 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
                 >
                   <div className="flex items-center gap-3">
                     <div className="h-10 w-10 rounded-xl bg-card flex items-center justify-center font-bold text-xs uppercase border border-border">
-                      {mirror.mirror_name?.toLowerCase().includes("devupload") ? "DEV" : mirror.hosting_provider.slice(0, 3)}
+                      {mirror.mirror_name?.toLowerCase().includes("devupload")
+                        ? "DEV"
+                        : mirror.mirror_name?.toLowerCase().includes("exastash") || mirror.download_url?.toLowerCase().includes("exastash")
+                        ? "EXA"
+                        : mirror.hosting_provider.slice(0, 3)}
                     </div>
                     <div>
                       <div className="font-semibold text-sm text-foreground flex items-center gap-2">
-                        <span>{mirror.mirror_name || (mirror.hosting_provider === "custom" ? "DevUploads Mirror" : `${mirror.hosting_provider.toUpperCase()} Mirror`)}</span>
+                        <span>
+                          {mirror.mirror_name ||
+                            (mirror.download_url?.toLowerCase().includes("exastash")
+                              ? "ExaStash Cloud CDN"
+                              : mirror.download_url?.toLowerCase().includes("devupload")
+                              ? "DevUploads Fast Mirror"
+                              : `${mirror.hosting_provider.toUpperCase()} Mirror`)}
+                        </span>
                         {mirror.is_primary && (
                           <Badge variant="success" className="text-[10px]">
                             Primary
@@ -478,7 +487,12 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
                         )}
                       </div>
                       <div className="text-xs text-muted-foreground capitalize">
-                        Host: {mirror.mirror_name?.toLowerCase().includes("devupload") ? "DevUploads Fast CDN" : mirror.hosting_provider.replace("_", " ")}
+                        Host:{" "}
+                        {mirror.mirror_name?.toLowerCase().includes("devupload")
+                          ? "DevUploads Fast CDN"
+                          : mirror.mirror_name?.toLowerCase().includes("exastash") || mirror.download_url?.toLowerCase().includes("exastash")
+                          ? "ExaStash Cloud CDN"
+                          : mirror.hosting_provider.replace("_", " ")}
                       </div>
                     </div>
                   </div>

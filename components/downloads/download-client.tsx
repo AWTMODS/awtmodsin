@@ -68,6 +68,9 @@ export function DownloadClient({
     if (mirrorName && mirrorName.toLowerCase().includes("devupload")) {
       return "DevUploads Fast CDN";
     }
+    if (mirrorName && mirrorName.toLowerCase().includes("exastash")) {
+      return "ExaStash Cloud CDN";
+    }
     const names: Record<string, string> = {
       mediafire: "MediaFire",
       google_drive: "Google Drive",

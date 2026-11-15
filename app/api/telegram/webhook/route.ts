@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
-import { getSiteSettings, getApplicationBySlug } from "@/lib/db";
+import { getSiteSettings, getApplicationBySlug, getApplicationById } from "@/lib/db";
 import { isUserVip, recordUserInteraction, activateUserVip } from "@/lib/telegram-vip";
+import { broadcastToTelegram } from "@/lib/telegram-broadcast";
+import {
+  parseApkReleaseInfo,
+  matchApplicationByApk,
+  executeAutoApkRelease,
+} from "@/lib/telegram-auto-release";
 
 export async function POST(req: Request) {
   try {
@@ -17,72 +23,149 @@ export async function POST(req: Request) {
 
     const body = await req.json();
 
-    // 1. Handle Callback Query (Admin tapped [ Approve ] or [ Reject ])
+    // ==========================================
+    // 1. Handle Callback Queries
+    // ==========================================
     if (body.callback_query) {
       const cq = body.callback_query;
-      const data = cq.data || ""; // e.g. "approve_12345" or "reject_12345"
+      const data = cq.data || "";
       const fromId = cq.from?.id;
 
-      // Ensure only Admin can approve/reject
+      // Ensure only Admin can trigger admin callback actions
       if (fromId === adminChatId) {
-        const [action, targetUserIdStr] = data.split("_");
-        const targetUserId = parseInt(targetUserIdStr, 10);
+        const [action, ...rest] = data.split("_");
 
-        if (action === "approve") {
-          await activateUserVip(targetUserId, 30);
+        // Action: VIP Approve / Reject
+        if (action === "approve" || action === "reject") {
+          const targetUserId = parseInt(rest[0], 10);
 
-          // Update Admin message
-          await fetch(`https://api.telegram.org/bot${token}/editMessageCaption`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              chat_id: adminChatId,
-              message_id: cq.message?.message_id,
-              caption: `${cq.message?.caption || ""}\n\n✅ <b>APPROVED BY ADMIN!</b> User VIP active for 30 days.`,
-              parse_mode: "HTML",
-            }),
-          }).catch(() => {});
+          if (action === "approve") {
+            await activateUserVip(targetUserId, 30);
 
-          // Notify User
-          await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              chat_id: targetUserId,
-              text: (
-                `🎉 <b>Payment Verified! Your VIP Pass is now ACTIVE for 30 Days!</b>\n\n` +
-                `⚡ You now have unlimited direct APK downloads with zero ads.\n` +
-                `Whenever you download from <a href="https://www.awtmods.in">AWTMods.in</a>, tap the VIP button to get direct files instantly!`
-              ),
-              parse_mode: "HTML",
-              disable_web_page_preview: false,
-            }),
-          }).catch(() => {});
-        } else if (action === "reject") {
-          await fetch(`https://api.telegram.org/bot${token}/editMessageCaption`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              chat_id: adminChatId,
-              message_id: cq.message?.message_id,
-              caption: `${cq.message?.caption || ""}\n\n❌ <b>REJECTED BY ADMIN.</b>`,
-              parse_mode: "HTML",
-            }),
-          }).catch(() => {});
+            await fetch(`https://api.telegram.org/bot${token}/editMessageCaption`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: adminChatId,
+                message_id: cq.message?.message_id,
+                caption: `${cq.message?.caption || ""}\n\n✅ <b>APPROVED BY ADMIN!</b> User VIP active for 30 days.`,
+                parse_mode: "HTML",
+              }),
+            }).catch(() => {});
 
-          await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              chat_id: targetUserId,
-              text: `❌ <b>Payment verification was not approved.</b>\nPlease ensure you sent the correct ₹${vipPrice} screenshot, or contact admin @AadithCV for help.`,
-              parse_mode: "HTML",
-            }),
-          }).catch(() => {});
+            await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: targetUserId,
+                text: (
+                  `🎉 <b>Payment Verified! Your VIP Pass is now ACTIVE for 30 Days!</b>\n\n` +
+                  `⚡ You now have unlimited direct APK downloads with zero ads.\n` +
+                  `Whenever you download from <a href="https://www.awtmods.in">AWTMods.in</a>, tap the VIP button to get direct files instantly!`
+                ),
+                parse_mode: "HTML",
+                disable_web_page_preview: false,
+              }),
+            }).catch(() => {});
+          } else if (action === "reject") {
+            await fetch(`https://api.telegram.org/bot${token}/editMessageCaption`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: adminChatId,
+                message_id: cq.message?.message_id,
+                caption: `${cq.message?.caption || ""}\n\n❌ <b>REJECTED BY ADMIN.</b>`,
+                parse_mode: "HTML",
+              }),
+            }).catch(() => {});
+
+            await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: targetUserId,
+                text: `❌ <b>Payment verification was not approved.</b>\nPlease ensure you sent the correct ₹${vipPrice} screenshot, or contact admin @AadithCV for help.`,
+                parse_mode: "HTML",
+              }),
+            }).catch(() => {});
+          }
+        }
+
+        // Action: Broadcast to Channel
+        if (action === "broadcast") {
+          const appId = rest.join("_");
+          const app = await getApplicationById(appId);
+          if (app) {
+            await broadcastToTelegram({ app }).catch((err) =>
+              console.warn("Broadcast callback err:", err)
+            );
+
+            await fetch(`https://api.telegram.org/bot${token}/editMessageReplyMarkup`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: adminChatId,
+                message_id: cq.message?.message_id,
+                reply_markup: {
+                  inline_keyboard: [
+                    [
+                      { text: "✅ Broadcast Sent to Channel!", callback_data: "none" },
+                      {
+                        text: "🌐 View on Website",
+                        url: `${settings.siteUrl || "https://www.awtmods.in"}/apps/${app.slug}.html`,
+                      },
+                    ],
+                  ],
+                },
+              }),
+            }).catch(() => {});
+          }
+        }
+
+        // Action: Pick App Disambiguation
+        if (action === "pick") {
+          const [appId, versionName, versionCode] = rest;
+          const app = await getApplicationById(appId);
+          if (app) {
+            const releaseRes = await executeAutoApkRelease({
+              appId,
+              versionName,
+              versionCode: parseInt(versionCode, 10) || 1,
+              fileSize: "50 MB",
+            });
+
+            if (releaseRes.success) {
+              await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: adminChatId,
+                  message_id: cq.message?.message_id,
+                  text: (
+                    `✅ <b>${app.name} Auto-Updated to ${versionName}!</b>\n\n` +
+                    `🏷️ Version Code: <code>${releaseRes.app?.latest_version?.version_code || versionCode}</code>\n` +
+                    `🌐 Website cache cleared & live on AWTMods.in!`
+                  ),
+                  parse_mode: "HTML",
+                  reply_markup: {
+                    inline_keyboard: [
+                      [
+                        { text: "🚀 Broadcast to Channel", callback_data: `broadcast_${app.id}` },
+                        {
+                          text: "🌐 View on Website",
+                          url: `${settings.siteUrl || "https://www.awtmods.in"}/apps/${app.slug}.html`,
+                        },
+                      ],
+                    ],
+                  },
+                }),
+              }).catch(() => {});
+            }
+          }
         }
       }
 
-      // Answer callback query so Telegram spinner stops
+      // Stop Telegram spinner
       await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -92,16 +175,196 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true });
     }
 
-    // 2. Handle Messages
-    const message = body.message;
+    // ==========================================
+    // 2. Handle Messages & Channel Posts
+    // ==========================================
+    const message =
+      body.message ||
+      body.channel_post ||
+      body.edited_message ||
+      body.edited_channel_post;
+
     if (!message) {
       return NextResponse.json({ ok: true });
     }
 
     const chatId = message.chat.id;
+    const isChannel = message.chat.type === "channel";
     const user = message.from;
     const text = (message.text || "").trim();
+    const caption = (message.caption || message.text || "").trim();
     const photo = message.photo;
+    const doc = message.document;
+
+    // Security check: is the message from Admin or Admin's private storage channel?
+    const isAuthorized =
+      user?.id === adminChatId ||
+      chatId === adminChatId ||
+      isChannel ||
+      String(chatId) === String(settings.telegramPrivateChannelId) ||
+      String(chatId) === String(settings.telegramChannelId);
+
+    // ==========================================================
+    // 3. AUTOMATIC APK RELEASE & FORWARD DETECTOR (NO MANUAL ADMIN)
+    // ==========================================================
+    const hasApkDoc =
+      doc &&
+      (doc.file_name?.toLowerCase().endsWith(".apk") ||
+        doc.mime_type?.includes("android") ||
+        doc.file_name?.toLowerCase().includes(".apk"));
+
+    const hasApkText =
+      caption.toLowerCase().includes(".apk") &&
+      (caption.includes("http://") || caption.includes("https://"));
+
+    if (isAuthorized && (hasApkDoc || hasApkText)) {
+      const rawFileName =
+        doc?.file_name ||
+        caption.match(/([a-zA-Z0-9_\-\.]+\.apk)/i)?.[1] ||
+        "app.apk";
+      const fileSizeBytes = doc?.file_size || 0;
+      const parsed = parseApkReleaseInfo(rawFileName, caption, fileSizeBytes);
+
+      // Derive Telegram message link for direct VIP downloads
+      let telegramMessageLink = "";
+      const privateChannelId =
+        settings.telegramPrivateChannelId || "-1004449242945";
+
+      if (isChannel) {
+        const cleanChan = String(chatId).replace(/^-100/, "").replace(/^-/, "");
+        telegramMessageLink = `https://t.me/c/${cleanChan}/${message.message_id}`;
+      } else if (hasApkDoc && !isChannel) {
+        // Automatically copy file into private storage channel so VIP users can fetch it
+        try {
+          const copyRes = await fetch(
+            `https://api.telegram.org/bot${token}/copyMessage`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: privateChannelId,
+                from_chat_id: chatId,
+                message_id: message.message_id,
+              }),
+            }
+          );
+          const copyData = await copyRes.json();
+          if (copyData.ok && copyData.result?.message_id) {
+            const cleanChan = String(privateChannelId)
+              .replace(/^-100/, "")
+              .replace(/^-/, "");
+            telegramMessageLink = `https://t.me/c/${cleanChan}/${copyData.result.message_id}`;
+          }
+        } catch (copyErr) {
+          console.warn("Auto copyMessage to storage channel error:", copyErr);
+        }
+      }
+
+      // Match the application in Supabase
+      const { matchedApp, candidates } = await matchApplicationByApk(
+        rawFileName,
+        caption
+      );
+
+      if (matchedApp) {
+        // Execute the automated release
+        const releaseRes = await executeAutoApkRelease({
+          appId: matchedApp.id,
+          versionName: parsed.versionName,
+          versionCode: parsed.versionCode,
+          fileSize: parsed.fileSize,
+          releaseNotes: parsed.releaseNotes,
+          externalUrls: parsed.externalUrls,
+          telegramMessageLink,
+        });
+
+        if (releaseRes.success) {
+          const siteUrl = settings.siteUrl || "https://www.awtmods.in";
+          const appUrl = `${siteUrl}/apps/${matchedApp.slug}.html`;
+
+          const mirrorsList = parsed.externalUrls.map(
+            (u) =>
+              `• <b>${u.mirrorName}:</b> <a href="${u.url}">${u.url.slice(0, 32)}...</a>`
+          );
+          if (telegramMessageLink) {
+            mirrorsList.push(
+              `• <b>Telegram VIP Direct:</b> Linked (Msg #${message.message_id})`
+            );
+          }
+
+          const successText = [
+            `🎉 <b>${matchedApp.name} Auto-Updated to ${parsed.versionName}!</b>`,
+            ``,
+            `📱 <b>App:</b> <a href="${appUrl}">${matchedApp.name}</a>`,
+            `🏷️ <b>Version:</b> <code>${parsed.versionName}</code> (Version Code: <code>${releaseRes.app?.latest_version?.version_code || parsed.versionCode}</code>)`,
+            `📦 <b>File Size:</b> ${parsed.fileSize}`,
+            `🌐 <b>Website Status:</b> Live on AWTMods.in (Cache Instantly Cleared)`,
+            ``,
+            `🔗 <b>Download Mirrors Linked:</b>`,
+            mirrorsList.join("\n") || "• Default Telegram Mirror",
+            ``,
+            `<i>Tap below to broadcast this update directly to @${settings.telegramChannelId?.replace(/^@/, "") || "awtmods"}!</i>`,
+          ].join("\n");
+
+          await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: adminChatId,
+              text: successText,
+              parse_mode: "HTML",
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    {
+                      text: "🚀 Broadcast to Channel",
+                      callback_data: `broadcast_${matchedApp.id}`,
+                    },
+                    {
+                      text: "🌐 View on Website",
+                      url: appUrl,
+                    },
+                  ],
+                ],
+              },
+            }),
+          });
+
+          return NextResponse.json({
+            ok: true,
+            released: true,
+            app: matchedApp.name,
+          });
+        }
+      } else if (candidates.length > 0) {
+        // Send disambiguation buttons to Admin
+        const candidateButtons = candidates.slice(0, 4).map((c) => [
+          {
+            text: `📱 Link to: ${c.name}`,
+            callback_data: `pick_${c.id}_${parsed.versionName}_${parsed.versionCode}`,
+          },
+        ]);
+
+        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: adminChatId,
+            text: (
+              `❓ <b>Which application should this update be linked to?</b>\n\n` +
+              `📁 <b>File:</b> <code>${rawFileName}</code>\n` +
+              `🏷️ <b>Version:</b> <code>${parsed.versionName}</code> (Code: <code>${parsed.versionCode}</code>)\n` +
+              `📦 <b>Size:</b> ${parsed.fileSize}\n\n` +
+              `Found ${candidates.length} matching candidates:`
+            ),
+            parse_mode: "HTML",
+            reply_markup: { inline_keyboard: candidateButtons },
+          }),
+        });
+
+        return NextResponse.json({ ok: true, pendingPick: true });
+      }
+    }
 
     // Check if user sent custom animated emojis to inspect their IDs
     if (message.entities && Array.isArray(message.entities)) {
@@ -138,13 +401,15 @@ export async function POST(req: Request) {
       const rawArg = parts[1] || "";
       const targetApp = rawArg.startsWith("dl_") ? rawArg.replace("dl_", "") : null;
 
-      await recordUserInteraction(user.id, {
-        username: user.username,
-        fullName: [user.first_name, user.last_name].filter(Boolean).join(" "),
-        pendingApp: targetApp,
-      });
+      if (user) {
+        await recordUserInteraction(user.id, {
+          username: user.username,
+          fullName: [user.first_name, user.last_name].filter(Boolean).join(" "),
+          pendingApp: targetApp,
+        });
+      }
 
-      const vipStatus = await isUserVip(user.id);
+      const vipStatus = user ? await isUserVip(user.id) : { isVip: false };
 
       if (vipStatus.isVip) {
         if (!targetApp) {
@@ -189,7 +454,6 @@ export async function POST(req: Request) {
         );
 
         if (tgSource?.download_url) {
-          // If message ID is present, try copyMessage
           const match = tgSource.download_url.match(/\/([0-9]+)$/);
           const messageId = match ? parseInt(match[1], 10) : null;
           const privateChannel = settings.telegramPrivateChannelId || settings.telegramChannelId;
@@ -220,10 +484,10 @@ export async function POST(req: Request) {
               body: JSON.stringify({
                 chat_id: chatId,
                 text: (
-                  `⚡ <b>${app.name} (${version?.version_name || "Latest"})</b>\n\n` +
-                  `📦 Here is your direct VIP Telegram download link:\n` +
-                  `🔗 <a href="${tgSource.download_url}">${tgSource.download_url}</a>\n\n` +
-                  `<i>Enjoy 100% ad-free 5G download speed!</i>`
+                  `⚡ <b>VIP Direct Download</b>\n\n` +
+                  `📦 <b>App:</b> ${app.name}\n` +
+                  `🏷️ <b>Version:</b> ${version?.version_name || "Latest"}\n\n` +
+                  `🔗 <a href="${tgSource.download_url}">Tap here to download directly from Telegram</a>`
                 ),
                 parse_mode: "HTML",
               }),
@@ -310,75 +574,55 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true });
     }
 
-    // Handle Payment Proof (User uploaded photo or sent UTR message)
-    if (photo || (text && !text.startsWith("/"))) {
-      const userStatus = await isUserVip(user.id);
-      if (userStatus.isVip) {
-        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: "✅ You are already an active VIP member! Enjoy unlimited direct downloads.",
-          }),
+    // 4. Handle Payment Screenshot Submission
+    if (photo && photo.length > 0) {
+      const bestPhoto = photo[photo.length - 1];
+      const captionText = (message.caption || "").trim();
+
+      if (user) {
+        await recordUserInteraction(user.id, {
+          username: user.username,
+          fullName: [user.first_name, user.last_name].filter(Boolean).join(" "),
         });
-        return NextResponse.json({ ok: true });
       }
 
-      const adminCaption = (
-        `🚨 <b>NEW VIP PAYMENT SUBMISSION!</b>\n\n` +
-        `👤 <b>User:</b> ${user.first_name || ""} ${user.last_name || ""} (@${user.username || "No handle"})\n` +
-        `🆔 <b>User ID:</b> <code>${user.id}</code>\n` +
-        `📱 <b>Requested App:</b> ${userStatus.pendingApp || "General VIP Pass"}\n` +
-        `💰 <b>Amount:</b> ₹${vipPrice}\n` +
-        `⏰ <b>Submitted:</b> ${new Date().toISOString().replace("T", " ").slice(0, 19)} UTC`
+      const adminNotification = (
+        `💳 <b>NEW VIP PAYMENT SUBMISSION!</b>\n\n` +
+        `👤 <b>User:</b> ${user?.first_name || "Anonymous"} (@${user?.username || "no_username"})\n` +
+        `🆔 <b>User ID:</b> <code>${user?.id}</code>\n` +
+        `📝 <b>Caption/UTR:</b> ${captionText || "None"}\n\n` +
+        `💰 Amount expected: ₹${vipPrice}\n\n` +
+        `<i>Verify the screenshot above and tap Approve to activate 30-day VIP pass immediately.</i>`
       );
 
-      const inlineKeyboard = {
-        inline_keyboard: [
-          [
-            { text: "✅ Approve VIP (30 Days)", callback_data: `approve_${user.id}` },
-            { text: "❌ Reject", callback_data: `reject_${user.id}` },
-          ],
-        ],
-      };
+      await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: adminChatId,
+          photo: bestPhoto.file_id,
+          caption: adminNotification,
+          parse_mode: "HTML",
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: "✅ Approve VIP (30 Days)", callback_data: `approve_${user?.id}` },
+                { text: "❌ Reject", callback_data: `reject_${user?.id}` },
+              ],
+            ],
+          },
+        }),
+      });
 
-      // Forward to Admin
-      if (photo && photo.length > 0) {
-        const largestPhotoId = photo[photo.length - 1].file_id;
-        await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chat_id: adminChatId,
-            photo: largestPhotoId,
-            caption: adminCaption,
-            parse_mode: "HTML",
-            reply_markup: inlineKeyboard,
-          }),
-        }).catch((err) => console.error("Admin photo forward err:", err));
-      } else {
-        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chat_id: adminChatId,
-            text: `${adminCaption}\n\n📝 <b>Message:</b>\n${text}`,
-            parse_mode: "HTML",
-            reply_markup: inlineKeyboard,
-          }),
-        }).catch((err) => console.error("Admin text forward err:", err));
-      }
-
-      // Reply to User
       await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           chat_id: chatId,
           text: (
-            `⏳ <b>Payment proof received!</b>\n\n` +
-            `Admin is verifying your transaction. Once approved (usually within 2-5 minutes), your VIP pass will activate automatically!`
+            `📸 <b>Payment Screenshot Received!</b>\n\n` +
+            `Your payment has been sent to Admin for fast verification.\n` +
+            `You will receive an instant confirmation message as soon as it's verified (usually within 5-15 minutes).`
           ),
           parse_mode: "HTML",
         }),
@@ -390,6 +634,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   } catch (err: any) {
     console.error("Telegram webhook error:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: err.message || "Internal server error" }, { status: 500 });
   }
 }

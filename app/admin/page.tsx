@@ -16,6 +16,7 @@ import {
   PlusCircle,
   FileEdit,
   ArrowRight,
+  Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -89,11 +90,22 @@ export default async function AdminDashboardPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Link href="/admin/apps/new">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Link href="/admin/apps/new" prefetch={true}>
             <Button size="sm" className="rounded-xl px-4 gap-1.5 font-semibold">
               <PlusCircle className="h-4 w-4" />
               <span>Add New App</span>
+            </Button>
+          </Link>
+
+          <Link href="/admin/versions" prefetch={true}>
+            <Button
+              size="sm"
+              variant="outline"
+              className="rounded-xl px-3.5 gap-1.5 font-bold border-amber-500/35 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 shadow-2xs"
+            >
+              <Zap className="h-4 w-4 text-amber-500" />
+              <span>Publish Update</span>
             </Button>
           </Link>
         </div>

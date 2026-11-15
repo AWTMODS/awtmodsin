@@ -6,6 +6,7 @@ import { SiteSettings } from "@/lib/types";
 import { VipUser } from "@/lib/telegram-vip";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
   Bot,
@@ -563,6 +564,67 @@ export function BotManager({ initialSettings, initialVipUsers }: BotManagerProps
                 />
                 <span>Auto-post updates &amp; new apps to Public Channel</span>
               </label>
+            </div>
+
+            {/* Custom Post Template with Animated Emojis */}
+            <div className="sm:col-span-2 pt-4 border-t border-border space-y-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                <label className="text-xs font-bold text-foreground">
+                  Channel Post Caption Template (Supports Interactive &lt;tg-emoji&gt;)
+                </label>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSettings({
+                      ...settings,
+                      telegramPostTemplate: [
+                        `<tg-emoji emoji-id="5465465412345678901">🔥</tg-emoji> <b>NEW MOD UPDATE RELEASED!</b> <tg-emoji emoji-id="5465465412345678901">🔥</tg-emoji>`,
+                        ``,
+                        `<tg-emoji emoji-id="5443026723220265219">📱</tg-emoji> <b>App:</b> <a href="{app_url}">{app_name}</a>`,
+                        `<tg-emoji emoji-id="5447644880824188382">🏷️</tg-emoji> <b>Version:</b> <code>{version}</code> ({file_size})`,
+                        `<tg-emoji emoji-id="5445077613506757650">📂</tg-emoji> <b>Category:</b> {category}`,
+                        `👨‍💻 <b>Developer:</b> {developer}`,
+                        ``,
+                        `<tg-emoji emoji-id="5445284980978644754">✨</tg-emoji> <b>MOD FEATURES:</b>`,
+                        `• {release_notes}`,
+                        ``,
+                        `<tg-emoji emoji-id="5445284980978644754">🛡️</tg-emoji> <b>Status:</b> Safe &amp; Verified (Clean)`,
+                        `<tg-emoji emoji-id="5427009714745517384">🌐</tg-emoji> <b>Website:</b> <a href="{app_url}">awtmods.in/apps/{clean_slug}.html</a>`,
+                      ].join("\n"),
+                    })
+                  }
+                  className="text-[11px] text-sky-400 hover:underline self-start sm:self-auto"
+                >
+                  Reset to Animated Emoji Default
+                </button>
+              </div>
+
+              <Textarea
+                rows={8}
+                placeholder="Leave blank to use animated default, or paste your custom HTML template..."
+                value={settings.telegramPostTemplate || ""}
+                onChange={(e) =>
+                  setSettings({ ...settings, telegramPostTemplate: e.target.value })
+                }
+                className="rounded-2xl text-xs font-mono leading-relaxed"
+              />
+
+              <div className="p-3 rounded-2xl bg-secondary/40 text-[11px] text-muted-foreground space-y-1.5">
+                <div className="font-semibold text-foreground flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+                  <span>Interactive Emoji Tip &amp; Variables:</span>
+                </div>
+                <p>
+                  To get the exact ID of any animated emoji: Send it in a message to <strong className="text-foreground">@{settings.telegramBotUsername || "awtmods_bot"}</strong>, and the bot will immediately reply with its <code>&lt;tg-emoji emoji-id=&quot;...&quot;&gt;</code> tag!
+                </p>
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {["{app_name}", "{version}", "{file_size}", "{category}", "{developer}", "{release_notes}", "{app_url}", "{clean_slug}"].map((tag) => (
+                    <code key={tag} className="px-1.5 py-0.5 rounded bg-muted text-[10px] text-foreground font-mono">
+                      {tag}
+                    </code>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>

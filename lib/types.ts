@@ -160,6 +160,7 @@ export type SiteSettings = {
   telegramVipPrice?: number;
   telegramUpiId?: string;
   telegramUpiName?: string;
+  telegramPostTemplate?: string;
   // Smart Banner & Ad Space Placement Manager
   adsMasterEnabled?: boolean;
   adsMobileEnabled?: boolean;

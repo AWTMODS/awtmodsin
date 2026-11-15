@@ -103,6 +103,35 @@ export async function POST(req: Request) {
     const text = (message.text || "").trim();
     const photo = message.photo;
 
+    // Check if user sent custom animated emojis to inspect their IDs
+    if (message.entities && Array.isArray(message.entities)) {
+      const customEmojiEntities = message.entities.filter(
+        (e: any) => e.type === "custom_emoji" && e.custom_emoji_id
+      );
+      if (customEmojiEntities.length > 0 && !text.startsWith("/start")) {
+        const detectedList = customEmojiEntities.map((e: any, index: number) => {
+          const emojiChar = text.slice(e.offset, e.offset + e.length) || "✨";
+          return `${index + 1}. ${emojiChar} ID: <code>${e.custom_emoji_id}</code>\n   Tag: <code>&lt;tg-emoji emoji-id="${e.custom_emoji_id}"&gt;${emojiChar}&lt;/tg-emoji&gt;</code>`;
+        });
+
+        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: (
+              `✨ <b>Custom Animated Emojis Extracted!</b>\n\n` +
+              `Found ${customEmojiEntities.length} animated emoji(s):\n\n` +
+              detectedList.join("\n\n") +
+              `\n\n<i>You can copy these tags and paste them directly into your channel post templates in /admin/bot!</i>`
+            ),
+            parse_mode: "HTML",
+          }),
+        });
+        return NextResponse.json({ ok: true });
+      }
+    }
+
     // Check if user is asking for /start
     if (text.startsWith("/start")) {
       const parts = text.split(" ");

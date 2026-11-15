@@ -79,21 +79,35 @@ export async function broadcastToTelegram(
         .replace(/^\s*f(?:i|ir)st paragraph of[^\n]*/i, "")
         .trim();
 
-    // Prepare clean HTML caption
-    const caption = [
-      `🔥 <b>NEW MOD UPDATE RELEASED!</b> 🔥`,
-      ``,
-      `📱 <b>App:</b> <a href="${appUrl}">${escapeHtml(app.name)}</a>`,
-      `🏷️ <b>Version:</b> <code>${escapeHtml(versionName)}</code> (${escapeHtml(fileSize)})`,
-      `📂 <b>Category:</b> ${escapeHtml(categoryName)}`,
-      `👨‍💻 <b>Developer:</b> ${escapeHtml(developerName)}`,
-      ``,
-      `✨ <b>MOD FEATURES:</b>`,
-      `• ${escapeHtml(releaseNotes.slice(0, 300))}`,
-      ``,
-      `🛡️ <b>Status:</b> Safe &amp; Verified (Clean)`,
-      `🌐 <b>Website:</b> <a href="${appUrl}">awtmods.in/apps/${escapeHtml(cleanSlug)}.html</a>`,
-    ].join("\n");
+    // Prepare interactive HTML caption with animated emoji support
+    let caption: string;
+    if (settings.telegramPostTemplate && settings.telegramPostTemplate.trim()) {
+      caption = settings.telegramPostTemplate
+        .replace(/{app_name}/g, escapeHtml(app.name))
+        .replace(/{version}/g, escapeHtml(versionName))
+        .replace(/{file_size}/g, escapeHtml(fileSize))
+        .replace(/{category}/g, escapeHtml(categoryName))
+        .replace(/{developer}/g, escapeHtml(developerName))
+        .replace(/{release_notes}/g, escapeHtml(releaseNotes.slice(0, 400)))
+        .replace(/{app_url}/g, appUrl)
+        .replace(/{clean_slug}/g, escapeHtml(cleanSlug))
+        .replace(/{vip_link}/g, vipDeepLink);
+    } else {
+      caption = [
+        `<tg-emoji emoji-id="5465465412345678901">🔥</tg-emoji> <b>NEW MOD UPDATE RELEASED!</b> <tg-emoji emoji-id="5465465412345678901">🔥</tg-emoji>`,
+        ``,
+        `<tg-emoji emoji-id="5443026723220265219">📱</tg-emoji> <b>App:</b> <a href="${appUrl}">${escapeHtml(app.name)}</a>`,
+        `<tg-emoji emoji-id="5447644880824188382">🏷️</tg-emoji> <b>Version:</b> <code>${escapeHtml(versionName)}</code> (${escapeHtml(fileSize)})`,
+        `<tg-emoji emoji-id="5445077613506757650">📂</tg-emoji> <b>Category:</b> ${escapeHtml(categoryName)}`,
+        `👨‍💻 <b>Developer:</b> ${escapeHtml(developerName)}`,
+        ``,
+        `<tg-emoji emoji-id="5445284980978644754">✨</tg-emoji> <b>MOD FEATURES:</b>`,
+        `• ${escapeHtml(releaseNotes.slice(0, 300))}`,
+        ``,
+        `<tg-emoji emoji-id="5445284980978644754">🛡️</tg-emoji> <b>Status:</b> Safe &amp; Verified (Clean)`,
+        `<tg-emoji emoji-id="5427009714745517384">🌐</tg-emoji> <b>Website:</b> <a href="${appUrl}">awtmods.in/apps/${escapeHtml(cleanSlug)}.html</a>`,
+      ].join("\n");
+    }
 
     const replyMarkup = {
       inline_keyboard: [
@@ -112,6 +126,52 @@ export async function broadcastToTelegram(
       ],
     };
 
+    // Helper to send photo or message with auto-fallback for custom emojis
+    const sendWithFallback = async (usePhoto: boolean) => {
+      let currentCaption = caption;
+      let endpoint = usePhoto ? "sendPhoto" : "sendMessage";
+      let payload: any = {
+        chat_id: channelId,
+        parse_mode: "HTML",
+        reply_markup: replyMarkup,
+      };
+
+      if (usePhoto) {
+        payload.photo = photoUrl;
+        payload.caption = currentCaption;
+      } else {
+        payload.text = currentCaption;
+        payload.disable_web_page_preview = false;
+      }
+
+      let res = await fetch(`https://api.telegram.org/bot${token}/${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      let data = await res.json();
+
+      // If Telegram rejects custom emojis (ENTITY_NOT_ALLOWED), strip them to standard emojis and retry
+      if (!data.ok && (data.description?.includes("ENTITY") || data.description?.includes("custom_emoji"))) {
+        const plainCaption = currentCaption.replace(/<tg-emoji[^>]*>(.*?)<\/tg-emoji>/gi, "$1");
+        if (usePhoto) {
+          payload.caption = plainCaption;
+        } else {
+          payload.text = plainCaption;
+        }
+
+        res = await fetch(`https://api.telegram.org/bot${token}/${endpoint}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        data = await res.json();
+      }
+
+      return data;
+    };
+
     // Try sending with photo first if icon is valid absolute URL
     let photoUrl = app.icon_url;
     if (photoUrl && photoUrl.startsWith("/")) {
@@ -122,22 +182,7 @@ export async function broadcastToTelegram(
 
     if (isHttpUrl) {
       try {
-        const photoRes = await fetch(
-          `https://api.telegram.org/bot${token}/sendPhoto`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              chat_id: channelId,
-              photo: photoUrl,
-              caption,
-              parse_mode: "HTML",
-              reply_markup: replyMarkup,
-            }),
-          }
-        );
-
-        const photoData = await photoRes.json();
+        const photoData = await sendWithFallback(true);
         if (photoData.ok) {
           return {
             success: true,
@@ -145,7 +190,6 @@ export async function broadcastToTelegram(
             messageId: photoData.result?.message_id,
           };
         }
-        // If sendPhoto failed (e.g. image format issue), fall through to sendMessage
         console.warn("sendPhoto failed, falling back to sendMessage:", photoData.description);
       } catch (err) {
         console.warn("sendPhoto exception, falling back to sendMessage:", err);
@@ -153,22 +197,7 @@ export async function broadcastToTelegram(
     }
 
     // Fallback: sendMessage
-    const msgRes = await fetch(
-      `https://api.telegram.org/bot${token}/sendMessage`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: channelId,
-          text: caption,
-          parse_mode: "HTML",
-          reply_markup: replyMarkup,
-          disable_web_page_preview: false,
-        }),
-      }
-    );
-
-    const msgData = await msgRes.json();
+    const msgData = await sendWithFallback(false);
     if (!msgData.ok) {
       return {
         success: false,
@@ -208,14 +237,14 @@ export async function testTelegramConnection(
     }
 
     const testText = [
-      `🤖 <b>AWTMods Telegram Bot Connected!</b>`,
+      `<tg-emoji emoji-id="5443026723220265219">🤖</tg-emoji> <b>AWTMods Telegram Bot Connected!</b>`,
       ``,
-      `✅ This is a test confirmation message from <b>AWTMods Admin Console</b>.`,
-      `⚡ Auto-poster and VIP bot channels are active.`,
-      `⏰ <b>Timestamp:</b> ${new Date().toISOString()}`,
+      `<tg-emoji emoji-id="5445284980978644754">✅</tg-emoji> This is an interactive test confirmation from <b>AWTMods Admin Console</b>.`,
+      `<tg-emoji emoji-id="5447644880824188382">⚡</tg-emoji> Auto-poster, custom emojis, and VIP bot channels are active!`,
+      `<tg-emoji emoji-id="5445077613506757650">⏰</tg-emoji> <b>Timestamp:</b> ${new Date().toISOString()}`,
     ].join("\n");
 
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    let res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -225,7 +254,22 @@ export async function testTelegramConnection(
       }),
     });
 
-    const data = await res.json();
+    let data = await res.json();
+
+    // Fallback if custom emoji tags rejected
+    if (!data.ok && (data.description?.includes("ENTITY") || data.description?.includes("custom_emoji"))) {
+      const plainText = testText.replace(/<tg-emoji[^>]*>(.*?)<\/tg-emoji>/gi, "$1");
+      res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: plainText,
+          parse_mode: "HTML",
+        }),
+      });
+      data = await res.json();
+    }
     if (!data.ok) {
       return {
         success: false,

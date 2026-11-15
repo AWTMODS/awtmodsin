@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/utils";
-import { Plus, Check, Trash2, GitBranch, ExternalLink } from "lucide-react";
+import { Plus, Check, Trash2, GitBranch, ExternalLink, RotateCcw, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { QuickReleaseCard } from "./quick-release-card";
 
@@ -20,6 +20,7 @@ export function VersionsManager({
   const [selectedAppId, setSelectedAppId] = useState<string>(
     initialApps[0]?.id || ""
   );
+  const [rollingBackId, setRollingBackId] = useState<string | null>(null);
 
   const selectedApp = apps.find((a) => a.id === selectedAppId);
   const versions = selectedApp?.versions || [];
@@ -110,26 +111,54 @@ export function VersionsManager({
     toast.success(`Published ${newVersionName} for ${selectedApp.name}!`);
   };
 
-  const handleSetLatest = (versionId: string) => {
+  const handleSetLatest = async (versionId: string) => {
     if (!selectedApp) return;
-    setApps((prev) =>
-      prev.map((a) => {
-        if (a.id === selectedApp.id) {
-          const target = a.versions?.find((v) => v.id === versionId);
-          const updated = (a.versions || []).map((v) => ({
-            ...v,
-            is_latest: v.id === versionId,
-          }));
-          return {
-            ...a,
-            latest_version: target || a.latest_version,
-            versions: updated,
-          };
-        }
-        return a;
-      })
-    );
-    toast.success("Set as latest active version");
+    setRollingBackId(versionId);
+
+    try {
+      const res = await fetch("/api/admin/versions/rollback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          appId: selectedApp.id,
+          versionId,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to set version as active");
+      }
+
+      if (data.app) {
+        handleUpdateSuccess(data.app);
+      } else {
+        // Fallback local update
+        setApps((prev) =>
+          prev.map((a) => {
+            if (a.id === selectedApp.id) {
+              const target = a.versions?.find((v) => v.id === versionId);
+              const updated = (a.versions || []).map((v) => ({
+                ...v,
+                is_latest: v.id === versionId,
+              }));
+              return {
+                ...a,
+                latest_version: target || a.latest_version,
+                versions: updated,
+              };
+            }
+            return a;
+          })
+        );
+      }
+
+      toast.success("Successfully set version as active primary release!");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to rollback version");
+    } finally {
+      setRollingBackId(null);
+    }
   };
 
   return (
@@ -213,10 +242,22 @@ export function VersionsManager({
                   <Button
                     size="sm"
                     variant="outline"
+                    disabled={rollingBackId === ver.id}
                     onClick={() => handleSetLatest(ver.id)}
-                    className="text-xs rounded-xl shrink-0 self-start sm:self-auto"
+                    className="text-xs rounded-xl shrink-0 self-start sm:self-auto gap-1.5 border-border hover:border-amber-500/50 hover:bg-amber-500/10 text-foreground"
+                    title="Rollback or set this version as the primary active release"
                   >
-                    Mark as Latest
+                    {rollingBackId === ver.id ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        <span>Rolling Back...</span>
+                      </>
+                    ) : (
+                      <>
+                        <RotateCcw className="h-3.5 w-3.5 text-amber-500" />
+                        <span>Rollback to this Build</span>
+                      </>
+                    )}
                   </Button>
                 )}
               </div>

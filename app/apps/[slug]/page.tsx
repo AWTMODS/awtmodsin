@@ -30,6 +30,8 @@ import { ScreenshotsGallery } from "@/components/applications/screenshots-galler
 import { ShareButton } from "@/components/applications/share-button";
 import { ReviewsSection } from "@/components/applications/reviews-section";
 import { AppDescriptionRenderer } from "@/components/applications/app-description-renderer";
+import { CompanionHelper } from "@/components/applications/companion-helper";
+import { ModComparisonMatrix } from "@/components/applications/mod-comparison-matrix";
 import { formatDate, formatNumber, getAppUrl, getDownloadUrl, cleanAppSlug } from "@/lib/utils";
 
 interface AppDetailProps {
@@ -377,6 +379,13 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
         </div>
       </div>
 
+      {/* Companion Dependency Helper (MicroG / ReVanced GmsCore) */}
+      <CompanionHelper
+        appName={app.name}
+        packageName={app.package_name}
+        description={app.description}
+      />
+
       {/* Screenshots Gallery Section */}
       {app.screenshots && app.screenshots.length > 0 && (
         <div className="mb-12">
@@ -444,6 +453,13 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
               </div>
             </div>
           </div>
+
+          {/* Mod vs Original Comparison Matrix */}
+          <ModComparisonMatrix
+            appName={app.name}
+            category={app.category?.name}
+            isPc={isPc}
+          />
 
           {/* Download Mirrors Section */}
           <div className="rounded-3xl border border-border bg-card p-6 sm:p-8 space-y-4">

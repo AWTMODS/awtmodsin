@@ -917,6 +917,38 @@ export async function addApplicationVersion(
   return null;
 }
 
+export async function setLatestApplicationVersion(
+  appId: string,
+  versionId: string
+): Promise<boolean> {
+  invalidateDbCache();
+  const supabase = getDbClient();
+
+  if (supabase) {
+    try {
+      // 1. Mark all versions for this app as not latest
+      await supabase
+        .from("application_versions")
+        .update({ is_latest: false })
+        .eq("application_id", appId);
+
+      // 2. Mark target version as latest
+      const { error } = await supabase
+        .from("application_versions")
+        .update({ is_latest: true })
+        .eq("id", versionId);
+
+      if (!error) {
+        return true;
+      }
+    } catch (err) {
+      console.error("setLatestApplicationVersion error:", err);
+    }
+  }
+
+  return false;
+}
+
 export async function recordDownload(params: {
   application_id: string;
   version_id: string;

@@ -570,6 +570,45 @@ export async function POST(req: Request) {
       caption.toLowerCase().includes(".apk") &&
       (caption.includes("http://") || caption.includes("https://"));
 
+    // ==========================================================
+    // 2.8 GOOGLE PLAY STORE LINK AUTO-POST GENERATOR
+    // ==========================================================
+    const playStoreMatch = (text || caption || "").match(/play\.google\.com\/store\/apps\/details\?id=([a-zA-Z0-9._]+)/i);
+    if (isAuthorized && playStoreMatch && !hasApkDoc) {
+      const { scrapeAndCreateFromPlayStore } = await import("@/lib/playstore-auto-poster");
+      const { sendDraftPreviewToAdmin } = await import("@/lib/telegram-broadcast");
+
+      // Notify admin immediately that scraping has started
+      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: `🔍 <b>Google Play link detected!</b>\n<i>Scraping official icon, title, genre, and generating mod post...</i>`,
+          parse_mode: "HTML",
+        }),
+      }).catch(() => {});
+
+      const result = await scrapeAndCreateFromPlayStore(playStoreMatch[0]);
+
+      if (result.success && result.app) {
+        // Send draft preview to admin
+        await sendDraftPreviewToAdmin(result.app, adminChatId);
+        return NextResponse.json({ ok: true, playStoreAutoCreated: result.app.name });
+      } else {
+        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: `❌ <b>Failed to fetch from Google Play Store:</b>\n<code>${result.error || "Unknown error"}</code>`,
+            parse_mode: "HTML",
+          }),
+        }).catch(() => {});
+        return NextResponse.json({ ok: false, error: result.error });
+      }
+    }
+
     if (isAuthorized && (hasApkDoc || hasApkText)) {
       const rawFileName =
         doc?.file_name ||

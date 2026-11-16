@@ -140,7 +140,7 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
           : app.android_requirement || "Android 7.0+",
         applicationCategory: app.category?.name || (isPc ? "UtilitiesApplication" : "GameApplication"),
         softwareVersion: latestVersion?.version_name || "1.0.0",
-        fileSize: latestVersion?.file_size || "50 MB",
+        fileSize: latestVersion?.file_size || "Varies with device",
         author: {
           "@type": "Organization",
           name: app.developer || "Aadith C V",
@@ -268,7 +268,7 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
                   {latestVersion?.version_name || "v1.0.0"}
                 </Badge>
                 <Badge variant="secondary" className="font-mono text-xs">
-                  {latestVersion?.file_size || "50 MB"}
+                  {latestVersion?.file_size || "Varies with device"}
                 </Badge>
                 <Badge variant="secondary" className="text-xs">
                   {app.android_requirement}
@@ -598,7 +598,7 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
                   File Size
                 </span>
                 <span className="font-semibold text-foreground font-mono">
-                  {latestVersion?.file_size || "50 MB"}
+                  {latestVersion?.file_size || "Varies with device"}
                 </span>
               </div>
 

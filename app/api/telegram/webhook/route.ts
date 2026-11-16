@@ -260,6 +260,40 @@ export async function POST(req: Request) {
           }
         }
 
+        // Action: Wizard Edit App Size Prompt
+        if (action === "wiz_size") {
+          const appId = rest[0];
+          const app = await getApplicationById(appId);
+          if (app) {
+            const supabase = getDbClient();
+            if (supabase) {
+              await supabase.from("site_settings").upsert(
+                {
+                  setting_key: `admin_wizard_${adminChatId}`,
+                  setting_value: { step: "waiting_for_size", appId, appName: app.name },
+                  updated_at: new Date().toISOString(),
+                },
+                { onConflict: "setting_key" }
+              );
+            }
+
+            const currentSize = app.latest_version?.file_size || "Not set";
+            await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: adminChatId,
+                text: (
+                  `📦 <b>Edit Exact App Size for ${app.name}</b>\n\n` +
+                  `Current Size: <code>${currentSize}</code>\n\n` +
+                  `Please reply with the exact app size (e.g. <code>78 MB</code>, <code>138.56 MB</code>, <code>1.2 GB</code>):`
+                ),
+                parse_mode: "HTML",
+              }),
+            }).catch(() => {});
+          }
+        }
+
         // Action: Wizard Edit Logo Prompt
         if (action === "wiz_logo") {
           const appId = rest[0];
@@ -577,6 +611,50 @@ export async function POST(req: Request) {
           }
         }
 
+        // Step 1.5: App Size input
+        if (wiz.step === "waiting_for_size" && text) {
+          let cleanSize = text.trim();
+          if (/^[0-9]+(?:\.[0-9]+)?$/.test(cleanSize)) {
+            cleanSize = `${cleanSize} MB`;
+          } else {
+            const sizeMatch = cleanSize.match(/\b([0-9]+(?:\.[0-9]+)?\s*(?:MB|GB|KB))\b/i);
+            if (sizeMatch) {
+              cleanSize = sizeMatch[1].toUpperCase();
+            }
+          }
+
+          if (cleanSize) {
+            const app = await getApplicationById(wiz.appId);
+            const ver = app?.latest_version || app?.versions?.[0];
+            if (ver?.id) {
+              await supabase
+                .from("application_versions")
+                .update({ file_size: cleanSize })
+                .eq("id", ver.id);
+              await supabase
+                .from("site_settings")
+                .delete()
+                .eq("setting_key", `admin_wizard_${adminChatId}`);
+              invalidateDbCache();
+              const updatedApp = await getApplicationById(wiz.appId);
+              if (updatedApp) {
+                const { sendDraftPreviewToAdmin } = await import("@/lib/telegram-broadcast");
+                await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    chat_id: adminChatId,
+                    text: `✅ <b>Exact App Size updated to <code>${cleanSize}</code>!</b>\nHere is your updated Channel Broadcast Preview:`,
+                    parse_mode: "HTML",
+                  }),
+                });
+                await sendDraftPreviewToAdmin(updatedApp, adminChatId);
+                return NextResponse.json({ ok: true, wizardUpdated: "file_size" });
+              }
+            }
+          }
+        }
+
         // Step 2: Logo photo input
         if (wiz.step === "waiting_for_logo" && photo && photo.length > 0) {
           const bestPhoto = photo[photo.length - 1];
@@ -681,7 +759,8 @@ export async function POST(req: Request) {
         }),
       }).catch(() => {});
 
-      const result = await scrapeAndCreateFromPlayStore(playStoreMatch[0]);
+      const rawInput = (text || caption || "").trim() || playStoreMatch[0];
+      const result = await scrapeAndCreateFromPlayStore(rawInput);
 
       if (result.success && result.app) {
         // Send draft preview to admin

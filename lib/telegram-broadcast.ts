@@ -86,7 +86,7 @@ export async function broadcastToTelegram(
     const vipDeepLink = `https://t.me/${botUsername}?start=dl_${cleanSlug.slice(0, 50)}`;
 
     const versionName = version?.version_name || "Latest";
-    const fileSize = version?.file_size || "50 MB";
+    const fileSize = version?.file_size || "Varies with device";
     const categoryName = app.category?.name || "Modded App";
     const developerName = app.developer || "Aadith C V";
 
@@ -410,7 +410,7 @@ export async function sendDraftPreviewToAdmin(
 
     const versionName = version?.version_name || "Latest";
     const versionCode = version?.version_code || 1;
-    const fileSize = version?.file_size || "50 MB";
+    const fileSize = version?.file_size || "Varies with device";
 
     let modFeaturesList: string[] = [];
     if (Array.isArray(app.mod_features) && app.mod_features.length > 0) {
@@ -502,11 +502,15 @@ export async function sendDraftPreviewToAdmin(
           callback_data: `wiz_code:${app.id}`,
         },
         {
-          text: "🖼️ Change Logo Photo",
-          callback_data: `wiz_logo:${app.id}`,
+          text: "📦 Edit App Size",
+          callback_data: `wiz_size:${app.id}`,
         },
       ],
       [
+        {
+          text: "🖼️ Change Logo Photo",
+          callback_data: `wiz_logo:${app.id}`,
+        },
         {
           text: "📝 Edit Mod Features",
           callback_data: `wiz_feat:${app.id}`,

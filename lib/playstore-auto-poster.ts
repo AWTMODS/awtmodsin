@@ -147,6 +147,10 @@ export async function scrapeAndCreateFromPlayStore(
 ): Promise<{ success: boolean; app?: Application; error?: string }> {
   try {
     let appId = "";
+    // Check if inputUrlOrId contains custom size (e.g. "https://play.google.com/store/apps/details?id=... 85 MB")
+    const sizeMatch = inputUrlOrId.match(/\b([0-9]+(?:\.[0-9]+)?\s*(?:MB|GB|KB))\b/i);
+    const customSize = sizeMatch ? sizeMatch[1].toUpperCase() : null;
+
     const match = inputUrlOrId.match(/id=([a-zA-Z0-9._]+)/i);
     if (match) {
       appId = match[1];
@@ -182,9 +186,10 @@ export async function scrapeAndCreateFromPlayStore(
         : "vLatest";
 
     const fileSize =
-      detail.size && detail.size !== "VARY"
+      customSize ||
+      (detail.size && detail.size !== "VARY"
         ? detail.size
-        : "55 MB";
+        : "Varies with device");
 
     const androidReq =
       detail.androidVersionText && detail.androidVersionText !== "VARY"
@@ -219,6 +224,16 @@ export async function scrapeAndCreateFromPlayStore(
           short_description: shortDescription,
         })
         .eq("id", existingApp.id);
+
+      if (customSize) {
+        const existingVer = existingApp.latest_version || existingApp.versions?.[0];
+        if (existingVer?.id) {
+          await supabase
+            .from("application_versions")
+            .update({ file_size: customSize })
+            .eq("id", existingVer.id);
+        }
+      }
 
       invalidateDbCache();
       const updated = await getApplicationBySlug(slug);

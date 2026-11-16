@@ -71,7 +71,7 @@ export function parseApkReleaseInfo(
     });
 
   // 2. File Size (extract from bytes or text)
-  let fileSize = "50 MB";
+  let fileSize = "Varies with device";
   if (fileSizeBytes > 0) {
     const mb = fileSizeBytes / (1024 * 1024);
     fileSize = mb >= 1024 ? `${(mb / 1024).toFixed(2)} GB` : `${mb.toFixed(1)} MB`;
@@ -371,7 +371,7 @@ export async function executeAutoApkRelease(params: {
     version: {
       version_name: params.versionName,
       version_code: finalVersionCode,
-      file_size: params.fileSize || "50 MB",
+      file_size: params.fileSize || "Varies with device",
       architecture: "arm64-v8a",
       android_requirement: "Android 7.0+",
       sha256: null,

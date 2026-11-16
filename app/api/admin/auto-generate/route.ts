@@ -338,7 +338,7 @@ export async function POST(req: Request) {
     const fileSize =
       detail.size && detail.size !== "VARY"
         ? detail.size
-        : "55 MB";
+        : "Varies with device";
 
     const androidReq =
       detail.androidVersionText && detail.androidVersionText !== "VARY"

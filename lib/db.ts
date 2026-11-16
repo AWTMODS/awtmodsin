@@ -674,7 +674,7 @@ function sanitizeAppPayload(data: any) {
     const v = { ...sanitized.version };
     if (!v.version_name) v.version_name = "v1.0.0";
     if (!v.version_code) v.version_code = 1;
-    if (!v.file_size) v.file_size = "50 MB";
+    if (!v.file_size) v.file_size = "Varies with device";
     if (!v.android_requirement) v.android_requirement = sanitized.android_requirement || "Android 7.0+";
 
     if (Array.isArray(v.download_sources)) {
@@ -753,7 +753,7 @@ export async function createApplication(
     application_id: newId,
     version_name: sanitized.version?.version_name || "v1.0.0",
     version_code: sanitized.version?.version_code || 1,
-    file_size: sanitized.version?.file_size || "50 MB",
+    file_size: sanitized.version?.file_size || "Varies with device",
     architecture: sanitized.version?.architecture || "arm64-v8a",
     android_requirement: sanitized.version?.android_requirement || "Android 7.0+",
     sha256: sanitized.version?.sha256 || null,
@@ -895,7 +895,7 @@ export async function addApplicationVersion(
           application_id: appId,
           version_name: versionData.version_name || "v1.0.0",
           version_code: versionData.version_code || 1,
-          file_size: versionData.file_size || "50 MB",
+          file_size: versionData.file_size || "Varies with device",
           architecture: versionData.architecture || "arm64-v8a",
           android_requirement: versionData.android_requirement || "Android 7.0+",
           sha256: versionData.sha256 || null,

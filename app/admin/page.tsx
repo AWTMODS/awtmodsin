@@ -6,8 +6,10 @@ import {
   getSiteStats,
   getAnalyticsChartData,
 } from "@/lib/db";
+import { getRadarState } from "@/lib/playstore-radar";
 import { formatNumber } from "@/lib/utils";
 import { DashboardCharts } from "@/components/admin/dashboard-charts";
+import { DashboardRadarWidget } from "@/components/admin/dashboard-radar-widget";
 import {
   Layers,
   Download,
@@ -17,6 +19,7 @@ import {
   FileEdit,
   ArrowRight,
   Zap,
+  Radio,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -27,13 +30,14 @@ export const metadata = {
 };
 
 export default async function AdminDashboardPage() {
-  const [stats, { applications }, categories, reports, chartData] =
+  const [stats, { applications }, categories, reports, chartData, radarState] =
     await Promise.all([
       getSiteStats(),
       getApplications({ limit: 10, sortBy: "downloads", status: "all" }),
       getCategories(),
       getReports("pending"),
       getAnalyticsChartData(30),
+      getRadarState(),
     ]);
 
   const statCards = [
@@ -43,6 +47,17 @@ export default async function AdminDashboardPage() {
       sub: `${stats.totalApps} total in database`,
       icon: Layers,
       href: "/admin/apps?status=published",
+    },
+    {
+      title: "Play Store Radar",
+      value: (radarState.updatesCount ?? 0).toString(),
+      sub:
+        (radarState.updatesCount ?? 0) > 0
+          ? `${radarState.updatesCount} update${radarState.updatesCount === 1 ? "" : "s"} on Google Play`
+          : "All apps up to date",
+      icon: Radio,
+      href: "/admin/apps?status=radar_updates",
+      highlight: (radarState.updatesCount ?? 0) > 0,
     },
     {
       title: "Draft Apps",
@@ -91,6 +106,22 @@ export default async function AdminDashboardPage() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          <Link href="/admin/apps?status=radar_updates" prefetch={true}>
+            <Button
+              size="sm"
+              variant="outline"
+              className="rounded-xl px-3.5 gap-1.5 font-bold border-cyan-500/35 bg-cyan-500/10 text-cyan-500 hover:bg-cyan-500/20 shadow-2xs"
+            >
+              <Radio className="h-4 w-4 text-cyan-400" />
+              <span>Play Store Radar</span>
+              {(radarState.updatesCount ?? 0) > 0 && (
+                <span className="ml-1 px-1.5 py-0.2 bg-cyan-500 text-black text-[10px] font-extrabold rounded-full">
+                  {radarState.updatesCount}
+                </span>
+              )}
+            </Button>
+          </Link>
+
           <Link href="/admin/apps/new" prefetch={true}>
             <Button size="sm" className="rounded-xl px-4 gap-1.5 font-semibold">
               <PlusCircle className="h-4 w-4" />
@@ -112,7 +143,7 @@ export default async function AdminDashboardPage() {
       </div>
 
       {/* Real Statistics Overview Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
         {statCards.map((c, i) => {
           const Icon = c.icon;
           const CardContent = (
@@ -180,6 +211,12 @@ export default async function AdminDashboardPage() {
           </Link>
         </div>
       )}
+
+      {/* Play Store Version Radar Live Section */}
+      <DashboardRadarWidget
+        initialUpdates={radarState.updates}
+        initialLastScan={radarState.lastScanAt}
+      />
 
       {/* Analytics Charts & Top Apps */}
       <DashboardCharts

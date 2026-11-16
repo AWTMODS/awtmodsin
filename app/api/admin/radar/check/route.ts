@@ -3,11 +3,21 @@ import { checkPlayStoreUpdates, getRadarState } from "@/lib/playstore-radar";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+export const fetchCache = "force-no-store";
 
 export async function GET() {
   try {
     const state = await getRadarState();
-    return NextResponse.json({ success: true, radar: state });
+    return NextResponse.json(
+      { success: true, radar: state },
+      {
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+        },
+      }
+    );
   } catch (err: any) {
     return NextResponse.json({ error: err.message || "Failed to load radar state" }, { status: 500 });
   }

@@ -32,9 +32,19 @@ export function DashboardRadarWidget({
   const [lastScanAt, setLastScanAt] = useState<string>(initialLastScan);
   const [isScanning, setIsScanning] = useState(false);
 
+  // Sync state whenever initialUpdates changes from server
+  useEffect(() => {
+    if (initialUpdates && Object.keys(initialUpdates).length > 0) {
+      setUpdates(initialUpdates);
+    }
+    if (initialLastScan) {
+      setLastScanAt(initialLastScan);
+    }
+  }, [initialUpdates, initialLastScan]);
+
   // Fetch live radar updates on mount
   useEffect(() => {
-    fetch("/api/admin/radar/check")
+    fetch("/api/admin/radar/check", { cache: "no-store" })
       .then((r) => r.json())
       .then((data) => {
         if (data.radar?.updates) {
@@ -64,7 +74,7 @@ export function DashboardRadarWidget({
           toast.success("✅ All applications are up-to-date with Google Play!");
         }
         // Refresh state
-        const stateRes = await fetch("/api/admin/radar/check");
+        const stateRes = await fetch("/api/admin/radar/check", { cache: "no-store" });
         const stateData = await stateRes.json();
         if (stateData.radar?.updates) {
           setUpdates(stateData.radar.updates);

@@ -72,7 +72,7 @@ export function AppsTable({
   const [isScanningRadar, setIsScanningRadar] = useState(false);
 
   useEffect(() => {
-    fetch("/api/admin/radar/check")
+    fetch("/api/admin/radar/check", { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => {
         if (d.radar?.updates) {
@@ -99,7 +99,7 @@ export function AppsTable({
           toast.success("✅ All applications are up-to-date with Google Play!");
         }
         // Refresh radar state
-        const stateRes = await fetch("/api/admin/radar/check");
+        const stateRes = await fetch("/api/admin/radar/check", { cache: "no-store" });
         const stateData = await stateRes.json();
         if (stateData.radar?.updates) {
           setRadarUpdates(stateData.radar.updates);

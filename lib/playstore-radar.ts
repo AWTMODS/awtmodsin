@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { getDbClient, getSiteSettings, getApplicationById } from "@/lib/db";
 import { isNewerVersion } from "./version-comparator";
 
@@ -67,6 +68,11 @@ export async function saveRadarState(state: RadarState): Promise<void> {
     },
     { onConflict: "setting_key" }
   );
+
+  try {
+    revalidatePath("/admin");
+    revalidatePath("/admin/apps");
+  } catch {}
 }
 
 /**

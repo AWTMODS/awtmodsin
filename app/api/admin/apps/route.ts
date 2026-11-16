@@ -47,9 +47,12 @@ export async function POST(req: Request) {
   }
 }
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET() {
   try {
-    const { applications } = await getApplications({ limit: 100, status: "all" });
+    const { applications } = await getApplications({ limit: 1000, status: "all" });
     return NextResponse.json({ applications });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });

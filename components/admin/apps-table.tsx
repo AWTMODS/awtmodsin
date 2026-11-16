@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import Image from "next/image";
 import { Application, AppCategory } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +23,7 @@ import {
   Zap,
   Loader2,
   X,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -39,9 +40,31 @@ export function AppsTable({
 }: AppsTableProps) {
   const router = useRouter();
   const [apps, setApps] = useState<Application[]>(initialApps);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedStatus, setSelectedStatus] = useState(defaultStatus);
+
+  // Sync state whenever initialApps changes from server refresh
+  useEffect(() => {
+    setApps(initialApps);
+  }, [initialApps]);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      const res = await fetch("/api/admin/apps", { cache: "no-store" });
+      const data = await res.json();
+      if (data.applications && Array.isArray(data.applications)) {
+        setApps(data.applications);
+        toast.success(`Refreshed! Loaded ${data.applications.length} applications.`);
+      }
+    } catch {
+      router.refresh();
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   // Auto-Generate Quick Modal States
   const [showAutoModal, setShowAutoModal] = useState(false);
@@ -220,6 +243,17 @@ export function AppsTable({
 
           {/* Action Buttons: Neatly arranged on mobile, never cut off */}
           <div className="grid grid-cols-2 sm:flex items-center gap-2 w-full xl:w-auto">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={isRefreshing}
+              onClick={handleRefresh}
+              className="w-full sm:w-auto rounded-xl gap-1.5 font-bold border-border hover:bg-muted shrink-0 shadow-2xs"
+            >
+              <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin text-primary" : ""}`} />
+              <span>{isRefreshing ? "Refreshing..." : "Refresh"}</span>
+            </Button>
+
             <Link href="/admin/versions" prefetch={true} className="w-full sm:w-auto">
               <Button
                 size="sm"

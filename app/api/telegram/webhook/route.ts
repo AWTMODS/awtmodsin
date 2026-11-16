@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { getSiteSettings, getApplicationBySlug, getApplicationById, getDbClient, invalidateDbCache, getSiteStats } from "@/lib/db";
 import { isUserVip, recordUserInteraction, activateUserVip } from "@/lib/telegram-vip";
 import { broadcastToTelegram } from "@/lib/telegram-broadcast";
@@ -7,6 +8,26 @@ import {
   matchApplicationByApk,
   executeAutoApkRelease,
 } from "@/lib/telegram-auto-release";
+
+function purgeAppCaches(slug?: string) {
+  try {
+    invalidateDbCache();
+    revalidatePath("/");
+    revalidatePath("/apps");
+    revalidatePath("/categories");
+    revalidatePath("/search");
+    revalidatePath("/admin");
+    revalidatePath("/admin/apps");
+    revalidatePath("/admin/versions");
+    if (slug) {
+      const clean = slug.replace(/\.html$/i, "");
+      revalidatePath(`/apps/${clean}`);
+      revalidatePath(`/apps/${clean}.html`);
+      revalidatePath(`/download/${clean}`);
+      revalidatePath(`/download/${clean}.html`);
+    }
+  } catch {}
+}
 
 export async function POST(req: Request) {
   try {
@@ -108,7 +129,7 @@ export async function POST(req: Request) {
                 .from("application_versions")
                 .update({ status: "published" })
                 .eq("application_id", appId);
-              invalidateDbCache();
+              purgeAppCaches(app.slug);
               app = (await getApplicationById(appId)) || app;
             }
 
@@ -164,7 +185,7 @@ export async function POST(req: Request) {
               .from("application_versions")
               .update({ status: "published" })
               .eq("application_id", appId);
-            invalidateDbCache();
+            purgeAppCaches();
           }
 
           const app = await getApplicationById(appId);
@@ -204,7 +225,7 @@ export async function POST(req: Request) {
               .from("application_versions")
               .update({ status: "draft" })
               .eq("application_id", appId);
-            invalidateDbCache();
+            purgeAppCaches();
           }
 
           const app = await getApplicationById(appId);
@@ -591,7 +612,7 @@ export async function POST(req: Request) {
                 .from("site_settings")
                 .delete()
                 .eq("setting_key", `admin_wizard_${adminChatId}`);
-              invalidateDbCache();
+              purgeAppCaches();
               const updatedApp = await getApplicationById(wiz.appId);
               if (updatedApp) {
                 const { sendDraftPreviewToAdmin } = await import("@/lib/telegram-broadcast");
@@ -635,7 +656,7 @@ export async function POST(req: Request) {
                 .from("site_settings")
                 .delete()
                 .eq("setting_key", `admin_wizard_${adminChatId}`);
-              invalidateDbCache();
+              purgeAppCaches();
               const updatedApp = await getApplicationById(wiz.appId);
               if (updatedApp) {
                 const { sendDraftPreviewToAdmin } = await import("@/lib/telegram-broadcast");
@@ -672,7 +693,7 @@ export async function POST(req: Request) {
               .from("site_settings")
               .delete()
               .eq("setting_key", `admin_wizard_${adminChatId}`);
-            invalidateDbCache();
+            purgeAppCaches();
             const updatedApp = await getApplicationById(wiz.appId);
             if (updatedApp) {
               const { sendDraftPreviewToAdmin } = await import("@/lib/telegram-broadcast");
@@ -706,7 +727,7 @@ export async function POST(req: Request) {
               .from("site_settings")
               .delete()
               .eq("setting_key", `admin_wizard_${adminChatId}`);
-            invalidateDbCache();
+            purgeAppCaches();
             const updatedApp = await getApplicationById(wiz.appId);
             if (updatedApp) {
               const { sendDraftPreviewToAdmin } = await import("@/lib/telegram-broadcast");

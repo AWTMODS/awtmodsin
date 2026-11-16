@@ -80,9 +80,12 @@ export async function getApplications(options?: {
 }): Promise<{ applications: Application[]; total: number }> {
   const cacheKey = JSON.stringify(options || {});
   const now = Date.now();
-  const cached = cachedAppsMap.get(cacheKey);
-  if (cached && now - cached.timestamp < 30000) {
-    return cached.data;
+  // Do not serve cached results for admin queries (status: "all") so admin panel is always real-time live
+  if (options?.status !== "all") {
+    const cached = cachedAppsMap.get(cacheKey);
+    if (cached && now - cached.timestamp < 30000) {
+      return cached.data;
+    }
   }
 
   const supabase = getDbClient();

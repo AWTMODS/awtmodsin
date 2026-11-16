@@ -1,5 +1,26 @@
+import { revalidatePath } from "next/cache";
 import { getCategories, createApplication, getApplicationBySlug, getDbClient, invalidateDbCache } from "@/lib/db";
 import { AppCategory, Application } from "@/lib/types";
+
+function purgeAppCaches(slug?: string) {
+  try {
+    invalidateDbCache();
+    revalidatePath("/");
+    revalidatePath("/apps");
+    revalidatePath("/categories");
+    revalidatePath("/search");
+    revalidatePath("/admin");
+    revalidatePath("/admin/apps");
+    revalidatePath("/admin/versions");
+    if (slug) {
+      const clean = slug.replace(/\.html$/i, "");
+      revalidatePath(`/apps/${clean}`);
+      revalidatePath(`/apps/${clean}.html`);
+      revalidatePath(`/download/${clean}`);
+      revalidatePath(`/download/${clean}.html`);
+    }
+  } catch {}
+}
 
 // Dynamic import for google-play-scraper
 async function getGPlay() {
@@ -235,7 +256,7 @@ export async function scrapeAndCreateFromPlayStore(
         }
       }
 
-      invalidateDbCache();
+      purgeAppCaches(slug);
       const updated = await getApplicationBySlug(slug);
       return { success: true, app: updated || existingApp };
     }
@@ -281,7 +302,7 @@ export async function scrapeAndCreateFromPlayStore(
     };
 
     const created = await createApplication(newAppData as any);
-    invalidateDbCache();
+    purgeAppCaches(slug);
     return { success: true, app: created };
   } catch (err: any) {
     console.error("scrapeAndCreateFromPlayStore error:", err);

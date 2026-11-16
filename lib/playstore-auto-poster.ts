@@ -257,8 +257,8 @@ export async function scrapeAndCreateFromPlayStore(
           {
             download_type: "external" as const,
             hosting_provider: "custom" as const,
-            download_url: `https://play.google.com/store/apps/details?id=${detail.appId}`,
-            mirror_name: "Google Play Store Link",
+            download_url: `https://www.awtmods.in/download/${slug}`,
+            mirror_name: "AWTMods Fast Mirror",
             is_primary: true,
           },
         ],

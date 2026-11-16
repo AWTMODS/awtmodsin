@@ -1052,17 +1052,27 @@ export async function POST(req: Request) {
         // Look up the exact app in the database
         const app = await getApplicationBySlug(targetApp);
         if (!app) {
+          const siteUrl = settings.siteUrl || "https://www.awtmods.in";
+          const searchUrl = `${siteUrl}/search?q=${encodeURIComponent(targetApp)}`;
           await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               chat_id: chatId,
               text: (
-                `❌ <b>File Not Found</b>\n\n` +
-                `Sorry, we could not find an application matching "<b>${targetApp}</b>" in the AWTMods catalog.\n\n` +
-                `🔍 Browse all available apps at <a href="https://www.awtmods.in">AWTMods.in</a> or submit a request on our Mod Board!`
+                `⚠️ <b>File Updating / Not Found in Bot</b>\n\n` +
+                `The direct file for "<b>${targetApp}</b>" could not be located in this bot node.\n\n` +
+                `🌐 You can search and download the latest version right now from our website:\n` +
+                `🔗 <a href="${searchUrl}"><b>Search &amp; Download on AWTMods.in</b></a>`
               ),
               parse_mode: "HTML",
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    { text: "🌐 Search & Download on Website", url: searchUrl },
+                  ],
+                ],
+              },
             }),
           });
           return NextResponse.json({ ok: true });
@@ -1154,12 +1164,23 @@ export async function POST(req: Request) {
         }
 
         // 3. If direct Telegram file is not in storage yet:
-        // Provide the direct external mirror or website link — NEVER just open the general channel!
-        const mirror = version?.download_sources?.find(
-          (s) => s.download_url && !s.download_url.includes("t.me")
-        );
+        // Provide our official website download link or valid external mirror — NEVER just open play store or general channel!
         const siteUrl = settings.siteUrl || "https://www.awtmods.in";
-        const fastMirrorUrl = mirror?.download_url || `${siteUrl}/download/${app.slug}`;
+        const cleanSlug = app.slug.replace(/\.html$/, "");
+        const websiteDownloadUrl = `${siteUrl}/download/${cleanSlug}`;
+        const websiteAppUrl = `${siteUrl}/apps/${cleanSlug}.html`;
+
+        const mirror = version?.download_sources?.find(
+          (s) =>
+            s.download_url &&
+            !s.download_url.includes("t.me") &&
+            !s.download_url.includes("play.google.com")
+        );
+
+        const targetDownloadUrl = mirror?.download_url || websiteDownloadUrl;
+        const targetMirrorName = mirror?.download_url
+          ? (mirror.mirror_name || "Fast Mirror")
+          : "AWTMods Website";
 
         await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
           method: "POST",
@@ -1172,14 +1193,17 @@ export async function POST(req: Request) {
               `🏷️ <b>Version:</b> ${version?.version_name || "Latest"}\n` +
               `📊 <b>Size:</b> ${version?.file_size || "APK"}\n\n` +
               `⚠️ The direct Telegram file for this update is currently syncing to our VIP node.\n` +
-              `🚀 In the meantime, you can download it immediately with zero wait times:\n\n` +
-              `🔗 <a href="${fastMirrorUrl}"><b>Click here for Instant Download (${mirror?.mirror_name || "Fast Mirror"})</b></a>`
+              `🚀 In the meantime, you can download it immediately from our website:\n\n` +
+              `🔗 <a href="${targetDownloadUrl}"><b>Click here to Download on AWTMods Website</b></a>`
             ),
             parse_mode: "HTML",
             reply_markup: {
               inline_keyboard: [
                 [
-                  { text: "🚀 Open Fast Download Mirror", url: fastMirrorUrl },
+                  { text: `🌐 Download on Website (${targetMirrorName})`, url: targetDownloadUrl },
+                ],
+                [
+                  { text: "📱 View Full App Details", url: websiteAppUrl },
                 ],
               ],
             },

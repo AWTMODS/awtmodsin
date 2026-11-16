@@ -240,7 +240,7 @@ export async function scrapeAndCreateFromPlayStore(
       android_requirement: androidReq,
       is_featured: false,
       is_trending: false,
-      status: "published" as const,
+      status: "draft" as const,
       screenshots,
       mod_features: modFeatures,
       version: {
@@ -252,7 +252,7 @@ export async function scrapeAndCreateFromPlayStore(
         sha256: null,
         release_notes: modFeatures.join("\n"),
         is_latest: true,
-        status: "published" as const,
+        status: "draft" as const,
         download_sources: [
           {
             download_type: "external" as const,

@@ -474,13 +474,26 @@ export async function sendDraftPreviewToAdmin(
       `2. 🌐 DOWNLOAD NOW (Website)`,
       ``,
       `🏷️ <b>Version Code:</b> <code>${versionCode}</code> | 📦 <b>Size:</b> ${fileSize}`,
+      `📌 <b>Website Status:</b> <code>${app.status === "draft" ? "📁 DRAFT (Unpublished)" : "🌐 PUBLISHED (Live)"}</code>`,
     ].join("\n");
+
+    const isDraft = app.status === "draft";
+    const websiteActionButton = isDraft
+      ? { text: "🌐 Publish on Website", callback_data: `wiz_pubsite:${app.id}` }
+      : { text: "📁 Save as Draft", callback_data: `wiz_draft:${app.id}` };
 
     const adminButtons = [
       [
         {
           text: "🚀 Approve & Broadcast to Channel",
           callback_data: `wiz_approve:${app.id}`,
+        },
+      ],
+      [
+        websiteActionButton,
+        {
+          text: isDraft ? "👀 Preview on Website" : "🌐 View Live App",
+          url: appUrl,
         },
       ],
       [
@@ -497,10 +510,6 @@ export async function sendDraftPreviewToAdmin(
         {
           text: "📝 Edit Mod Features",
           callback_data: `wiz_feat:${app.id}`,
-        },
-        {
-          text: "🌐 View Live App",
-          url: appUrl,
         },
       ],
     ];

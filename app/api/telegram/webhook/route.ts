@@ -95,8 +95,23 @@ export async function POST(req: Request) {
         // Action: Broadcast to Channel
         if (action === "broadcast" || action === "wiz_approve") {
           const appId = rest[0] || rest.join("_");
-          const app = await getApplicationById(appId);
+          let app = await getApplicationById(appId);
           if (app) {
+            // If currently in draft, publish it to the website now
+            const supabase = getDbClient();
+            if (supabase && app.status !== "published") {
+              await supabase
+                .from("applications")
+                .update({ status: "published" })
+                .eq("id", appId);
+              await supabase
+                .from("application_versions")
+                .update({ status: "published" })
+                .eq("application_id", appId);
+              invalidateDbCache();
+              app = (await getApplicationById(appId)) || app;
+            }
+
             const bRes = await broadcastToTelegram({ app, force: true }).catch((err) =>
               console.warn("Broadcast callback err:", err)
             );
@@ -115,8 +130,9 @@ export async function POST(req: Request) {
                 text: (
                   `🎉 <b>POST APPROVED &amp; BROADCAST LIVE!</b>\n\n` +
                   `📱 <b>App:</b> ${app.name}\n` +
-                  `📢 <b>Channel:</b> ${channelId}\n\n` +
-                  `✅ <i>The post with your custom animated emojis, logo, and DevUploads mirror is live!</i>`
+                  `📢 <b>Channel:</b> ${channelId}\n` +
+                  `🌐 <b>Website Status:</b> Published (Live on AWTMods.in)\n\n` +
+                  `✅ <i>The post is live on the channel with official app icon and download buttons!</i>`
                 ),
                 parse_mode: "HTML",
                 reply_markup: {
@@ -132,6 +148,82 @@ export async function POST(req: Request) {
                 },
               }),
             }).catch(() => {});
+          }
+        }
+
+        // Action: Publish on Website Only
+        if (action === "wiz_pubsite") {
+          const appId = rest[0];
+          const supabase = getDbClient();
+          if (supabase) {
+            await supabase
+              .from("applications")
+              .update({ status: "published" })
+              .eq("id", appId);
+            await supabase
+              .from("application_versions")
+              .update({ status: "published" })
+              .eq("application_id", appId);
+            invalidateDbCache();
+          }
+
+          const app = await getApplicationById(appId);
+          if (app) {
+            const siteUrl = settings.siteUrl || "https://www.awtmods.in";
+            const appUrl = `${siteUrl}/apps/${app.slug}.html`;
+
+            await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: adminChatId,
+                text: (
+                  `🌐 <b>${app.name} is now PUBLISHED Live on Website!</b>\n\n` +
+                  `🔗 <b>Live URL:</b> <a href="${appUrl}">${appUrl}</a>\n\n` +
+                  `<i>It is now visible in the website catalog and search! You can still broadcast it to @${settings.telegramChannelId?.replace(/^@/, "") || "awtmods"} below whenever you're ready:</i>`
+                ),
+                parse_mode: "HTML",
+              }),
+            });
+
+            const { sendDraftPreviewToAdmin } = await import("@/lib/telegram-broadcast");
+            await sendDraftPreviewToAdmin(app, adminChatId);
+          }
+        }
+
+        // Action: Keep / Save as Draft on Website
+        if (action === "wiz_draft") {
+          const appId = rest[0];
+          const supabase = getDbClient();
+          if (supabase) {
+            await supabase
+              .from("applications")
+              .update({ status: "draft" })
+              .eq("id", appId);
+            await supabase
+              .from("application_versions")
+              .update({ status: "draft" })
+              .eq("application_id", appId);
+            invalidateDbCache();
+          }
+
+          const app = await getApplicationById(appId);
+          if (app) {
+            await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: adminChatId,
+                text: (
+                  `📁 <b>${app.name} Saved as DRAFT</b>\n\n` +
+                  `✅ <i>This app is hidden from the public website catalog until you choose to publish it.</i>`
+                ),
+                parse_mode: "HTML",
+              }),
+            });
+
+            const { sendDraftPreviewToAdmin } = await import("@/lib/telegram-broadcast");
+            await sendDraftPreviewToAdmin(app, adminChatId);
           }
         }
 

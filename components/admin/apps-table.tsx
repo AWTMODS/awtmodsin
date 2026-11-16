@@ -24,6 +24,7 @@ import {
   Loader2,
   X,
   RefreshCw,
+  Radio,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -63,6 +64,53 @@ export function AppsTable({
       router.refresh();
     } finally {
       setIsRefreshing(false);
+    }
+  };
+
+  // Play Store Version Radar States
+  const [radarUpdates, setRadarUpdates] = useState<Record<string, any>>({});
+  const [isScanningRadar, setIsScanningRadar] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/admin/radar/check")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.radar?.updates) {
+          setRadarUpdates(d.radar.updates);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleRunRadar = async () => {
+    setIsScanningRadar(true);
+    toast.info("📡 Scanning Google Play Store for new updates...");
+    try {
+      const res = await fetch("/api/admin/radar/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notifyTelegram: true }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        if (data.updatesFound > 0) {
+          toast.success(`🚀 Radar Found ${data.updatesFound} updates! Bot alerts dispatched.`);
+        } else {
+          toast.success("✅ All applications are up-to-date with Google Play!");
+        }
+        // Refresh radar state
+        const stateRes = await fetch("/api/admin/radar/check");
+        const stateData = await stateRes.json();
+        if (stateData.radar?.updates) {
+          setRadarUpdates(stateData.radar.updates);
+        }
+      } else {
+        toast.error(data.error || "Radar scan failed");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to scan radar");
+    } finally {
+      setIsScanningRadar(false);
     }
   };
 
@@ -124,7 +172,11 @@ export function AppsTable({
     const matchesCategory =
       !selectedCategory || app.category_id === selectedCategory;
 
-    const matchesStatus = !selectedStatus || app.status === selectedStatus;
+    const matchesStatus =
+      !selectedStatus ||
+      (selectedStatus === "radar_updates"
+        ? !!radarUpdates[app.id]
+        : app.status === selectedStatus);
 
     return matchesSearch && matchesCategory && matchesStatus;
   });
@@ -227,6 +279,11 @@ export function AppsTable({
               className="w-full sm:w-auto rounded-xl border border-border bg-card px-3 py-2 text-xs sm:text-sm text-foreground focus:outline-none truncate"
             >
               <option value="">All Statuses ({apps.length})</option>
+              {Object.keys(radarUpdates).length > 0 && (
+                <option value="radar_updates" className="text-amber-500 font-bold">
+                  🚀 Play Store Updates ({Object.keys(radarUpdates).length})
+                </option>
+              )}
               <option value="published">
                 Published ({apps.filter((a) => a.status === "published").length})
               </option>
@@ -252,6 +309,22 @@ export function AppsTable({
             >
               <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin text-primary" : ""}`} />
               <span>{isRefreshing ? "Refreshing..." : "Refresh"}</span>
+            </Button>
+
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={isScanningRadar}
+              onClick={handleRunRadar}
+              className="w-full sm:w-auto rounded-xl gap-1.5 font-bold border-cyan-500/30 bg-cyan-500/5 text-cyan-500 hover:bg-cyan-500/10 shrink-0 shadow-2xs"
+            >
+              <Radio className={`h-4 w-4 ${isScanningRadar ? "animate-spin text-cyan-400" : ""}`} />
+              <span>{isScanningRadar ? "Scanning..." : "Play Store Radar"}</span>
+              {Object.keys(radarUpdates).length > 0 && (
+                <span className="ml-1 px-1.5 py-0.2 bg-cyan-500 text-black text-[10px] font-extrabold rounded-full">
+                  {Object.keys(radarUpdates).length}
+                </span>
+              )}
             </Button>
 
             <Link href="/admin/versions" prefetch={true} className="w-full sm:w-auto">
@@ -349,7 +422,23 @@ export function AppsTable({
                       </td>
 
                       {/* Version */}
-                      <td className="py-3 px-4 font-mono text-xs">{version}</td>
+                      <td className="py-3 px-4 font-mono text-xs">
+                        <div className="flex flex-col gap-1 items-start">
+                          <span className="font-semibold text-foreground">{version}</span>
+                          {radarUpdates[app.id] && (
+                            <a
+                              href={`https://play.google.com/store/apps/details?id=${app.package_name}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-500 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-md hover:bg-amber-500/20 transition-colors"
+                              title={`Google Play has released ${radarUpdates[app.id].playStoreVersion}! Click to view on Play Store.`}
+                            >
+                              <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                              Play: v{radarUpdates[app.id].playStoreVersion}
+                            </a>
+                          )}
+                        </div>
+                      </td>
 
                       {/* Size */}
                       <td className="py-3 px-4 font-mono text-xs text-muted-foreground">

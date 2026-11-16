@@ -380,6 +380,92 @@ export async function POST(req: Request) {
           }
         }
 
+        // Action: Radar Quick Release Prompt
+        if (action === "rdr_rel") {
+          const appId = rest[0];
+          const newVer = rest[1] || "Latest";
+          const app = await getApplicationById(appId);
+          if (app) {
+            const supabase = getDbClient();
+            if (supabase) {
+              await supabase.from("site_settings").upsert(
+                {
+                  setting_key: `admin_wizard_${adminChatId}`,
+                  setting_value: {
+                    step: "waiting_for_radar_apk",
+                    appId,
+                    appName: app.name,
+                    versionName: newVer.startsWith("v") ? newVer : `v${newVer}`,
+                  },
+                  updated_at: new Date().toISOString(),
+                },
+                { onConflict: "setting_key" }
+              );
+            }
+
+            await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: adminChatId,
+                text: (
+                  `⚡ <b>Quick Release: ${app.name} (${newVer})</b>\n\n` +
+                  `Please forward the new modded <code>.apk</code> file or paste a DevUploads / Direct APK link right here:\n\n` +
+                  `<i>The bot will automatically extract file size, assign version <code>${newVer}</code>, and update the website catalog instantly!</i>`
+                ),
+                parse_mode: "HTML",
+              }),
+            }).catch(() => {});
+          }
+        }
+
+        // Action: Radar Auto-Draft from Play Store
+        if (action === "rdr_draft") {
+          const appId = rest[0];
+          const app = await getApplicationById(appId);
+          if (app && app.package_name) {
+            const { scrapeAndCreateFromPlayStore } = await import("@/lib/playstore-auto-poster");
+            const { sendDraftPreviewToAdmin } = await import("@/lib/telegram-broadcast");
+
+            await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: adminChatId,
+                text: `🔍 <i>Scraping Play Store metadata for ${app.name} and generating draft...</i>`,
+                parse_mode: "HTML",
+              }),
+            }).catch(() => {});
+
+            const res = await scrapeAndCreateFromPlayStore(
+              `https://play.google.com/store/apps/details?id=${app.package_name}`
+            );
+            if (res.success && res.app) {
+              await sendDraftPreviewToAdmin(res.app, adminChatId);
+            }
+          }
+        }
+
+        // Action: Radar Mute Alert
+        if (action === "rdr_mute") {
+          const appId = rest[0];
+          const { getRadarState, saveRadarState } = await import("@/lib/playstore-radar");
+          const radarState = await getRadarState();
+          if (radarState.updates[appId]) {
+            radarState.updates[appId].isMuted = true;
+            await saveRadarState(radarState);
+          }
+          await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: adminChatId,
+              text: `🔕 <b>Alert Muted:</b> You will not receive further alerts for this version.`,
+              parse_mode: "HTML",
+            }),
+          }).catch(() => {});
+        }
+
         // Action: Auto-Create New App
         if (action === "newapp" || action === "create") {
           const { executeAutoCreateApp, getPendingApkRelease } = await import("@/lib/telegram-auto-release");
@@ -743,6 +829,48 @@ export async function POST(req: Request) {
               await sendDraftPreviewToAdmin(updatedApp, adminChatId);
               return NextResponse.json({ ok: true, wizardUpdated: "features" });
             }
+          }
+        }
+
+        // Step 4: Radar Quick Release APK input
+        if (wiz.step === "waiting_for_radar_apk" && (doc || text || caption)) {
+          const rawFileName =
+            doc?.file_name ||
+            (caption || text || "").match(/([a-zA-Z0-9_\-\.]+\.apk)/i)?.[1] ||
+            "app.apk";
+          const fileSizeBytes = doc?.file_size || 0;
+          const parsed = parseApkReleaseInfo(rawFileName, caption || text || "", fileSizeBytes);
+
+          const { executeAutoApkRelease } = await import("@/lib/telegram-auto-release");
+          const releaseRes = await executeAutoApkRelease({
+            appId: wiz.appId,
+            versionName: wiz.versionName || parsed.versionName,
+            versionCode: parsed.versionCode > 0 ? parsed.versionCode : 1,
+            fileSize: parsed.fileSize,
+            externalUrls: parsed.externalUrls,
+            fileId: doc?.file_id,
+            releaseNotes: parsed.releaseNotes,
+          });
+
+          await supabase
+            .from("site_settings")
+            .delete()
+            .eq("setting_key", `admin_wizard_${adminChatId}`);
+          purgeAppCaches();
+
+          if (releaseRes.success && releaseRes.app) {
+            const { sendDraftPreviewToAdmin } = await import("@/lib/telegram-broadcast");
+            await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: adminChatId,
+                text: `🎉 <b>${releaseRes.app.name} updated to ${wiz.versionName || parsed.versionName}!</b>\n\nChannel Broadcast Preview generated below:`,
+                parse_mode: "HTML",
+              }),
+            });
+            await sendDraftPreviewToAdmin(releaseRes.app, adminChatId);
+            return NextResponse.json({ ok: true, radarQuickReleased: releaseRes.app.name });
           }
         }
       }

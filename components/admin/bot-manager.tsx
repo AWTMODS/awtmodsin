@@ -566,6 +566,119 @@ export function BotManager({ initialSettings, initialVipUsers }: BotManagerProps
               </label>
             </div>
 
+            {/* Publishing Mode Selector (Modes 1, 2, 3) */}
+            <div className="sm:col-span-2 p-4 rounded-2xl bg-secondary/30 border border-border space-y-3">
+              <div>
+                <label className="text-xs font-bold text-foreground flex items-center gap-2">
+                  <Send className="h-4 w-4 text-sky-400" />
+                  Channel Broadcast Publishing Mode
+                </label>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Choose how automated app releases are published to your public channel <strong>{settings.telegramChannelId || "@awtmods"}</strong>:
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 pt-1">
+                {/* Mode 1: Bot Auto-Poster */}
+                <div
+                  onClick={() => setSettings({ ...settings, telegramBroadcastMode: "bot_inline" })}
+                  className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                    (settings.telegramBroadcastMode || "bot_inline") === "bot_inline"
+                      ? "border-sky-500 bg-sky-500/10 shadow-sm"
+                      : "border-border hover:border-border/80 bg-background/50"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-bold text-foreground">🤖 Mode 1: Bot Auto-Poster</span>
+                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-400">Default</span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-snug">
+                    Posts automatically with <strong>3 big interactive buttons</strong> (VIP, DevUploads, Website). Highest click rate &amp; 100% automated.
+                  </p>
+                </div>
+
+                {/* Mode 2: Admin Review & Forward */}
+                <div
+                  onClick={() => setSettings({ ...settings, telegramBroadcastMode: "admin_draft" })}
+                  className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                    settings.telegramBroadcastMode === "admin_draft"
+                      ? "border-amber-500 bg-amber-500/10 shadow-sm"
+                      : "border-border hover:border-border/80 bg-background/50"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-bold text-foreground">📋 Mode 2: Admin Draft Review</span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-snug">
+                    Sends draft to your <strong>Admin DM first</strong>. You 1-tap forward to the channel from your Telegram Premium account for native animated emojis.
+                  </p>
+                </div>
+
+                {/* Mode 3: Telegram Premium Userbot (MTProto) */}
+                <div
+                  onClick={() => setSettings({ ...settings, telegramBroadcastMode: "userbot_mtproto" })}
+                  className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                    settings.telegramBroadcastMode === "userbot_mtproto"
+                      ? "border-emerald-500 bg-emerald-500/10 shadow-sm"
+                      : "border-border hover:border-border/80 bg-background/50"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-bold text-foreground">⚡ Mode 3: Premium Userbot</span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-snug">
+                    Fully automated posting via your <strong>Telegram Premium account</strong> (MTProto) with native animated emojis &amp; text download links.
+                  </p>
+                </div>
+              </div>
+
+              {/* Userbot Configuration Fields when Mode 3 is selected */}
+              {settings.telegramBroadcastMode === "userbot_mtproto" && (
+                <div className="pt-3 border-t border-border/80 space-y-3">
+                  <div className="text-[11px] text-amber-400 font-semibold flex items-center gap-1.5">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    <span>Telegram API Credentials Required for Mode 3:</span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Get your <code>API ID</code> &amp; <code>API Hash</code> free from <a href="https://my.telegram.org" target="_blank" rel="noreferrer" className="text-sky-400 underline">my.telegram.org</a>. Generate a <code>Session String</code> with GramJS or Telethon once.
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-foreground">Telegram App API ID</label>
+                      <Input
+                        placeholder="e.g. 12345678"
+                        value={settings.telegramUserApiId || ""}
+                        onChange={(e) => setSettings({ ...settings, telegramUserApiId: e.target.value.trim() })}
+                        className="rounded-xl text-xs font-mono"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-foreground">Telegram App API Hash</label>
+                      <Input
+                        placeholder="e.g. 0123456789abcdef0123456789abcdef"
+                        value={settings.telegramUserApiHash || ""}
+                        onChange={(e) => setSettings({ ...settings, telegramUserApiHash: e.target.value.trim() })}
+                        className="rounded-xl text-xs font-mono"
+                      />
+                    </div>
+                    <div className="sm:col-span-2 space-y-1">
+                      <label className="text-[11px] font-semibold text-foreground">Telegram User Session String (GramJS StringSession)</label>
+                      <Input
+                        placeholder="1BAAAG... (paste GramJS session string here)"
+                        value={settings.telegramUserSessionString || ""}
+                        onChange={(e) => setSettings({ ...settings, telegramUserSessionString: e.target.value.trim() })}
+                        className="rounded-xl text-xs font-mono"
+                      />
+                      <p className="text-[10px] text-muted-foreground">
+                        * If left empty or invalid, the system automatically falls back to Mode 1 (Bot Auto-Poster) so broadcasts never fail.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Custom Post Template with Animated Emojis */}
             <div className="sm:col-span-2 pt-4 border-t border-border space-y-2">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">

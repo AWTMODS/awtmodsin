@@ -161,6 +161,10 @@ export type SiteSettings = {
   telegramUpiId?: string;
   telegramUpiName?: string;
   telegramPostTemplate?: string;
+  telegramBroadcastMode?: 'bot_inline' | 'admin_draft' | 'userbot_mtproto';
+  telegramUserApiId?: string;
+  telegramUserApiHash?: string;
+  telegramUserSessionString?: string;
   // Smart Banner & Ad Space Placement Manager
   adsMasterEnabled?: boolean;
   adsMobileEnabled?: boolean;

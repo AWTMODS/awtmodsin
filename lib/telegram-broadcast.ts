@@ -61,6 +61,24 @@ export async function broadcastToTelegram(
       };
     }
 
+    // ==========================================
+    // Check Broadcasting Publishing Mode
+    // Mode 1 (Default): 'bot_inline' -> Direct to channel with 3 interactive buttons
+    // Mode 2: 'admin_draft' -> Pre-formatted draft sent to Admin DM first
+    // Mode 3: 'userbot_mtproto' -> MTProto user session with animated emojis
+    // ==========================================
+    const broadcastMode = settings.telegramBroadcastMode || "bot_inline";
+
+    // Mode 2: Admin Draft Mode (Review & 1-Tap Forward)
+    if (!options.force && broadcastMode === "admin_draft") {
+      const adminChatId = settings.telegramAdminChatId || "1343548529";
+      const draftRes = await sendDraftPreviewToAdmin(options.app, adminChatId);
+      return {
+        success: draftRes.success,
+        message: `Draft preview sent to Admin DM for review. Forward to ${channelId} from your Telegram Premium account to display native animated emojis!`,
+      };
+    }
+
     const { app } = options;
     const version = options.version || app.latest_version || app.versions?.[0];
     const cleanSlug = cleanAppSlug(app.slug);
@@ -246,6 +264,30 @@ export async function broadcastToTelegram(
     }
 
     const isHttpUrl = photoUrl && (photoUrl.startsWith("http://") || photoUrl.startsWith("https://"));
+
+    // Mode 3: Telegram Premium Userbot (MTProto)
+    if (
+      broadcastMode === "userbot_mtproto" &&
+      settings.telegramUserApiId &&
+      settings.telegramUserApiHash &&
+      settings.telegramUserSessionString
+    ) {
+      const ubRes = await broadcastViaUserbot(
+        settings,
+        channelId,
+        caption,
+        isHttpUrl ? photoUrl : undefined,
+        {
+          vipUrl: vipDeepLink,
+          devUploadsUrl: devUploadsMirror?.download_url,
+          websiteUrl: downloadPageUrl,
+        }
+      );
+      if (ubRes.success) {
+        return ubRes;
+      }
+      console.warn("Userbot broadcast failed, falling back to Bot API Mode 1:", ubRes.error);
+    }
 
     if (isHttpUrl) {
       try {
@@ -529,5 +571,84 @@ export async function sendDraftPreviewToAdmin(
   } catch (err: any) {
     console.error("sendDraftPreviewToAdmin error:", err);
     return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Broadcasts directly using an authenticated Telegram User session (MTProto via GramJS)
+ * This allows a Telegram Premium user account to publish posts with 100% native animated emojis.
+ */
+export async function broadcastViaUserbot(
+  settings: any,
+  channelId: string,
+  caption: string,
+  photoUrl?: string,
+  downloadLinks?: { vipUrl: string; devUploadsUrl?: string; websiteUrl: string }
+): Promise<TelegramBroadcastResult> {
+  const apiId = parseInt(settings.telegramUserApiId || "", 10);
+  const apiHash = settings.telegramUserApiHash || "";
+  const sessionString = settings.telegramUserSessionString || "";
+
+  if (!apiId || !apiHash || !sessionString) {
+    return {
+      success: false,
+      error: "Telegram Userbot API ID, API Hash, or Session String not configured in Admin Settings.",
+    };
+  }
+
+  try {
+    const { TelegramClient } = await import("telegram");
+    const { StringSession } = await import("telegram/sessions/index.js");
+
+    const client = new TelegramClient(new StringSession(sessionString), apiId, apiHash, {
+      connectionRetries: 3,
+      useWSS: false,
+    });
+
+    await client.connect();
+
+    // In Userbot mode, append download links as clean text hyperlinks since normal user messages cannot hold inline buttons
+    let fullMessage = caption;
+    if (downloadLinks) {
+      fullMessage += "\n\n<b>DOWNLOAD NOW:</b>\n";
+      fullMessage += `⚡ <a href="${downloadLinks.vipUrl}">Instant VIP Direct Download</a>\n`;
+      if (downloadLinks.devUploadsUrl) {
+        fullMessage += `📥 <a href="${downloadLinks.devUploadsUrl}">Free Download (DevUploads)</a>\n`;
+      }
+      fullMessage += `🌐 <a href="${downloadLinks.websiteUrl}">Website Download</a>`;
+    }
+
+    let targetPeer: any = channelId;
+    if (targetPeer.startsWith("@")) {
+      targetPeer = targetPeer.slice(1);
+    }
+
+    let res: any;
+    if (photoUrl && (photoUrl.startsWith("http://") || photoUrl.startsWith("https://"))) {
+      res = await client.sendMessage(targetPeer, {
+        message: fullMessage,
+        file: photoUrl,
+        parseMode: "html",
+      });
+    } else {
+      res = await client.sendMessage(targetPeer, {
+        message: fullMessage,
+        parseMode: "html",
+      });
+    }
+
+    await client.disconnect();
+
+    return {
+      success: true,
+      message: `Successfully posted via Telegram Premium Userbot with animated emojis to ${channelId}`,
+      messageId: res?.id,
+    };
+  } catch (err: any) {
+    console.error("broadcastViaUserbot error:", err);
+    return {
+      success: false,
+      error: err.message || "Failed to broadcast via Telegram Userbot",
+    };
   }
 }

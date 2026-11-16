@@ -29,6 +29,7 @@
     "recharts": "^2.15.0",
     "sonner": "^1.7.2",
     "tailwind-merge": "^2.6.0",
+    "telegram": "^2.26.22",
     "zod": "^3.24.1"
   },
   "devDependencies": {

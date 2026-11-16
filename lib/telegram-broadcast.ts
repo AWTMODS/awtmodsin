@@ -187,27 +187,13 @@ export async function broadcastToTelegram(
           url: vipDeepLink,
         },
       ],
-    ];
-
-    if (devUploadsMirror?.download_url) {
-      const mirrorLabel = devUploadsMirror.download_url.includes("devuploads.com")
-        ? "📥 Free Download (DevUploads)"
-        : `📥 Free Download (${devUploadsMirror.mirror_name || "Fast Mirror"})`;
-
-      inlineKeyboard.push([
+      [
         {
-          text: mirrorLabel,
-          url: devUploadsMirror.download_url,
+          text: "🌐 DOWNLOAD NOW (Website)",
+          url: downloadPageUrl,
         },
-      ]);
-    }
-
-    inlineKeyboard.push([
-      {
-        text: "🌐 DOWNLOAD NOW (Website)",
-        url: downloadPageUrl,
-      },
-    ]);
+      ],
+    ];
 
     const replyMarkup = { inline_keyboard: inlineKeyboard };
 
@@ -477,10 +463,6 @@ export async function sendDraftPreviewToAdmin(
       `<tg-emoji emoji-id="4958714479681471536">⭐️</tg-emoji> <b>Join Channel ➔</b> ${channelId}`,
     ].join("\n");
 
-    const devUploadsButtonText = devUploadsMirror?.download_url
-      ? (devUploadsMirror.download_url.includes("devuploads.com") ? "📥 Free Download (DevUploads)" : `📥 Free Download (${devUploadsMirror.mirror_name || "Fast Mirror"})`)
-      : "❌ None Linked";
-
     const previewMessageText = [
       `📋 <b>CHANNEL BROADCAST DRAFT PREVIEW</b>`,
       `<i>Review how this post will look before sending to <b>${channelId}</b>:</i>`,
@@ -489,8 +471,7 @@ export async function sendDraftPreviewToAdmin(
       `━━━━━━━━━━━━━━━━━━━━`,
       `🔘 <b>Post Buttons to be Attached:</b>`,
       `1. ⚡ DOWNLOAD NOW (Instant VIP)`,
-      `2. ${devUploadsButtonText}`,
-      `3. 🌐 DOWNLOAD NOW (Website)`,
+      `2. 🌐 DOWNLOAD NOW (Website)`,
       ``,
       `🏷️ <b>Version Code:</b> <code>${versionCode}</code> | 📦 <b>Size:</b> ${fileSize}`,
     ].join("\n");
@@ -612,9 +593,6 @@ export async function broadcastViaUserbot(
     if (downloadLinks) {
       fullMessage += "\n\n<b>DOWNLOAD NOW:</b>\n";
       fullMessage += `⚡ <a href="${downloadLinks.vipUrl}">Instant VIP Direct Download</a>\n`;
-      if (downloadLinks.devUploadsUrl) {
-        fullMessage += `📥 <a href="${downloadLinks.devUploadsUrl}">Free Download (DevUploads)</a>\n`;
-      }
       fullMessage += `🌐 <a href="${downloadLinks.websiteUrl}">Website Download</a>`;
     }
 

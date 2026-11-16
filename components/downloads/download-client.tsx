@@ -184,7 +184,7 @@ export function DownloadClient({
           </div>
           <div className="flex items-center gap-1.5 font-medium text-foreground">
             <Check className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-            <span>All 95+ Apps Included</span>
+            <span>All Catalog Apps Included</span>
           </div>
         </div>
       </div>
@@ -389,7 +389,7 @@ export function DownloadClient({
                 </div>
                 <div className="flex items-start gap-2">
                   <Check className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-                  <span><strong>All 95+ Apps:</strong> Valid for unlimited downloads across our entire library for 30 days.</span>
+                  <span><strong>All Catalog Apps:</strong> Valid for unlimited downloads across our entire library for 30 days.</span>
                 </div>
               </div>
 

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSiteSettings, getApplicationBySlug, getApplicationById, getDbClient, invalidateDbCache } from "@/lib/db";
+import { getSiteSettings, getApplicationBySlug, getApplicationById, getDbClient, invalidateDbCache, getSiteStats } from "@/lib/db";
 import { isUserVip, recordUserInteraction, activateUserVip } from "@/lib/telegram-vip";
 import { broadcastToTelegram } from "@/lib/telegram-broadcast";
 import {
@@ -1028,6 +1028,8 @@ export async function POST(req: Request) {
       }
 
       const vipStatus = user ? await isUserVip(user.id) : { isVip: false };
+      const stats = await getSiteStats();
+      const liveAppCount = stats?.publishedApps || 97;
 
       if (vipStatus.isVip) {
         if (!targetApp) {
@@ -1039,7 +1041,7 @@ export async function POST(req: Request) {
               text: (
                 `👑 <b>Welcome Back, VIP Member!</b>\n\n` +
                 `✨ Your VIP pass is active until: <code>${vipStatus.expiresAt?.slice(0, 10)}</code>\n\n` +
-                `Browse our 95+ apps on <a href="https://www.awtmods.in">AWTMods.in</a> and tap "Get Direct File" on any app to receive it instantly here!`
+                `Browse all <b>${liveAppCount} apps</b> on <a href="https://www.awtmods.in">AWTMods.in</a> and tap "Get Direct File" on any app to receive it instantly here!`
               ),
               parse_mode: "HTML",
             }),
@@ -1216,7 +1218,7 @@ export async function POST(req: Request) {
         `✨ <b>VIP BENEFITS:</b>\n` +
         `• 🚫 Zero Ads &amp; Zero Link Shorteners\n` +
         `• ⚡ Instant direct 1-tap APK installation\n` +
-        `• 📦 Unlimited access across all 95+ apps for 30 days\n` +
+        `• 📦 Unlimited access across all <b>${liveAppCount} apps</b> for 30 days\n` +
         `• 🛡️ Direct Admin verification &amp; fast support\n\n` +
         `💰 <b>Price:</b> ₹${vipPrice} / 30 Days\n` +
         `📱 <b>Payee UPI ID:</b> <code>${upiId}</code>\n` +

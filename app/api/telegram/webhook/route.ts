@@ -9,6 +9,9 @@ import {
   executeAutoApkRelease,
 } from "@/lib/telegram-auto-release";
 
+export const dynamic = "force-dynamic";
+export const maxDuration = 60;
+
 function purgeAppCaches(slug?: string) {
   try {
     invalidateDbCache();
@@ -890,42 +893,142 @@ export async function POST(req: Request) {
       (caption.includes("http://") || caption.includes("https://"));
 
     // ==========================================================
-    // 2.8 GOOGLE PLAY STORE LINK AUTO-POST GENERATOR
+    // 2.8 GOOGLE PLAY STORE LINK AUTO-POST GENERATOR (SINGLE & BULK)
     // ==========================================================
-    const playStoreMatch = (text || caption || "").match(/play\.google\.com\/store\/apps\/details\?id=([a-zA-Z0-9._]+)/i);
-    if (isAuthorized && playStoreMatch && !hasApkDoc) {
+    const fullMessage = (text || caption || "").trim();
+    const playStoreRegex = /(?:https?:\/\/)?play\.google\.com\/store\/apps\/details\?id=([a-zA-Z0-9._]+)[^\s]*/gi;
+    const playStoreMatches = [...fullMessage.matchAll(playStoreRegex)];
+
+    if (isAuthorized && playStoreMatches.length > 0 && !hasApkDoc) {
       const { scrapeAndCreateFromPlayStore } = await import("@/lib/playstore-auto-poster");
       const { sendDraftPreviewToAdmin } = await import("@/lib/telegram-broadcast");
 
-      // Notify admin immediately that scraping has started
-      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: chatId,
-          text: `🔍 <b>Google Play link detected!</b>\n<i>Scraping official icon, title, genre, and generating mod post...</i>`,
-          parse_mode: "HTML",
-        }),
-      }).catch(() => {});
+      // Extract per-line target strings to preserve any per-app custom sizes or annotations
+      const lines = fullMessage.split(/\r?\n/).map((l: string) => l.trim()).filter(Boolean);
+      const targetsMap = new Map<string, string>();
 
-      const rawInput = (text || caption || "").trim() || playStoreMatch[0];
-      const result = await scrapeAndCreateFromPlayStore(rawInput);
+      for (const match of playStoreMatches) {
+        const fullUrl = match[0];
+        const pkgId = match[1].toLowerCase();
+        // Look for the specific line that contains this URL
+        const matchingLine = lines.find((l: string) => l.includes(fullUrl)) || fullUrl;
+        const urlMatchesInLine = [...matchingLine.matchAll(/(?:https?:\/\/)?play\.google\.com\/store\/apps\/details\?id=([a-zA-Z0-9._]+)[^\s]*/gi)];
+        const targetString = urlMatchesInLine.length === 1 ? matchingLine : fullUrl;
 
-      if (result.success && result.app) {
-        // Send draft preview to admin
-        await sendDraftPreviewToAdmin(result.app, adminChatId);
-        return NextResponse.json({ ok: true, playStoreAutoCreated: result.app.name });
-      } else {
+        if (!targetsMap.has(pkgId)) {
+          targetsMap.set(pkgId, targetString);
+        }
+      }
+
+      const uniqueTargets = Array.from(targetsMap.values());
+
+      if (uniqueTargets.length === 1) {
+        // --- SINGLE APP IMPORT FLOW ---
         await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             chat_id: chatId,
-            text: `❌ <b>Failed to fetch from Google Play Store:</b>\n<code>${result.error || "Unknown error"}</code>`,
+            text: `🔍 <b>Google Play link detected!</b>\n<i>Scraping official icon, title, genre, and generating mod post...</i>`,
             parse_mode: "HTML",
           }),
         }).catch(() => {});
-        return NextResponse.json({ ok: false, error: result.error });
+
+        const rawInput = uniqueTargets[0];
+        const result = await scrapeAndCreateFromPlayStore(rawInput);
+
+        if (result.success && result.app) {
+          await sendDraftPreviewToAdmin(result.app, adminChatId);
+          purgeAppCaches(result.app.slug);
+          return NextResponse.json({ ok: true, playStoreAutoCreated: result.app.name });
+        } else {
+          await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: chatId,
+              text: `❌ <b>Failed to fetch from Google Play Store:</b>\n<code>${result.error || "Unknown error"}</code>`,
+              parse_mode: "HTML",
+            }),
+          }).catch(() => {});
+          return NextResponse.json({ ok: false, error: result.error });
+        }
+      } else {
+        // --- BULK APPS IMPORT FLOW ---
+        const totalCount = uniqueTargets.length;
+        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: `📦 <b>Bulk Google Play Import: ${totalCount} apps detected!</b>\n<i>Scraping metadata, icons, and generating draft cards...</i>`,
+            parse_mode: "HTML",
+          }),
+        }).catch(() => {});
+
+        const successfulApps: any[] = [];
+        const failedApps: { target: string; error: string }[] = [];
+
+        for (let i = 0; i < uniqueTargets.length; i++) {
+          const target = uniqueTargets[i];
+          try {
+            const result = await scrapeAndCreateFromPlayStore(target);
+            if (result.success && result.app) {
+              successfulApps.push(result.app);
+              await sendDraftPreviewToAdmin(result.app, adminChatId);
+            } else {
+              failedApps.push({ target, error: result.error || "Failed to scrape" });
+            }
+          } catch (err: any) {
+            failedApps.push({ target, error: err.message || "Scraping failed" });
+          }
+
+          // Gentle delay between Telegram messages to prevent HTTP 429 flood
+          if (i < uniqueTargets.length - 1) {
+            await new Promise((resolve) => setTimeout(resolve, 350));
+          }
+        }
+
+        // Invalidate website caches so all newly created drafts show up immediately in Admin
+        purgeAppCaches();
+
+        // Send consolidated summary to admin
+        const successCount = successfulApps.length;
+        const failCount = failedApps.length;
+
+        let summaryText = `🎉 <b>Bulk Import Complete!</b>\n\n`;
+        summaryText += `✅ <b>Successfully Created:</b> ${successCount} / ${totalCount} draft posts\n`;
+        if (failCount > 0) {
+          summaryText += `⚠️ <b>Failed (${failCount}):</b>\n`;
+          for (const f of failedApps.slice(0, 5)) {
+            const pkg = f.target.match(/id=([a-zA-Z0-9._]+)/i)?.[1] || f.target.slice(0, 30);
+            summaryText += `• <code>${pkg}</code>: ${f.error}\n`;
+          }
+          if (failedApps.length > 5) {
+            summaryText += `<i>...and ${failedApps.length - 5} more</i>\n`;
+          }
+        }
+        summaryText += `\nAll drafts are ready! You can publish them with the <b>[ 🚀 Quick Publish ]</b> buttons above, or manage them in the dashboard:\n`;
+        summaryText += `👉 <a href="https://www.awtmods.in/admin/apps">Manage Apps in Admin Panel</a>`;
+
+        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: summaryText,
+            parse_mode: "HTML",
+            disable_web_page_preview: true,
+          }),
+        }).catch(() => {});
+
+        return NextResponse.json({
+          ok: true,
+          bulkPlayStoreImport: true,
+          total: totalCount,
+          successCount,
+          failCount,
+        });
       }
     }
 

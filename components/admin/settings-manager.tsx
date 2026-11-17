@@ -242,6 +242,120 @@ export function SettingsManager({
         </div>
       </div>
 
+      {/* Telegram Join Modal (Growth Popup) */}
+      <div className="rounded-3xl border border-sky-500/20 bg-sky-500/5 p-6 sm:p-8 space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-border">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-sky-400 animate-pulse" />
+              <h3 className="font-bold text-base text-foreground">
+                Telegram Join Popup (Community Growth Widget)
+              </h3>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Displays a modern, high-converting Telegram channel join bottom sheet / modal to website visitors.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (typeof window !== "undefined") {
+                  try {
+                    localStorage.removeItem("awtmods_tg_joined");
+                    localStorage.removeItem("awtmods_tg_snooze_until");
+                  } catch {}
+                  window.dispatchEvent(new CustomEvent("awtmods_open_tg_popup"));
+                  toast.info("Triggered Telegram Join Popup preview!");
+                }
+              }}
+              className="rounded-xl border-sky-500/40 text-xs font-semibold gap-1.5 hover:bg-sky-500/10 text-foreground"
+            >
+              <span>Preview Live Popup</span>
+            </Button>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={settings.telegramPopupEnabled !== false}
+              onChange={(e) =>
+                setSettings({ ...settings, telegramPopupEnabled: e.target.checked })
+              }
+              className="h-4 w-4 rounded border-border text-sky-500 focus:ring-sky-500 bg-background"
+            />
+            <div>
+              <span className="text-xs font-semibold text-foreground">
+                Enable Telegram Join Popup
+              </span>
+              <p className="text-[11px] text-muted-foreground">
+                When enabled, visitors are prompted to join your official Telegram channel after a short delay.
+              </p>
+            </div>
+          </label>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold uppercase text-foreground">
+                Display Delay (Seconds)
+              </label>
+              <Input
+                type="number"
+                min={1}
+                max={60}
+                value={settings.telegramPopupDelay ?? 3}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    telegramPopupDelay: parseInt(e.target.value) || 3,
+                  })
+                }
+                className="rounded-xl text-xs font-mono"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Delay after page load before opening (default: 3s).
+              </p>
+            </div>
+
+            <div className="space-y-1 sm:col-span-2">
+              <label className="text-xs font-semibold uppercase text-foreground">
+                Popup Title
+              </label>
+              <Input
+                value={settings.telegramPopupTitle ?? "Join our Telegram"}
+                onChange={(e) =>
+                  setSettings({ ...settings, telegramPopupTitle: e.target.value })
+                }
+                className="rounded-xl text-xs"
+                placeholder="Join our Telegram"
+              />
+            </div>
+
+            <div className="space-y-1 sm:col-span-3">
+              <label className="text-xs font-semibold uppercase text-foreground">
+                Popup Subtitle / Description
+              </label>
+              <Input
+                value={
+                  settings.telegramPopupDesc ??
+                  "Get new premium unlocked apps first, plus update alerts and support from the community."
+                }
+                onChange={(e) =>
+                  setSettings({ ...settings, telegramPopupDesc: e.target.value })
+                }
+                className="rounded-xl text-xs"
+                placeholder="Get new premium unlocked apps first, plus update alerts and support from the community."
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Download Preferences */}
       <div className="rounded-3xl border border-border bg-card p-6 sm:p-8 space-y-4">
         <h3 className="font-bold text-base text-foreground pb-2 border-b border-border">

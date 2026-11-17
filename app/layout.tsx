@@ -4,6 +4,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { Toaster } from "sonner";
+import { TelegramJoinPopup } from "@/components/telegram-join-popup";
 
 const siteUrl =
   process.env.NEXT_PUBLIC_SITE_URL || "https://awtmodsin.vercel.app";
@@ -117,6 +118,7 @@ export default function RootLayout({
               },
             }}
           />
+          <TelegramJoinPopup />
         </ThemeProvider>
       </body>
     </html>

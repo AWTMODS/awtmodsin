@@ -184,6 +184,10 @@ export const initialSiteSettings: SiteSettings = {
   competitorRadarEnabled: false,
   competitorRadarSites: "LiteAPKs, HappyMod, AN1, APKDone",
   autoBackupTelegramEnabled: true,
+  telegramPopupEnabled: true,
+  telegramPopupDelay: 3,
+  telegramPopupTitle: "Join our Telegram",
+  telegramPopupDesc: "Get new premium unlocked apps first, plus update alerts and support from the community.",
 };
 
 // No demo reports - clean state

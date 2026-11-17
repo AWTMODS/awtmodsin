@@ -21,7 +21,7 @@ function purgeAppCaches(slug?: string) {
       revalidatePath(`/download/${clean}`, "page");
       revalidatePath(`/download/${clean}.html`, "page");
     }
-  } catch {}
+  } catch { }
 }
 
 // Dynamic import for google-play-scraper

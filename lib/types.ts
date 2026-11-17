@@ -184,6 +184,11 @@ export type SiteSettings = {
   competitorRadarSites?: string;
   // Automated Database Backup to Telegram
   autoBackupTelegramEnabled?: boolean;
+  // Telegram Join Popup (Growth Widget)
+  telegramPopupEnabled?: boolean;
+  telegramPopupDelay?: number;
+  telegramPopupTitle?: string;
+  telegramPopupDesc?: string;
 };
 
 export type ModRequestStatus = 'pending' | 'in_progress' | 'completed' | 'dismissed';

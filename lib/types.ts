@@ -175,6 +175,15 @@ export type SiteSettings = {
   adCountdownCardEnabled?: boolean;
   adInFeedBannerHtml?: string;
   adInFeedBannerEnabled?: boolean;
+  // Telegram VIP Referral System Settings
+  telegramReferralsEnabled?: boolean;
+  telegramReferralGoal?: number;
+  telegramReferralRewardDays?: number;
+  // Competitor Mod Radar Settings
+  competitorRadarEnabled?: boolean;
+  competitorRadarSites?: string;
+  // Automated Database Backup to Telegram
+  autoBackupTelegramEnabled?: boolean;
 };
 
 export type ModRequestStatus = 'pending' | 'in_progress' | 'completed' | 'dismissed';

@@ -300,6 +300,37 @@ export async function broadcastToTelegram(
       };
     }
 
+    // Notify update subscribers in background
+    try {
+      const { getSubscribersForApp } = await import("./telegram-vip");
+      const subIds = await getSubscribersForApp(app.slug);
+      const botUser = settings.telegramBotUsername || "awtmods_bot";
+      for (const subId of subIds) {
+        fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: subId,
+            text: (
+              `⚡ <b>New Update Released for ${escapeHtml(app.name)}!</b>\n\n` +
+              `🏷️ <b>Version:</b> <code>${escapeHtml(versionName)}</code>\n` +
+              `📦 <b>Size:</b> ${escapeHtml(fileSize)}\n\n` +
+              `<i>Tap below to download the latest update now:</i>`
+            ),
+            parse_mode: "HTML",
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  { text: "⚡ Direct Download", url: `https://t.me/${botUser}?start=dl_${cleanSlug.slice(0, 50)}` },
+                  { text: "🌐 View on Website", url: appUrl },
+                ],
+              ],
+            },
+          }),
+        }).catch(() => {});
+      }
+    } catch {}
+
     return {
       success: true,
       message: `Successfully posted ${app.name} to ${channelId}`,
@@ -485,8 +516,12 @@ export async function sendDraftPreviewToAdmin(
     const adminButtons = [
       [
         {
-          text: "🚀 Approve & Broadcast to Channel",
+          text: "🚀 Approve & Broadcast Now",
           callback_data: `wiz_approve:${app.id}`,
+        },
+        {
+          text: "⏰ Schedule Post",
+          callback_data: `wiz_sched:${app.id}`,
         },
       ],
       [

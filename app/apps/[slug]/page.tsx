@@ -464,7 +464,7 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
           {/* Download Mirrors Section */}
           <div className="rounded-3xl border border-border bg-card p-4 sm:p-6 lg:p-8 space-y-4 overflow-hidden">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-              <h2 className="text-xl font-bold text-foreground">
+              <h2 className="text-lg sm:text-xl font-bold text-foreground">
                 Download Mirrors ({downloadSources.length})
               </h2>
               <span className="text-xs text-muted-foreground">
@@ -501,31 +501,31 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
                 return (
                   <div
                     key={mirror.id || index}
-                    className="flex items-center justify-between gap-3 p-3.5 sm:p-4 rounded-2xl border border-border bg-secondary/30 hover:border-neutral-400/50 transition-colors"
+                    className="flex items-center justify-between gap-2.5 sm:gap-3 p-3 sm:p-4 rounded-2xl border border-border bg-secondary/30 hover:border-neutral-400/50 transition-colors overflow-hidden"
                   >
                     <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
-                      <div className="h-10 w-10 shrink-0 rounded-xl bg-card flex items-center justify-center font-bold text-xs uppercase border border-border text-foreground">
+                      <div className="h-9 w-9 sm:h-10 sm:w-10 shrink-0 rounded-xl bg-card flex items-center justify-center font-bold text-xs uppercase border border-border text-foreground">
                         {code}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="font-semibold text-xs sm:text-sm text-foreground flex flex-wrap items-center gap-1.5">
-                          <span className="truncate max-w-[130px] xs:max-w-[180px] sm:max-w-none">
-                            {mirrorLabel}
+                        <div className="font-semibold text-xs sm:text-sm text-foreground truncate">
+                          {mirrorLabel}
+                        </div>
+                        <div className="flex items-center gap-1.5 text-[11px] sm:text-xs text-muted-foreground mt-0.5">
+                          <span className="capitalize truncate max-w-[120px] sm:max-w-none">
+                            Host: {hostLabel}
                           </span>
                           {mirror.is_primary && (
-                            <Badge variant="success" className="text-[10px] shrink-0 py-0 px-1.5 leading-tight">
+                            <Badge variant="success" className="text-[9px] sm:text-[10px] shrink-0 py-0 px-1.5 leading-none h-4">
                               Primary
                             </Badge>
                           )}
-                        </div>
-                        <div className="text-[11px] sm:text-xs text-muted-foreground capitalize truncate">
-                          Host: {hostLabel}
                         </div>
                       </div>
                     </div>
 
                     <Link href={getDownloadUrl(app.slug, { mirrorId: mirror.id })} className="shrink-0">
-                      <Button size="sm" className="rounded-xl px-3 sm:px-4 h-9 gap-1.5 font-semibold text-xs shrink-0 whitespace-nowrap">
+                      <Button size="sm" className="rounded-xl px-2.5 sm:px-4 h-8 sm:h-9 gap-1 sm:gap-1.5 font-semibold text-xs shrink-0 whitespace-nowrap">
                         <Download className="h-3.5 w-3.5 shrink-0" />
                         <span>Download</span>
                       </Button>

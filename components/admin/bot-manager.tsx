@@ -49,6 +49,7 @@ export function BotManager({ initialSettings, initialVipUsers }: BotManagerProps
   const [saving, setSaving] = useState(false);
   const [testingBot, setTestingBot] = useState(false);
   const [connectingWebhook, setConnectingWebhook] = useState(false);
+  const [backingUp, setBackingUp] = useState(false);
   const [showToken, setShowToken] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
 
@@ -163,7 +164,21 @@ export function BotManager({ initialSettings, initialVipUsers }: BotManagerProps
     if (!searchQuery.trim()) return true;
 
     const q = searchQuery.toLowerCase();
-    return (
+    const handleBackupDatabase = async () => {
+    setBackingUp(true);
+    try {
+      const res = await fetch("/api/admin/bot/backup", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Backup failed");
+      toast.success(data.message || "Database backup sent to Telegram!");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to backup database");
+    } finally {
+      setBackingUp(false);
+    }
+  };
+
+  return (
       String(u.userId).includes(q) ||
       (u.fullName && u.fullName.toLowerCase().includes(q)) ||
       (u.username && u.username.toLowerCase().includes(q)) ||
@@ -261,6 +276,20 @@ export function BotManager({ initialSettings, initialVipUsers }: BotManagerProps
     }
   };
 
+  const handleBackupDatabase = async () => {
+    setBackingUp(true);
+    try {
+      const res = await fetch("/api/admin/bot/backup", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Backup failed");
+      toast.success(data.message || "Database backup sent to Telegram!");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to backup database");
+    } finally {
+      setBackingUp(false);
+    }
+  };
+
   return (
     <div className="space-y-8 max-w-5xl">
       {/* Top Action Bar */}
@@ -316,6 +345,22 @@ export function BotManager({ initialSettings, initialVipUsers }: BotManagerProps
               <Radio className="h-3.5 w-3.5 text-sky-400" />
             )}
             <span>Send Test Ping</span>
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleBackupDatabase}
+            disabled={backingUp || !settings.telegramBotToken}
+            className="rounded-xl border-purple-500/40 text-xs font-semibold gap-1.5 hover:bg-purple-500/10 text-foreground"
+          >
+            {backingUp ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-400" />
+            ) : (
+              <Save className="h-3.5 w-3.5 text-purple-400" />
+            )}
+            <span>Backup DB to Telegram</span>
           </Button>
         </div>
       </div>
@@ -740,6 +785,126 @@ export function BotManager({ initialSettings, initialVipUsers }: BotManagerProps
           </div>
         </div>
 
+        {/* 👥 VIP Affiliate & Referral System */}
+        <div className="rounded-3xl border border-border bg-card p-6 sm:p-8 space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-border gap-2">
+            <div>
+              <span className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-500 block">
+                Organic Growth &amp; Viral Invites
+              </span>
+              <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+                <Users className="h-5 w-5 text-emerald-500" />
+                <span>Affiliate &amp; VIP Referral System</span>
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Reward active users with Free VIP when they invite their friends to your Telegram Bot.
+              </p>
+            </div>
+            <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold">
+              <input
+                type="checkbox"
+                checked={settings.telegramReferralsEnabled !== false}
+                onChange={(e) =>
+                  setSettings({ ...settings, telegramReferralsEnabled: e.target.checked })
+                }
+                className="h-4 w-4 rounded border-border text-emerald-500"
+              />
+              <span className="text-foreground">Referral Program Active</span>
+            </label>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold uppercase text-foreground">
+                Friends Required to Unlock Free VIP *
+              </label>
+              <Input
+                type="number"
+                min={1}
+                max={50}
+                value={settings.telegramReferralGoal ?? 5}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    telegramReferralGoal: parseInt(e.target.value, 10) || 5,
+                  })
+                }
+                className="rounded-xl text-xs font-mono"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Default: 5 friends. Once a user refers this number of people, the bot unlocks Free VIP automatically.
+              </p>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold uppercase text-foreground">
+                Free VIP Reward Duration (Days) *
+              </label>
+              <Input
+                type="number"
+                min={1}
+                max={365}
+                value={settings.telegramReferralRewardDays ?? 30}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    telegramReferralRewardDays: parseInt(e.target.value, 10) || 30,
+                  })
+                }
+                className="rounded-xl text-xs font-mono"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Number of days of Free VIP granted upon reaching the referral goal (default: 30 days).
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* 🔥 Competitor Mod Release Radar */}
+        <div className="rounded-3xl border border-amber-500/30 bg-card p-6 sm:p-8 space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-border gap-2">
+            <div>
+              <span className="text-[10px] font-extrabold uppercase tracking-widest text-amber-500 block">
+                Competitive Intelligence
+              </span>
+              <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-amber-500" />
+                <span>Competitor Mod Release Radar</span>
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Automatically monitors competitor catalogs (LiteAPKs, HappyMod, AN1) and alerts Admin on Telegram when a newer mod is spotted.
+              </p>
+            </div>
+            <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-amber-500 bg-amber-500/10 px-3 py-1.5 rounded-xl border border-amber-500/30">
+              <input
+                type="checkbox"
+                checked={!!settings.competitorRadarEnabled}
+                onChange={(e) =>
+                  setSettings({ ...settings, competitorRadarEnabled: e.target.checked })
+                }
+                className="h-4 w-4 rounded border-border text-amber-500"
+              />
+              <span>{settings.competitorRadarEnabled ? "Radar Active" : "Radar Paused"}</span>
+            </label>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-semibold uppercase text-foreground">
+              Monitored Competitor Mod Sources
+            </label>
+            <Input
+              value={settings.competitorRadarSites || "LiteAPKs, HappyMod, AN1, APKDone"}
+              onChange={(e) =>
+                setSettings({ ...settings, competitorRadarSites: e.target.value })
+              }
+              className="rounded-xl text-xs font-mono"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              When a newer version of your top apps is found, the bot sends an alert with a 1-tap <b>[ ⚡ Auto-Import &amp; Scrape Mod ]</b> button.
+            </p>
+          </div>
+        </div>
+
         {/* Save Button */}
         <div className="flex justify-end">
           <Button
@@ -873,7 +1038,21 @@ export function BotManager({ initialSettings, initialVipUsers }: BotManagerProps
               <tbody className="divide-y divide-border/60">
                 {filteredUsers.map((u) => {
                   const isLoading = actionLoadingId === u.userId;
-                  return (
+                  const handleBackupDatabase = async () => {
+    setBackingUp(true);
+    try {
+      const res = await fetch("/api/admin/bot/backup", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Backup failed");
+      toast.success(data.message || "Database backup sent to Telegram!");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to backup database");
+    } finally {
+      setBackingUp(false);
+    }
+  };
+
+  return (
                     <tr key={u.userId} className="hover:bg-muted/30 transition-colors">
                       <td className="py-3 px-3">
                         <div className="font-semibold text-foreground">

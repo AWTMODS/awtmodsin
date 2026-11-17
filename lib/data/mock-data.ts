@@ -178,6 +178,12 @@ export const initialSiteSettings: SiteSettings = {
   adCountdownCardEnabled: false,
   adInFeedBannerHtml: "",
   adInFeedBannerEnabled: false,
+  telegramReferralsEnabled: true,
+  telegramReferralGoal: 5,
+  telegramReferralRewardDays: 30,
+  competitorRadarEnabled: false,
+  competitorRadarSites: "LiteAPKs, HappyMod, AN1, APKDone",
+  autoBackupTelegramEnabled: true,
 };
 
 // No demo reports - clean state

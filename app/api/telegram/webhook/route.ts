@@ -469,6 +469,120 @@ export async function POST(req: Request) {
           }).catch(() => {});
         }
 
+        // Action: Schedule Post Broadcast
+        if (action === "wiz_sched") {
+          const appId = rest[0];
+          const app = await getApplicationById(appId);
+          if (app) {
+            await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: adminChatId,
+                text: (
+                  `⏰ <b>Schedule Channel Broadcast: ${app.name}</b>\n\n` +
+                  `Select when you would like this post to be published to <b>${settings.telegramChannelId || "@awtmods"}</b>:`
+                ),
+                parse_mode: "HTML",
+                reply_markup: {
+                  inline_keyboard: [
+                    [
+                      { text: "⏱️ In 1 Hour", callback_data: `sched_do:${app.id}:60` },
+                      { text: "⏱️ In 3 Hours", callback_data: `sched_do:${app.id}:180` },
+                    ],
+                    [
+                      { text: "🌅 Peak 6:00 PM", callback_data: `sched_do:${app.id}:peak18` },
+                      { text: "🌃 Peak 9:00 PM", callback_data: `sched_do:${app.id}:peak21` },
+                    ],
+                    [
+                      { text: "☀️ Tomorrow 10:00 AM", callback_data: `sched_do:${app.id}:tomorrow10` },
+                    ],
+                    [
+                      { text: "🔙 Cancel", callback_data: `broadcast:${app.id}` },
+                    ],
+                  ],
+                },
+              }),
+            });
+          }
+        }
+
+        // Action: Confirm Schedule Execution
+        if (action === "sched_do") {
+          const appId = rest[0];
+          const timing = rest[1] || "60";
+          const app = await getApplicationById(appId);
+          if (app) {
+            let targetDate = new Date();
+            if (timing === "60") {
+              targetDate = new Date(Date.now() + 60 * 60 * 1000);
+            } else if (timing === "180") {
+              targetDate = new Date(Date.now() + 180 * 60 * 1000);
+            } else if (timing === "peak18") {
+              targetDate.setHours(18, 0, 0, 0);
+              if (targetDate.getTime() <= Date.now()) {
+                targetDate.setDate(targetDate.getDate() + 1);
+              }
+            } else if (timing === "peak21") {
+              targetDate.setHours(21, 0, 0, 0);
+              if (targetDate.getTime() <= Date.now()) {
+                targetDate.setDate(targetDate.getDate() + 1);
+              }
+            } else if (timing === "tomorrow10") {
+              targetDate.setDate(targetDate.getDate() + 1);
+              targetDate.setHours(10, 0, 0, 0);
+            }
+
+            const { scheduleAppPost } = await import("@/lib/telegram-scheduler");
+            await scheduleAppPost(app.id, targetDate.toISOString(), adminChatId);
+
+            await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: adminChatId,
+                text: (
+                  `⏰ <b>Post Scheduled Successfully!</b>\n\n` +
+                  `📦 <b>App:</b> ${app.name}\n` +
+                  `📅 <b>Scheduled For:</b> <code>${targetDate.toLocaleString("en-US", { timeZone: "Asia/Kolkata" })} IST</code>\n` +
+                  `📢 <b>Target Channel:</b> ${settings.telegramChannelId || "@awtmods"}\n\n` +
+                  `<i>The bot will automatically publish this to the website and channel when the scheduled time arrives.</i>`
+                ),
+                parse_mode: "HTML",
+              }),
+            });
+          }
+        }
+
+        // Action: Auto-Import from Competitor Mod Radar
+        if (action === "import_mod") {
+          const rawUrl = decodeURIComponent(rest.join(":"));
+          await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: adminChatId,
+              text: `🔍 <i>Scraping competitor mod page and generating draft post...</i>\n<code>${rawUrl}</code>`,
+              parse_mode: "HTML",
+            }),
+          });
+          const { scrapeAndCreateFromModUrl } = await import("@/lib/mod-web-scraper");
+          const { sendDraftPreviewToAdmin } = await import("@/lib/telegram-broadcast");
+          const res = await scrapeAndCreateFromModUrl(rawUrl);
+          if (res.success && res.app) {
+            await sendDraftPreviewToAdmin(res.app, adminChatId);
+          } else {
+            await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: adminChatId,
+                text: `❌ Mod scraping failed: ${res.error}`,
+              }),
+            });
+          }
+        }
+
         // Action: Auto-Create New App
         if (action === "newapp" || action === "create") {
           const { executeAutoCreateApp, getPendingApkRelease } = await import("@/lib/telegram-auto-release");
@@ -632,6 +746,93 @@ export async function POST(req: Request) {
             }
           }
         }
+      }
+
+      // ==========================================
+      // Public Callbacks for ALL Telegram Users
+      // ==========================================
+      const userChatId = cq.message?.chat?.id || fromId;
+
+      // User Action: Subscribe to App Updates
+      if (data.startsWith("sub_") || data.startsWith("sub:")) {
+        const targetAppId = data.includes(":") ? data.split(":")[1] : data.slice(4);
+        const app = await getApplicationById(targetAppId);
+        if (app && fromId) {
+          const { subscribeUserToApp } = await import("@/lib/telegram-vip");
+          await subscribeUserToApp(fromId, app.slug);
+          await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: userChatId,
+              text: `🔔 <b>Subscribed!</b> You will receive an instant alert here the second a new update for <b>${app.name}</b> is released.`,
+              parse_mode: "HTML",
+            }),
+          });
+        }
+      }
+
+      // User Action: Referral Program Dashboard
+      if (data === "referral_info") {
+        const { getReferralStats } = await import("@/lib/telegram-vip");
+        const goal = settings.telegramReferralGoal || 5;
+        const stats = await getReferralStats(fromId || userChatId, settings.telegramBotUsername || "awtmods_bot", goal);
+        const percent = Math.min(100, Math.round((stats.count / goal) * 100));
+        const fullBar = "🟩".repeat(Math.floor(percent / 20)) + "⬜".repeat(5 - Math.floor(percent / 20));
+
+        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: userChatId,
+            text: (
+              `👥 <b>AWTMods VIP Referral Program</b>\n\n` +
+              `Invite <b>${goal} friends</b> to the bot and unlock <b>30 Days of FREE VIP Access</b>! 👑\n\n` +
+              `📊 <b>Your Progress:</b> ${stats.count} / ${goal} Friends Invited\n` +
+              `[${fullBar}] ${percent}%\n\n` +
+              `🔗 <b>Your Exclusive Invite Link:</b>\n<code>${stats.inviteLink}</code>\n\n` +
+              `<i>When your friends start the bot using your link, your count increases! Once you reach ${goal}, Free VIP unlocks automatically!</i>`
+            ),
+            parse_mode: "HTML",
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: "📤 Share Invite Link with Friends",
+                    url: `https://t.me/share/url?url=${encodeURIComponent(stats.inviteLink)}&text=${encodeURIComponent("Download 100% clean modded APKs with zero ads on AWTMods!")}`,
+                  },
+                ],
+              ],
+            },
+          }),
+        });
+      }
+
+      // User Action: Submit MOD Request from Bot
+      if (data.startsWith("req_app:") || data.startsWith("req_app_")) {
+        const requestedName = decodeURIComponent(data.includes(":") ? data.slice(8) : data.slice(8));
+        const supabase = getDbClient();
+        if (supabase && requestedName) {
+          await supabase.from("mod_requests").insert({
+            app_name: requestedName,
+            status: "pending",
+            requested_by: cq.from?.username || String(fromId) || "Telegram User",
+            votes: 1,
+          });
+        }
+        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: userChatId,
+            text: (
+              `✅ <b>MOD Request Submitted!</b>\n\n` +
+              `Our team has received your request for <b>"${requestedName}"</b>.\n` +
+              `We will add it to AWTMods.in soon! Make sure to stay in our channel @awtmods for the release alert.`
+            ),
+            parse_mode: "HTML",
+          }),
+        });
       }
 
       // Stop Telegram spinner
@@ -1375,6 +1576,71 @@ export async function POST(req: Request) {
       const rawArg = parts[1] || "";
       const targetApp = rawArg.startsWith("dl_") ? rawArg.replace("dl_", "") : null;
 
+      // Handle Affiliate Referral Invitation (?start=ref_<referrerId>)
+      if (rawArg.startsWith("ref_") && user) {
+        const referrerId = parseInt(rawArg.replace("ref_", ""), 10);
+        if (!isNaN(referrerId) && referrerId !== user.id) {
+          const { recordReferral } = await import("@/lib/telegram-vip");
+          const goal = settings.telegramReferralGoal || 5;
+          const rewardDays = settings.telegramReferralRewardDays || 30;
+          const refResult = await recordReferral(user.id, referrerId, goal, rewardDays);
+
+          if (refResult.success) {
+            if (refResult.unlockedVip) {
+              await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: referrerId,
+                  text: (
+                    `🎉 <b>CONGRATULATIONS! REFERRAL GOAL REACHED!</b>\n\n` +
+                    `<b>${goal} friends</b> have joined AWTMods using your invite link.\n` +
+                    `You have unlocked <b>${rewardDays} Days of FREE VIP Access</b>! 👑\n\n` +
+                    `Your VIP pass is active right now. Enjoy unlimited direct APK downloads!`
+                  ),
+                  parse_mode: "HTML",
+                }),
+              }).catch(() => {});
+            } else {
+              await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: referrerId,
+                  text: (
+                    `👤 <b>New Friend Joined!</b>\n\n` +
+                    `A friend just joined using your referral link.\n` +
+                    `📊 <b>Your Progress:</b> ${refResult.count} / ${goal} friends\n` +
+                    `<i>Only ${goal - refResult.count} more to unlock Free VIP!</i>`
+                  ),
+                  parse_mode: "HTML",
+                }),
+              }).catch(() => {});
+            }
+          }
+        }
+      }
+
+      // Handle App Update Alert Subscription (?start=notify_<slug>)
+      if (rawArg.startsWith("notify_") && user) {
+        const slug = rawArg.replace("notify_", "");
+        const { subscribeUserToApp } = await import("@/lib/telegram-vip");
+        await subscribeUserToApp(user.id, slug);
+        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: (
+              `🔔 <b>Subscribed to Update Alerts!</b>\n\n` +
+              `You will receive an instant message here the second a new version of <b>${slug}</b> is published on AWTMods!`
+            ),
+            parse_mode: "HTML",
+          }),
+        }).catch(() => {});
+        return NextResponse.json({ ok: true });
+      }
+
       if (user) {
         await recordUserInteraction(user.id, {
           username: user.username,
@@ -1699,6 +1965,231 @@ export async function POST(req: Request) {
       });
 
       return NextResponse.json({ ok: true });
+    }
+
+    // ==========================================================
+    // 5. DATABASE BACKUP COMMAND (/backup) - Admin Only
+    // ==========================================================
+    if (text === "/backup" && isAuthorized) {
+      const { sendDatabaseBackupToTelegram } = await import("@/lib/telegram-backup");
+      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: `⏳ <b>Exporting database snapshot...</b>\n<i>Collecting applications, versions, categories, and settings...</i>`,
+          parse_mode: "HTML",
+        }),
+      }).catch(() => {});
+
+      const backupRes = await sendDatabaseBackupToTelegram(chatId);
+      if (!backupRes.success) {
+        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: `❌ Backup failed: ${backupRes.error}`,
+          }),
+        }).catch(() => {});
+      }
+      return NextResponse.json({ ok: true });
+    }
+
+    // ==========================================================
+    // 6. REFERRAL PROGRAM COMMAND (/referral or /invite)
+    // ==========================================================
+    if (text === "/referral" || text === "/invite") {
+      const { getReferralStats } = await import("@/lib/telegram-vip");
+      const goal = settings.telegramReferralGoal || 5;
+      const stats = await getReferralStats(user?.id || chatId, settings.telegramBotUsername || "awtmods_bot", goal);
+      const percent = Math.min(100, Math.round((stats.count / goal) * 100));
+      const fullBar = "🟩".repeat(Math.floor(percent / 20)) + "⬜".repeat(5 - Math.floor(percent / 20));
+
+      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: (
+            `👥 <b>AWTMods VIP Referral Program</b>\n\n` +
+            `Invite <b>${goal} friends</b> to the bot and unlock <b>30 Days of FREE VIP Access</b>! 👑\n\n` +
+            `📊 <b>Your Progress:</b> ${stats.count} / ${goal} Friends Invited\n` +
+            `[${fullBar}] ${percent}%\n\n` +
+            `🔗 <b>Your Exclusive Invite Link:</b>\n<code>${stats.inviteLink}</code>\n\n` +
+            `<i>Share this link with your friends or in Telegram groups!</i>`
+          ),
+          parse_mode: "HTML",
+          reply_markup: {
+            inline_keyboard: [
+              [
+                {
+                  text: "📤 Share Invite Link with Friends",
+                  url: `https://t.me/share/url?url=${encodeURIComponent(stats.inviteLink)}&text=${encodeURIComponent("Download 100% clean modded APKs with zero ads on AWTMods!")}`,
+                },
+              ],
+            ],
+          },
+        }),
+      });
+      return NextResponse.json({ ok: true });
+    }
+
+    // ==========================================================
+    // 7. DIRECT APP NAME SEARCH & VIP APK DELIVERY (NO /command REQUIRED)
+    // ==========================================================
+    if (
+      text &&
+      !text.startsWith("/") &&
+      !text.startsWith("http://") &&
+      !text.startsWith("https://") &&
+      !hasApkDoc &&
+      !hasApkText
+    ) {
+      const query = text.trim();
+      if (query.length >= 2) {
+        const { getApplications } = await import("@/lib/db");
+        const cleanSlugQuery = query.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+
+        let targetApp = await getApplicationBySlug(cleanSlugQuery);
+        if (!targetApp) {
+          const { applications: searchResults } = await getApplications({
+            search: query,
+            limit: 3,
+            status: "published",
+          });
+          if (searchResults && searchResults.length > 0) {
+            targetApp = searchResults[0];
+          }
+        }
+
+        if (targetApp) {
+          const version = targetApp.latest_version || targetApp.versions?.[0];
+          const vipStatus = user ? await isUserVip(user.id) : { isVip: false };
+          const siteUrl = settings.siteUrl || "https://www.awtmods.in";
+          const cleanSlug = targetApp.slug.replace(/\.html$/, "");
+          const appUrl = `${siteUrl}/apps/${cleanSlug}.html`;
+          const downloadUrl = `${siteUrl}/download/${cleanSlug}`;
+
+          if (vipStatus.isVip) {
+            // VIP USER: Direct APK delivery
+            const tgSource = version?.download_sources?.find(
+              (s) => s.hosting_provider === "telegram" || s.download_url?.includes("t.me")
+            );
+
+            let sentDirect = false;
+            if (tgSource?.storage_key) {
+              try {
+                const docRes = await fetch(`https://api.telegram.org/bot${token}/sendDocument`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    chat_id: chatId,
+                    document: tgSource.storage_key,
+                    caption: (
+                      `⚡ <b>VIP Direct Download Delivered!</b>\n\n` +
+                      `📦 <b>App:</b> ${targetApp.name}\n` +
+                      `🏷️ <b>Version:</b> ${version?.version_name || "Latest"}\n` +
+                      `📊 <b>Size:</b> ${version?.file_size || "APK"}\n\n` +
+                      `👑 <i>VIP Pass Active. Tap above to install directly!</i>`
+                    ),
+                    parse_mode: "HTML",
+                  }),
+                });
+                const docJson = await docRes.json();
+                sentDirect = docJson.ok;
+              } catch {}
+            }
+
+            if (!sentDirect) {
+              await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: chatId,
+                  text: (
+                    `⚡ <b>VIP Direct Download</b>\n\n` +
+                    `📦 <b>App:</b> ${targetApp.name}\n` +
+                    `🏷️ <b>Version:</b> <code>${version?.version_name || "Latest"}</code>\n` +
+                    `📊 <b>Size:</b> ${version?.file_size || "APK"}\n\n` +
+                    `🚀 Tap below to download high-speed without waiting:`
+                  ),
+                  parse_mode: "HTML",
+                  reply_markup: {
+                    inline_keyboard: [
+                      [{ text: "⚡ High-Speed Direct Download", url: downloadUrl }],
+                      [{ text: "🌐 View Full App Details", url: appUrl }],
+                    ],
+                  },
+                }),
+              });
+            }
+            return NextResponse.json({ ok: true, directDelivered: targetApp.name });
+          } else {
+            // NON-VIP USER: App Preview Card with Free Download & VIP Option
+            const modFeats = (targetApp.mod_features || []).slice(0, 4).map((f) => `• ${f}`).join("\n");
+            const appCardText = (
+              `📱 <b>${targetApp.name}</b>\n\n` +
+              `🏷️ <b>Version:</b> <code>${version?.version_name || "vLatest"}</code> | 📦 <b>Size:</b> ${version?.file_size || "APK"}\n` +
+              `👤 <b>Developer:</b> ${targetApp.developer || "Aadith C V"}\n\n` +
+              (modFeats ? `<u><b>MOD Features:</b></u>\n${modFeats}\n\n` : "") +
+              `🛡️ <i>Clean, Verified &amp; Malware-Free APK</i>`
+            );
+
+            await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: chatId,
+                text: appCardText,
+                parse_mode: "HTML",
+                reply_markup: {
+                  inline_keyboard: [
+                    [
+                      { text: "🌐 Free Download on Website", url: downloadUrl },
+                    ],
+                    [
+                      { text: "👑 Get Direct File in Chat (VIP)", callback_data: `get_vip_${cleanSlug}` },
+                    ],
+                    [
+                      { text: "👥 Invite Friends (Get Free VIP)", callback_data: "referral_info" },
+                      { text: "🔔 Notify Me on Updates", callback_data: `sub_${targetApp.id}` },
+                    ],
+                  ],
+                },
+              }),
+            });
+            return NextResponse.json({ ok: true, previewServed: targetApp.name });
+          }
+        } else {
+          // App not found: Offer 1-tap MOD Request!
+          const safeQuery = query.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+          await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: chatId,
+              text: (
+                `🔍 <b>App Not Found:</b> "<code>${safeQuery}</code>"\n\n` +
+                `This application is not available on AWTMods yet.\n` +
+                `Would you like to request this MOD? Our team will add it!`
+              ),
+              parse_mode: "HTML",
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    { text: "🙋‍♂️ Submit MOD Request", callback_data: `req_app:${encodeURIComponent(query.slice(0, 40))}` },
+                  ],
+                  [
+                    { text: "🌐 Browse All Apps on Website", url: "https://www.awtmods.in/apps" },
+                  ],
+                ],
+              },
+            }),
+          });
+          return NextResponse.json({ ok: true, notFoundOffered: query });
+        }
+      }
     }
 
     return NextResponse.json({ ok: true });

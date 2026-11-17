@@ -243,8 +243,8 @@ export async function checkPlayStoreUpdates(options?: {
 
   const detectedUpdates: RadarAppUpdate[] = [];
 
-  // 2. Iterate in gentle batches of 3
-  const batchSize = 3;
+  // 2. Iterate in gentle batches of 5 for optimal speed
+  const batchSize = 5;
   for (let i = 0; i < targetApps.length; i += batchSize) {
     const batch = targetApps.slice(i, i + batchSize);
 

@@ -42,8 +42,9 @@ export function DashboardRadarWidget({
     }
   }, [initialUpdates, initialLastScan]);
 
-  // Fetch live radar updates on mount
+  // Fetch live radar updates on mount & auto-scan every 15 mins
   useEffect(() => {
+    // Check if stale or fetch latest
     fetch("/api/admin/radar/check", { cache: "no-store" })
       .then((r) => r.json())
       .then((data) => {
@@ -55,6 +56,23 @@ export function DashboardRadarWidget({
         }
       })
       .catch(() => {});
+
+    // Periodic automatic background sync every 15 minutes while dashboard is open
+    const interval = setInterval(() => {
+      fetch("/api/admin/radar/check?scan=true", { cache: "no-store" })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.radar?.updates) {
+            setUpdates(data.radar.updates);
+            if (data.radar.lastScanAt) {
+              setLastScanAt(data.radar.lastScanAt);
+            }
+          }
+        })
+        .catch(() => {});
+    }, 15 * 60 * 1000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const handleScanRadar = async () => {
@@ -130,11 +148,18 @@ export function DashboardRadarWidget({
                 </span>
               )}
             </div>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {lastScanAt
-                ? `Last scanned: ${new Date(lastScanAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
-                : "Automated Google Play Store version monitor"}
-            </p>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground mt-0.5">
+              <span>
+                {lastScanAt
+                  ? `Last scanned: ${new Date(lastScanAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                  : "Automated Google Play Store version monitor"}
+              </span>
+              <span className="text-border">•</span>
+              <span className="inline-flex items-center gap-1 text-[11px] text-emerald-500 font-medium">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Auto-Scan Active (Every 30m)
+              </span>
+            </div>
           </div>
         </div>
 

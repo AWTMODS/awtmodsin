@@ -12,7 +12,7 @@ export const maxDuration = 60;
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    const limit = searchParams.get("limit") ? parseInt(searchParams.get("limit")!, 10) : 30;
+    const limit = searchParams.get("limit") ? parseInt(searchParams.get("limit")!, 10) : 100;
 
     const settings = await getSiteSettings();
     const token = settings.telegramBotToken || process.env.TELEGRAM_BOT_TOKEN || "";

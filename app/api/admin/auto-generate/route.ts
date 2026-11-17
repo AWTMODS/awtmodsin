@@ -211,6 +211,27 @@ export async function POST(req: Request) {
       );
     }
 
+    // Direct Mod Website URL Scraper (e.g. APKDone, HappyMod, AN1, LiteAPKs, etc.)
+    if (
+      (query.startsWith("http://") || query.startsWith("https://")) &&
+      !query.includes("play.google.com/store/apps/details")
+    ) {
+      const { scrapeAndCreateFromModUrl } = await import("@/lib/mod-web-scraper");
+      const modResult = await scrapeAndCreateFromModUrl(query);
+      if (modResult.success && modResult.app) {
+        return NextResponse.json({
+          success: true,
+          app: modResult.app,
+          appData: modResult.app,
+        });
+      } else {
+        return NextResponse.json(
+          { error: modResult.error || "Failed to scrape mod webpage" },
+          { status: 400 }
+        );
+      }
+    }
+
     const categories = await getCategories();
     const gplay = await getGPlay();
 

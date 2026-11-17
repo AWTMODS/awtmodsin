@@ -28,7 +28,7 @@ async function getGPlay() {
   return (mod as any).default || mod;
 }
 
-function generateCleanSlug(title: string): string {
+export function generateCleanSlug(title: string): string {
   return title
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
@@ -36,7 +36,7 @@ function generateCleanSlug(title: string): string {
     .substring(0, 80);
 }
 
-function mapGenreToCategory(
+export function mapGenreToCategory(
   genre: string | undefined,
   genreId: string | undefined,
   categories: AppCategory[]
@@ -85,7 +85,7 @@ function mapGenreToCategory(
   return categories[0]?.id || "";
 }
 
-function generateModFeatures(title: string, genre: string = ""): string[] {
+export function generateModFeatures(title: string, genre: string = ""): string[] {
   const t = title.toLowerCase();
   const g = genre.toLowerCase();
 
@@ -239,6 +239,7 @@ export async function scrapeAndCreateFromPlayStore(
         .update({
           name: finalName,
           package_name: detail.appId,
+          developer: "Aadith C V",
           icon_url: detail.icon || existingApp.icon_url,
           banner_url: detail.headerImage || existingApp.banner_url,
           mod_features: modFeatures,

@@ -131,25 +131,25 @@ export function ModComparisonMatrix({
   }
 
   return (
-    <div className="rounded-3xl border border-border bg-card p-6 sm:p-8 space-y-5">
+    <div className="rounded-3xl border border-border bg-card p-4 sm:p-6 lg:p-8 space-y-5 overflow-hidden">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-border">
         <div>
           <span className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-500 block">
             Side-By-Side Comparison
           </span>
-          <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
+          <h2 className="text-lg sm:text-xl font-bold text-foreground flex items-center gap-2">
             <span>Official Play Store vs AWTMods Edition</span>
-            <Sparkles className="h-4 w-4 text-emerald-500" />
+            <Sparkles className="h-4 w-4 text-emerald-500 shrink-0" />
           </h2>
         </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Shield className="h-3.5 w-3.5 text-emerald-500" />
+        <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0">
+          <Shield className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
           <span>Verified Safe APK</span>
         </div>
       </div>
 
-      <div className="overflow-x-auto -mx-2 sm:mx-0">
-        <table className="w-full text-left text-xs sm:text-sm">
+      <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0 scrollbar-none [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+        <table className="w-full min-w-[440px] sm:min-w-[500px] text-left text-xs sm:text-sm">
           <thead>
             <tr className="border-b border-border/80 text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground">
               <th className="py-3 px-3">Feature</th>

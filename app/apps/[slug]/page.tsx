@@ -401,7 +401,7 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
         {/* Left Column: About, Features, What's New, Versions */}
         <div className="lg:col-span-8 space-y-8">
           {/* About Section */}
-          <div className="rounded-3xl border border-border bg-card p-6 sm:p-8 space-y-4">
+          <div className="rounded-3xl border border-border bg-card p-4 sm:p-6 lg:p-8 space-y-4 overflow-hidden">
             <h2 className="text-xl font-bold text-foreground">
               About This App
             </h2>
@@ -462,8 +462,8 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
           />
 
           {/* Download Mirrors Section */}
-          <div className="rounded-3xl border border-border bg-card p-6 sm:p-8 space-y-4">
-            <div className="flex items-center justify-between">
+          <div className="rounded-3xl border border-border bg-card p-4 sm:p-6 lg:p-8 space-y-4 overflow-hidden">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
               <h2 className="text-xl font-bold text-foreground">
                 Download Mirrors ({downloadSources.length})
               </h2>
@@ -473,60 +473,72 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
             </div>
 
             <div className="space-y-3">
-              {downloadSources.map((mirror, index) => (
-                <div
-                  key={mirror.id || index}
-                  className="flex items-center justify-between p-4 rounded-2xl border border-border bg-secondary/30 hover:border-neutral-400/50 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-xl bg-card flex items-center justify-center font-bold text-xs uppercase border border-border">
-                      {mirror.mirror_name?.toLowerCase().includes("devupload")
-                        ? "DEV"
-                        : mirror.mirror_name?.toLowerCase().includes("exastash") || mirror.download_url?.toLowerCase().includes("exastash")
-                        ? "EXA"
-                        : mirror.hosting_provider.slice(0, 3)}
-                    </div>
-                    <div>
-                      <div className="font-semibold text-sm text-foreground flex items-center gap-2">
-                        <span>
-                          {mirror.mirror_name ||
-                            (mirror.download_url?.toLowerCase().includes("exastash")
-                              ? "ExaStash Cloud CDN"
-                              : mirror.download_url?.toLowerCase().includes("devupload")
-                              ? "DevUploads Fast Mirror"
-                              : `${mirror.hosting_provider.toUpperCase()} Mirror`)}
-                        </span>
-                        {mirror.is_primary && (
-                          <Badge variant="success" className="text-[10px]">
-                            Primary
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="text-xs text-muted-foreground capitalize">
-                        Host:{" "}
-                        {mirror.mirror_name?.toLowerCase().includes("devupload")
-                          ? "DevUploads Fast CDN"
-                          : mirror.mirror_name?.toLowerCase().includes("exastash") || mirror.download_url?.toLowerCase().includes("exastash")
-                          ? "ExaStash Cloud CDN"
-                          : mirror.hosting_provider.replace("_", " ")}
-                      </div>
-                    </div>
-                  </div>
+              {downloadSources.map((mirror, index) => {
+                const mirrorLabel =
+                  mirror.mirror_name ||
+                  (mirror.download_url?.toLowerCase().includes("exastash")
+                    ? "ExaStash Cloud CDN"
+                    : mirror.download_url?.toLowerCase().includes("devupload")
+                    ? "DevUploads Fast Mirror"
+                    : `${mirror.hosting_provider.toUpperCase()} Mirror`);
 
-                  <Link href={getDownloadUrl(app.slug, { mirrorId: mirror.id })}>
-                    <Button size="sm" className="rounded-xl px-4 gap-1.5 font-semibold">
-                      <Download className="h-3.5 w-3.5" />
-                      <span>Download</span>
-                    </Button>
-                  </Link>
-                </div>
-              ))}
+                const hostLabel =
+                  mirror.mirror_name?.toLowerCase().includes("devupload")
+                    ? "DevUploads Fast CDN"
+                    : mirror.mirror_name?.toLowerCase().includes("exastash") ||
+                      mirror.download_url?.toLowerCase().includes("exastash")
+                    ? "ExaStash Cloud CDN"
+                    : mirror.hosting_provider.replace("_", " ");
+
+                const code =
+                  mirror.mirror_name?.toLowerCase().includes("devupload")
+                    ? "DEV"
+                    : mirror.mirror_name?.toLowerCase().includes("exastash") ||
+                      mirror.download_url?.toLowerCase().includes("exastash")
+                    ? "EXA"
+                    : mirror.hosting_provider.slice(0, 3);
+
+                return (
+                  <div
+                    key={mirror.id || index}
+                    className="flex items-center justify-between gap-3 p-3.5 sm:p-4 rounded-2xl border border-border bg-secondary/30 hover:border-neutral-400/50 transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+                      <div className="h-10 w-10 shrink-0 rounded-xl bg-card flex items-center justify-center font-bold text-xs uppercase border border-border text-foreground">
+                        {code}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-semibold text-xs sm:text-sm text-foreground flex flex-wrap items-center gap-1.5">
+                          <span className="truncate max-w-[130px] xs:max-w-[180px] sm:max-w-none">
+                            {mirrorLabel}
+                          </span>
+                          {mirror.is_primary && (
+                            <Badge variant="success" className="text-[10px] shrink-0 py-0 px-1.5 leading-tight">
+                              Primary
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="text-[11px] sm:text-xs text-muted-foreground capitalize truncate">
+                          Host: {hostLabel}
+                        </div>
+                      </div>
+                    </div>
+
+                    <Link href={getDownloadUrl(app.slug, { mirrorId: mirror.id })} className="shrink-0">
+                      <Button size="sm" className="rounded-xl px-3 sm:px-4 h-9 gap-1.5 font-semibold text-xs shrink-0 whitespace-nowrap">
+                        <Download className="h-3.5 w-3.5 shrink-0" />
+                        <span>Download</span>
+                      </Button>
+                    </Link>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
           {/* Version History Table */}
           {versionHistory.length > 0 && (
-            <div className="rounded-3xl border border-border bg-card p-6 sm:p-8 space-y-4">
+            <div className="rounded-3xl border border-border bg-card p-4 sm:p-6 lg:p-8 space-y-4 overflow-hidden">
               <h2 className="text-xl font-bold text-foreground">
                 Version History
               </h2>
@@ -534,27 +546,27 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
                 {versionHistory.map((ver) => (
                   <div
                     key={ver.id}
-                    className="py-4 first:pt-0 last:pb-0 flex items-center justify-between gap-4"
+                    className="py-3.5 sm:py-4 first:pt-0 last:pb-0 flex items-center justify-between gap-3"
                   >
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-bold text-sm text-foreground">
+                        <span className="font-bold text-sm text-foreground truncate">
                           {ver.version_name}
                         </span>
                         {ver.is_latest && (
-                          <Badge variant="outline" className="text-[10px]">
+                          <Badge variant="outline" className="text-[10px] shrink-0">
                             Current
                           </Badge>
                         )}
                       </div>
-                      <div className="text-xs text-muted-foreground mt-0.5">
+                      <div className="text-xs text-muted-foreground mt-0.5 truncate">
                         Released: {formatDate(ver.created_at)} • Size: {ver.file_size}
                       </div>
                     </div>
 
-                    <Link href={getDownloadUrl(app.slug, { versionId: ver.id })}>
-                      <Button variant="secondary" size="sm" className="rounded-xl gap-1 text-xs">
-                        <Download className="h-3.5 w-3.5" />
+                    <Link href={getDownloadUrl(app.slug, { versionId: ver.id })} className="shrink-0">
+                      <Button variant="secondary" size="sm" className="rounded-xl px-3 sm:px-4 h-9 gap-1 text-xs shrink-0 whitespace-nowrap">
+                        <Download className="h-3.5 w-3.5 shrink-0" />
                         <span>Download</span>
                       </Button>
                     </Link>

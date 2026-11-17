@@ -243,8 +243,8 @@ export async function checkPlayStoreUpdates(options?: {
 
   const detectedUpdates: RadarAppUpdate[] = [];
 
-  // 2. Iterate in gentle batches of 5 for optimal speed
-  const batchSize = 5;
+  // 2. Iterate in gentle batches of 8 for optimal speed & low latency
+  const batchSize = 8;
   for (let i = 0; i < targetApps.length; i += batchSize) {
     const batch = targetApps.slice(i, i + batchSize);
 
@@ -310,9 +310,19 @@ export async function checkPlayStoreUpdates(options?: {
       })
     );
 
+    // Progressive save every 2 batches so progress and timestamps are never lost
+    if ((i / batchSize) % 2 === 0 || i + batchSize >= targetApps.length) {
+      await saveRadarState({
+        lastScanAt: new Date().toISOString(),
+        totalChecked: Math.min(i + batch.length, targetApps.length),
+        updatesCount: Object.keys(currentUpdates).length,
+        updates: currentUpdates,
+      }).catch(() => {});
+    }
+
     // Minor delay between batches to respect Google Play rate limits
     if (i + batchSize < targetApps.length) {
-      await new Promise((resolve) => setTimeout(resolve, 600));
+      await new Promise((resolve) => setTimeout(resolve, 200));
     }
   }
 

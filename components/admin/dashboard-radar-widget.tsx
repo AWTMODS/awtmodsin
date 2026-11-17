@@ -32,44 +32,73 @@ export function DashboardRadarWidget({
   const [lastScanAt, setLastScanAt] = useState<string>(initialLastScan);
   const [isScanning, setIsScanning] = useState(false);
 
-  // Sync state whenever initialUpdates changes from server
-  useEffect(() => {
-    if (initialUpdates && Object.keys(initialUpdates).length > 0) {
-      setUpdates(initialUpdates);
+  // Helper to format scan time relatively
+  const formatScanTime = (isoString?: string) => {
+    if (!isoString) return "Not scanned yet";
+    const ms = new Date(isoString).getTime();
+    if (isNaN(ms)) return "Recently";
+    const diffMins = Math.floor((Date.now() - ms) / 60000);
+    if (diffMins < 1) return "Just now";
+    if (diffMins < 60) return `${diffMins} min${diffMins === 1 ? "" : "s"} ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) {
+      return `${diffHours} hr${diffHours === 1 ? "" : "s"} ago (${new Date(isoString).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})`;
     }
-    if (initialLastScan) {
-      setLastScanAt(initialLastScan);
-    }
-  }, [initialUpdates, initialLastScan]);
+    return new Date(isoString).toLocaleDateString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  };
 
-  // Fetch live radar updates on mount & auto-scan every 15 mins
+  // Automated background scan executor
+  const triggerAutoScan = async () => {
+    setIsScanning(true);
+    try {
+      const res = await fetch("/api/admin/radar/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notifyTelegram: true }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        const stateRes = await fetch("/api/admin/radar/check", { cache: "no-store" });
+        const stateData = await stateRes.json();
+        if (stateData.radar?.updates) {
+          setUpdates(stateData.radar.updates);
+          setLastScanAt(stateData.radar.lastScanAt || new Date().toISOString());
+        }
+      }
+    } catch {
+      // Fallback
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
+  // Fetch live radar updates on mount & auto-scan when stale (> 20 mins)
   useEffect(() => {
-    // Check if stale or fetch latest
     fetch("/api/admin/radar/check", { cache: "no-store" })
       .then((r) => r.json())
       .then((data) => {
         if (data.radar?.updates) {
           setUpdates(data.radar.updates);
-          if (data.radar.lastScanAt) {
-            setLastScanAt(data.radar.lastScanAt);
+          const scanTime = data.radar.lastScanAt;
+          if (scanTime) {
+            setLastScanAt(scanTime);
+            const lastMs = new Date(scanTime).getTime();
+            // If older than 20 minutes, automatically trigger background scan
+            if (!lastMs || Date.now() - lastMs > 20 * 60 * 1000) {
+              triggerAutoScan();
+            }
+          } else {
+            triggerAutoScan();
           }
+        } else {
+          triggerAutoScan();
         }
       })
       .catch(() => {});
 
-    // Periodic automatic background sync every 15 minutes while dashboard is open
+    // Periodic automatic background check every 15 minutes while dashboard tab is open
     const interval = setInterval(() => {
-      fetch("/api/admin/radar/check?scan=true", { cache: "no-store" })
-        .then((r) => r.json())
-        .then((data) => {
-          if (data.radar?.updates) {
-            setUpdates(data.radar.updates);
-            if (data.radar.lastScanAt) {
-              setLastScanAt(data.radar.lastScanAt);
-            }
-          }
-        })
-        .catch(() => {});
+      triggerAutoScan();
     }, 15 * 60 * 1000);
 
     return () => clearInterval(interval);
@@ -150,14 +179,19 @@ export function DashboardRadarWidget({
             </div>
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground mt-0.5">
               <span>
-                {lastScanAt
-                  ? `Last scanned: ${new Date(lastScanAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
-                  : "Automated Google Play Store version monitor"}
+                {isScanning ? (
+                  <span className="text-cyan-500 font-semibold flex items-center gap-1">
+                    <RefreshCw className="h-3 w-3 animate-spin" />
+                    Scanning Google Play Store live...
+                  </span>
+                ) : (
+                  `Last scanned: ${formatScanTime(lastScanAt)}`
+                )}
               </span>
               <span className="text-border">•</span>
               <span className="inline-flex items-center gap-1 text-[11px] text-emerald-500 font-medium">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Auto-Scan Active (Every 30m)
+                Auto-Scan: Active (Every 30m)
               </span>
             </div>
           </div>

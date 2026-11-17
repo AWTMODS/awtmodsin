@@ -5,19 +5,21 @@ import { AppCategory, Application } from "@/lib/types";
 function purgeAppCaches(slug?: string) {
   try {
     invalidateDbCache();
-    revalidatePath("/");
-    revalidatePath("/apps");
-    revalidatePath("/categories");
-    revalidatePath("/search");
-    revalidatePath("/admin");
-    revalidatePath("/admin/apps");
-    revalidatePath("/admin/versions");
+    revalidatePath("/", "page");
+    revalidatePath("/apps", "page");
+    revalidatePath("/categories", "page");
+    revalidatePath("/search", "page");
+    revalidatePath("/admin", "page");
+    revalidatePath("/admin/apps", "page");
+    revalidatePath("/admin/versions", "page");
+    revalidatePath("/apps/[slug]", "page");
+    revalidatePath("/download/[slug]", "page");
     if (slug) {
       const clean = slug.replace(/\.html$/i, "");
-      revalidatePath(`/apps/${clean}`);
-      revalidatePath(`/apps/${clean}.html`);
-      revalidatePath(`/download/${clean}`);
-      revalidatePath(`/download/${clean}.html`);
+      revalidatePath(`/apps/${clean}`, "page");
+      revalidatePath(`/apps/${clean}.html`, "page");
+      revalidatePath(`/download/${clean}`, "page");
+      revalidatePath(`/download/${clean}.html`, "page");
     }
   } catch {}
 }

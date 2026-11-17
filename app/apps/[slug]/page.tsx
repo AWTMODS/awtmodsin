@@ -88,7 +88,9 @@ export async function generateMetadata({ params }: AppDetailProps): Promise<Meta
   };
 }
 
-export const revalidate = 60;
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
 
 export default async function AppDetailPage({ params }: AppDetailProps) {
   const rawSlug = params.slug;

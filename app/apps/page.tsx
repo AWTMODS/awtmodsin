@@ -7,7 +7,9 @@ import { AppsFilterBar } from "@/components/applications/apps-filter-bar";
 
 import type { Metadata } from "next";
 
-export const revalidate = 60;
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
 
 interface AppsPageProps {
   searchParams: {

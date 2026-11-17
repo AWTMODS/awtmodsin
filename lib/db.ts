@@ -83,7 +83,7 @@ export async function getApplications(options?: {
   // Do not serve cached results for admin queries (status: "all") so admin panel is always real-time live
   if (options?.status !== "all") {
     const cached = cachedAppsMap.get(cacheKey);
-    if (cached && now - cached.timestamp < 30000) {
+    if (cached && now - cached.timestamp < 3000) {
       return cached.data;
     }
   }
@@ -249,7 +249,7 @@ export async function getApplicationBySlug(slug: string): Promise<Application | 
   const targetSlug = legacyAliases[cleanSlug] || cleanSlug;
   const now = Date.now();
   const cached = cachedSlugMap.get(targetSlug);
-  if (cached && now - cached.timestamp < 60000) {
+  if (cached && now - cached.timestamp < 3000) {
     return cached.data;
   }
 

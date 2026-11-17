@@ -15,19 +15,21 @@ export const maxDuration = 60;
 function purgeAppCaches(slug?: string) {
   try {
     invalidateDbCache();
-    revalidatePath("/");
-    revalidatePath("/apps");
-    revalidatePath("/categories");
-    revalidatePath("/search");
-    revalidatePath("/admin");
-    revalidatePath("/admin/apps");
-    revalidatePath("/admin/versions");
+    revalidatePath("/", "page");
+    revalidatePath("/apps", "page");
+    revalidatePath("/categories", "page");
+    revalidatePath("/search", "page");
+    revalidatePath("/admin", "page");
+    revalidatePath("/admin/apps", "page");
+    revalidatePath("/admin/versions", "page");
+    revalidatePath("/apps/[slug]", "page");
+    revalidatePath("/download/[slug]", "page");
     if (slug) {
       const clean = slug.replace(/\.html$/i, "");
-      revalidatePath(`/apps/${clean}`);
-      revalidatePath(`/apps/${clean}.html`);
-      revalidatePath(`/download/${clean}`);
-      revalidatePath(`/download/${clean}.html`);
+      revalidatePath(`/apps/${clean}`, "page");
+      revalidatePath(`/apps/${clean}.html`, "page");
+      revalidatePath(`/download/${clean}`, "page");
+      revalidatePath(`/download/${clean}.html`, "page");
     }
   } catch {}
 }
@@ -178,6 +180,7 @@ export async function POST(req: Request) {
         // Action: Publish on Website Only
         if (action === "wiz_pubsite") {
           const appId = rest[0];
+          const app = await getApplicationById(appId);
           const supabase = getDbClient();
           if (supabase) {
             await supabase
@@ -188,10 +191,9 @@ export async function POST(req: Request) {
               .from("application_versions")
               .update({ status: "published" })
               .eq("application_id", appId);
-            purgeAppCaches();
+            purgeAppCaches(app?.slug);
           }
 
-          const app = await getApplicationById(appId);
           if (app) {
             const siteUrl = settings.siteUrl || "https://www.awtmods.in";
             const appUrl = `${siteUrl}/apps/${app.slug}.html`;
@@ -218,6 +220,7 @@ export async function POST(req: Request) {
         // Action: Keep / Save as Draft on Website
         if (action === "wiz_draft") {
           const appId = rest[0];
+          const app = await getApplicationById(appId);
           const supabase = getDbClient();
           if (supabase) {
             await supabase
@@ -228,10 +231,9 @@ export async function POST(req: Request) {
               .from("application_versions")
               .update({ status: "draft" })
               .eq("application_id", appId);
-            purgeAppCaches();
+            purgeAppCaches(app?.slug);
           }
 
-          const app = await getApplicationById(appId);
           if (app) {
             await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
               method: "POST",
@@ -902,7 +904,7 @@ export async function POST(req: Request) {
                 .from("site_settings")
                 .delete()
                 .eq("setting_key", `admin_wizard_${adminChatId}`);
-              purgeAppCaches();
+              purgeAppCaches(app?.slug);
               const updatedApp = await getApplicationById(wiz.appId);
               if (updatedApp) {
                 const { sendDraftPreviewToAdmin } = await import("@/lib/telegram-broadcast");
@@ -946,7 +948,7 @@ export async function POST(req: Request) {
                 .from("site_settings")
                 .delete()
                 .eq("setting_key", `admin_wizard_${adminChatId}`);
-              purgeAppCaches();
+              purgeAppCaches(app?.slug);
               const updatedApp = await getApplicationById(wiz.appId);
               if (updatedApp) {
                 const { sendDraftPreviewToAdmin } = await import("@/lib/telegram-broadcast");
@@ -983,8 +985,8 @@ export async function POST(req: Request) {
               .from("site_settings")
               .delete()
               .eq("setting_key", `admin_wizard_${adminChatId}`);
-            purgeAppCaches();
             const updatedApp = await getApplicationById(wiz.appId);
+            purgeAppCaches(updatedApp?.slug);
             if (updatedApp) {
               const { sendDraftPreviewToAdmin } = await import("@/lib/telegram-broadcast");
               await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -1017,8 +1019,8 @@ export async function POST(req: Request) {
               .from("site_settings")
               .delete()
               .eq("setting_key", `admin_wizard_${adminChatId}`);
-            purgeAppCaches();
             const updatedApp = await getApplicationById(wiz.appId);
+            purgeAppCaches(updatedApp?.slug);
             if (updatedApp) {
               const { sendDraftPreviewToAdmin } = await import("@/lib/telegram-broadcast");
               await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {

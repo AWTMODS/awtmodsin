@@ -18,6 +18,10 @@ interface DownloadPageProps {
   };
 }
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
+
 export async function generateMetadata({ params }: DownloadPageProps) {
   const app = await getApplicationBySlug(params.slug);
   if (!app) return { title: "Download App" };

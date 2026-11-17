@@ -396,13 +396,19 @@ export async function executeAutoApkRelease(params: {
 
   // Revalidate website static/ISR paths
   try {
-    revalidatePath("/");
-    revalidatePath("/apps");
-    revalidatePath("/admin/apps");
-    revalidatePath("/admin/versions");
+    revalidatePath("/", "page");
+    revalidatePath("/apps", "page");
+    revalidatePath("/admin", "page");
+    revalidatePath("/admin/apps", "page");
+    revalidatePath("/admin/versions", "page");
+    revalidatePath("/apps/[slug]", "page");
+    revalidatePath("/download/[slug]", "page");
     if (currentApp.slug) {
-      revalidatePath(`/apps/${currentApp.slug}`);
-      revalidatePath(`/download/${currentApp.slug}`);
+      const clean = currentApp.slug.replace(/\.html$/i, "");
+      revalidatePath(`/apps/${clean}`, "page");
+      revalidatePath(`/apps/${clean}.html`, "page");
+      revalidatePath(`/download/${clean}`, "page");
+      revalidatePath(`/download/${clean}.html`, "page");
     }
   } catch (revErr) {
     console.warn("Auto-release revalidate warning:", revErr);

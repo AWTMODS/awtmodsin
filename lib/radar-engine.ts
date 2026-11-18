@@ -15,6 +15,7 @@ export interface RadarTrackedApp {
   id: string;
   package_name: string;
   app_name: string;
+  slug?: string;
   play_store_url: string;
   icon_url?: string;
   developer?: string;
@@ -155,7 +156,32 @@ async function loadState(): Promise<RadarInMemoryState> {
   if (!supabase) return inMemoryState;
 
   try {
-    // 1. Try reading from dedicated Supabase tables
+    // 1. Primary: Read from site_settings JSON document (single-source-of-truth)
+    const { data: docData } = await supabase
+      .from("site_settings")
+      .select("setting_value")
+      .eq("setting_key", STORAGE_KEY)
+      .maybeSingle();
+
+    if (docData?.setting_value) {
+      const parsed = typeof docData.setting_value === "string"
+        ? JSON.parse(docData.setting_value)
+        : docData.setting_value;
+      if (parsed && Array.isArray(parsed.apps) && parsed.apps.length > 0) {
+        inMemoryState = {
+          apps: parsed.apps || [],
+          cycles: parsed.cycles || [],
+          remarks: parsed.remarks || [],
+          activities: parsed.activities || [],
+          releases: parsed.releases || [],
+          scannerLogs: parsed.scannerLogs || [],
+        };
+        hasInitialized = true;
+        return inMemoryState;
+      }
+    }
+
+    // 2. Fallback: Try reading from dedicated Supabase tables if JSON document is empty
     const { data: appsData, error: appsErr } = await supabase
       .from("radar_tracked_apps")
       .select("*")
@@ -180,23 +206,6 @@ async function loadState(): Promise<RadarInMemoryState> {
       };
       hasInitialized = true;
       return inMemoryState;
-    }
-
-    // 2. Fallback to site_settings JSON document
-    const { data: docData } = await supabase
-      .from("site_settings")
-      .select("setting_value")
-      .eq("setting_key", STORAGE_KEY)
-      .maybeSingle();
-
-    if (docData?.setting_value) {
-      const parsed = typeof docData.setting_value === "string"
-        ? JSON.parse(docData.setting_value)
-        : docData.setting_value;
-      if (parsed && Array.isArray(parsed.apps)) {
-        inMemoryState = parsed;
-        hasInitialized = true;
-      }
     }
   } catch (err) {
     console.warn("loadState error:", err);
@@ -518,43 +527,60 @@ export async function getRadarTrackedApps(params?: {
   return enriched;
 }
 
-export async function getRadarAppById(id: string): Promise<{
-  app: RadarTrackedApp | null;
-  cycles: RadarModdingCycle[];
-  remarks: RadarRemark[];
-  activities: RadarActivityLog[];
-  releases: RadarRelease[];
-}> {
-  const state = await loadState();
-  const cleanId = (id || "").trim().toLowerCase();
+/**
+ * Resilient resolver: finds app in radar state by id, package name, or slug,
+ * or auto-seeds from Supabase catalog if not tracked yet.
+ */
+export async function findRadarApp(
+  state: RadarInMemoryState,
+  identifier: string
+): Promise<RadarTrackedApp | null> {
+  if (!identifier) return null;
+  const cleanId = (identifier || "").trim().toLowerCase();
+  const rawId = cleanId.replace(/^radar-/, "");
 
+  // 1. Search existing apps in memory state
   let app = state.apps.find((a) => {
     const aId = (a.id || "").toLowerCase();
+    const aRawId = aId.replace(/^radar-/, "");
     const pkg = (a.package_name || "").toLowerCase();
+    const slug = (a.slug || "").toLowerCase();
+
     return (
       aId === cleanId ||
       aId === `radar-${cleanId}` ||
       `radar-${aId}` === cleanId ||
+      aRawId === rawId ||
       pkg === cleanId ||
-      (aId.includes(cleanId) && cleanId.length > 8) ||
-      (cleanId.includes(aId) && aId.length > 8)
+      pkg === rawId ||
+      slug === cleanId ||
+      slug === rawId ||
+      (aRawId.includes(rawId) && rawId.length > 8) ||
+      (rawId.includes(aRawId) && aRawId.length > 8)
     );
   }) || null;
 
-  // If not found in local radar state, search directly in the Supabase catalog
+  // 2. If not found in memory, query Supabase catalog directly
   if (!app) {
     const supabase = getDbClient();
     if (supabase) {
       try {
-        const { data: dbApp } = await supabase
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawId);
+        let query = supabase
           .from("applications")
           .select(`
             id, name, package_name, slug, icon_url, developer,
             category:categories(name),
             versions:application_versions(version_name)
-          `)
-          .or(`id.eq.${id},package_name.eq.${id},slug.eq.${id}`)
-          .maybeSingle();
+          `);
+
+        if (isUuid) {
+          query = query.or(`id.eq.${rawId},package_name.eq.${rawId},slug.eq.${rawId}`);
+        } else {
+          query = query.or(`package_name.eq.${rawId},slug.eq.${rawId}`);
+        }
+
+        const { data: dbApp } = await query.maybeSingle();
 
         if (dbApp && dbApp.package_name) {
           const now = new Date().toISOString();
@@ -562,7 +588,6 @@ export async function getRadarAppById(id: string): Promise<{
           const newAppId = `radar-${dbApp.id}`;
           const newCycleId = `cycle-${Date.now()}`;
 
-          // Check if playstore_radar_state already detected a newer Play Store version!
           let playStoreVer = ver;
           let siteModVer = ver;
           let changelogText = "";
@@ -624,12 +649,12 @@ export async function getRadarAppById(id: string): Promise<{
           await persistState(state);
         }
       } catch (err) {
-        console.error("Error auto-resolving app in getRadarAppById:", err);
+        console.error("Error auto-resolving app in findRadarApp:", err);
       }
     }
   }
 
-  // Double check and sync with playstore_radar_state for existing tracked apps
+  // 3. Sync real detected Play Store version if available
   if (app) {
     const supabase = getDbClient();
     if (supabase) {
@@ -671,6 +696,19 @@ export async function getRadarAppById(id: string): Promise<{
       } catch {}
     }
   }
+
+  return app;
+}
+
+export async function getRadarAppById(id: string): Promise<{
+  app: RadarTrackedApp | null;
+  cycles: RadarModdingCycle[];
+  remarks: RadarRemark[];
+  activities: RadarActivityLog[];
+  releases: RadarRelease[];
+}> {
+  const state = await loadState();
+  const app = await findRadarApp(state, id);
 
   if (!app) {
     return { app: null, cycles: [], remarks: [], activities: [], releases: [] };
@@ -819,15 +857,15 @@ export async function addRadarApp(data: {
 
 export async function removeRadarApp(id: string): Promise<boolean> {
   const state = await loadState();
-  const index = state.apps.findIndex((a) => a.id === id);
-  if (index === -1) return false;
+  const app = await findRadarApp(state, id);
+  if (!app) return false;
 
   // Soft delete / archive
-  state.apps[index].is_active_tracking = false;
+  app.is_active_tracking = false;
   state.activities.unshift({
     id: `act-${Date.now()}`,
-    radar_app_id: id,
-    app_name: state.apps[index].app_name,
+    radar_app_id: app.id,
+    app_name: app.app_name,
     action: "REMOVED_FROM_ACTIVE_TRACKING",
     performed_by: "Admin",
     created_at: new Date().toISOString(),
@@ -856,7 +894,7 @@ export async function transitionToModdingStarted(params: {
   priority?: RadarPriority;
 }): Promise<{ success: boolean; error?: string }> {
   const state = await loadState();
-  const app = state.apps.find((a) => a.id === params.appId);
+  const app = await findRadarApp(state, params.appId);
   if (!app) return { success: false, error: "Application not found" };
 
   const prevStatus = app.workflow_status;
@@ -867,7 +905,7 @@ export async function transitionToModdingStarted(params: {
   app.updated_at = now;
 
   // 2. Find or create current cycle
-  let cycle = state.cycles.find((c) => c.radar_app_id === app.id);
+  let cycle = state.cycles.find((c) => c.radar_app_id === app.id || c.radar_app_id === params.appId);
   if (!cycle || cycle.workflow_status === "MOD_RELEASED") {
     cycle = {
       id: `cycle-${Date.now()}`,
@@ -945,7 +983,7 @@ export async function transitionToModdedCompleted(params: {
   completionRemarks?: string;
 }): Promise<{ success: boolean; error?: string }> {
   const state = await loadState();
-  const app = state.apps.find((a) => a.id === params.appId);
+  const app = await findRadarApp(state, params.appId);
   if (!app) return { success: false, error: "Application not found" };
 
   const prevStatus = app.workflow_status;
@@ -954,7 +992,7 @@ export async function transitionToModdedCompleted(params: {
   app.workflow_status = "MODDED_COMPLETED";
   app.updated_at = now;
 
-  const cycle = state.cycles.find((c) => c.radar_app_id === app.id);
+  const cycle = state.cycles.find((c) => c.radar_app_id === app.id || c.radar_app_id === params.appId);
   if (cycle) {
     cycle.workflow_status = "MODDED_COMPLETED";
     cycle.modded_completed_at = now;
@@ -1008,7 +1046,7 @@ export async function transitionToReadyToPublish(params: {
   releaseNotes?: string;
 }): Promise<{ success: boolean; error?: string }> {
   const state = await loadState();
-  const app = state.apps.find((a) => a.id === params.appId);
+  const app = await findRadarApp(state, params.appId);
   if (!app) return { success: false, error: "Application not found" };
 
   const prevStatus = app.workflow_status;
@@ -1017,7 +1055,7 @@ export async function transitionToReadyToPublish(params: {
   app.workflow_status = "READY_TO_PUBLISH";
   app.updated_at = now;
 
-  const cycle = state.cycles.find((c) => c.radar_app_id === app.id);
+  const cycle = state.cycles.find((c) => c.radar_app_id === app.id || c.radar_app_id === params.appId);
   if (cycle) {
     cycle.workflow_status = "READY_TO_PUBLISH";
     cycle.mod_version = params.finalModVersion;
@@ -1069,7 +1107,7 @@ export async function transitionToModReleased(params: {
   releaseRemarks?: string;
 }): Promise<{ success: boolean; release?: RadarRelease; error?: string }> {
   const state = await loadState();
-  const app = state.apps.find((a) => a.id === params.appId);
+  const app = await findRadarApp(state, params.appId);
   if (!app) return { success: false, error: "Application not found" };
 
   const prevStatus = app.workflow_status;
@@ -1079,7 +1117,7 @@ export async function transitionToModReleased(params: {
   app.workflow_status = "MOD_RELEASED";
   app.updated_at = now;
 
-  const cycle = state.cycles.find((c) => c.radar_app_id === app.id);
+  const cycle = state.cycles.find((c) => c.radar_app_id === app.id || c.radar_app_id === params.appId);
   if (cycle) {
     cycle.workflow_status = "MOD_RELEASED";
     cycle.mod_version = params.releasedModVersion;
@@ -1149,7 +1187,7 @@ export async function addRadarRemark(params: {
   testingRequirements?: string;
 }): Promise<RadarRemark | null> {
   const state = await loadState();
-  const app = state.apps.find((a) => a.id === params.appId);
+  const app = await findRadarApp(state, params.appId);
   if (!app) return null;
 
   const now = new Date().toISOString();

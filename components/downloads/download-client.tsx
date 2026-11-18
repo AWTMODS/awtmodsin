@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   X,
   Info,
+  ArrowLeft,
 } from "lucide-react";
 import { Application, ApplicationVersion, DownloadSource } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -68,6 +69,23 @@ export function DownloadClient({
       setHasStarted(true);
     }
   }, [secondsLeft]);
+
+  // Lock body scroll and allow Escape key to dismiss VIP modal
+  useEffect(() => {
+    if (!showVipModal) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowVipModal(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [showVipModal]);
 
   const triggerDownload = async () => {
     if (!activeMirror) return;
@@ -343,30 +361,46 @@ export function DownloadClient({
 
       {/* VIP Explained Modal */}
       {showVipModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="relative w-full max-w-lg rounded-3xl border border-amber-500/40 bg-card p-6 sm:p-8 text-left shadow-2xl space-y-5 animate-in zoom-in-95 duration-200">
-            <button
-              onClick={() => setShowVipModal(false)}
-              className="absolute top-5 right-5 p-2 rounded-full bg-secondary hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <X className="h-4 w-4" />
-            </button>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowVipModal(false);
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="relative w-full max-w-lg max-h-[85vh] sm:max-h-[88vh] flex flex-col rounded-3xl border border-amber-500/40 bg-card text-left shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"
+          >
+            {/* Modal Sticky Header with Guaranteed Close Affordance */}
+            <div className="flex items-center justify-between p-4 sm:p-5 border-b border-border bg-card/95 backdrop-blur-xs shrink-0">
+              <div className="flex items-center gap-3 min-w-0 pr-2">
+                <div className="h-10 w-10 sm:h-11 sm:w-11 rounded-2xl bg-amber-500/20 text-amber-500 flex items-center justify-center border border-amber-500/30 shrink-0">
+                  <Zap className="h-5 w-5 fill-current" />
+                </div>
+                <div className="min-w-0">
+                  <span className="text-[10px] font-extrabold uppercase tracking-widest text-amber-500 block truncate">
+                    AWTMods Premium Pass
+                  </span>
+                  <h3 className="text-base sm:text-lg font-bold text-foreground truncate">
+                    VIP Direct Telegram Delivery
+                  </h3>
+                </div>
+              </div>
 
-            <div className="flex items-center gap-3">
-              <div className="h-12 w-12 rounded-2xl bg-amber-500/20 text-amber-500 flex items-center justify-center border border-amber-500/30">
-                <Zap className="h-6 w-6 fill-current" />
-              </div>
-              <div>
-                <span className="text-[10px] font-extrabold uppercase tracking-widest text-amber-500 block">
-                  AWTMods Premium Pass
-                </span>
-                <h3 className="text-xl font-bold text-foreground">
-                  VIP Direct Telegram Delivery
-                </h3>
-              </div>
+              {/* Touch-Friendly Close Button */}
+              <button
+                type="button"
+                onClick={() => setShowVipModal(false)}
+                aria-label="Close dialog"
+                className="p-2 sm:p-2.5 rounded-full bg-secondary hover:bg-muted text-foreground transition-colors shrink-0 border border-border/80 shadow-2xs"
+              >
+                <X className="h-4 w-4 sm:h-5 sm:w-5" />
+              </button>
             </div>
 
-            <div className="space-y-3 text-xs text-muted-foreground leading-relaxed">
+            {/* Scrollable Content Body (Guaranteed never cut off on mobile) */}
+            <div className="overflow-y-auto p-4 sm:p-6 space-y-3.5 text-xs text-muted-foreground leading-relaxed scrollbar-thin">
               <p>
                 Get unlimited direct <strong className="text-foreground">.apk</strong> downloads delivered straight to your Telegram chat via <strong className="text-foreground">@{botUsername}</strong> without any waiting countdowns, shorteners, or captchas.
               </p>
@@ -410,7 +444,8 @@ export function DownloadClient({
               </div>
             </div>
 
-            <div className="pt-2 flex flex-col sm:flex-row gap-2.5">
+            {/* Modal Sticky Bottom Action Footer */}
+            <div className="p-4 sm:p-5 border-t border-border bg-card/95 backdrop-blur-xs shrink-0 flex flex-col sm:flex-row gap-2.5">
               <a
                 href={telegramBotDeepLink}
                 target="_blank"
@@ -418,7 +453,7 @@ export function DownloadClient({
                 className="flex-1"
                 onClick={() => setShowVipModal(false)}
               >
-                <Button className="w-full h-12 rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-black font-extrabold gap-2 shadow-lg">
+                <Button className="w-full h-11 sm:h-12 rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-black font-extrabold gap-2 shadow-lg text-xs sm:text-sm">
                   <Zap className="h-4 w-4 fill-current" />
                   <span>Open @{botUsername} in Telegram</span>
                   <ExternalLink className="h-3.5 w-3.5" />
@@ -428,9 +463,10 @@ export function DownloadClient({
                 type="button"
                 variant="outline"
                 onClick={() => setShowVipModal(false)}
-                className="h-12 rounded-2xl px-5 text-xs font-semibold"
+                className="w-full sm:w-auto h-11 sm:h-12 rounded-2xl px-5 text-xs font-semibold gap-1.5 border-border hover:bg-muted"
               >
-                Close
+                <ArrowLeft className="h-4 w-4" />
+                <span>Back to Download</span>
               </Button>
             </div>
           </div>

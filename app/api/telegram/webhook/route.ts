@@ -2490,15 +2490,11 @@ export async function POST(req: Request) {
         // Final completion update for the progress card (100%)
         await updateTelegramProgress(true);
 
-        // Send individual interactive draft preview cards for up to 3 drafts
-        // (prevents flooding chat with 80+ photos and timing out Vercel)
-        const previewLimit = Math.min(newDrafts.length, 3);
-        for (let j = 0; j < previewLimit; j++) {
-          const draftApp = newDrafts[j];
-          await sendDraftPreviewToAdmin(draftApp, adminChatId).catch(() => {});
-          if (j < previewLimit - 1) {
-            await new Promise((resolve) => setTimeout(resolve, 350));
-          }
+        // For single-link imports (1 target), send the full draft preview card.
+        // For bulk imports (> 1 links), DO NOT send extra individual draft preview messages,
+        // so the user only gets the clean progress summary card with the "🚀 Publish All New Drafts Now" button.
+        if (uniqueTargets.length === 1 && newDrafts.length === 1) {
+          await sendDraftPreviewToAdmin(newDrafts[0], adminChatId).catch(() => {});
         }
 
         // Invalidate website caches so all newly created drafts show up immediately in Admin

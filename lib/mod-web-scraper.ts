@@ -129,7 +129,7 @@ function cleanScrapedTitle(rawTitle: string): { cleanBase: string; finalTitle: s
  */
 export async function scrapeAndCreateFromModUrl(
   inputUrl: string
-): Promise<{ success: boolean; app?: Application; error?: string }> {
+): Promise<{ success: boolean; app?: Application; error?: string; isNew?: boolean; wasAlreadyPublished?: boolean }> {
   try {
     // 1. Extract URL and potential custom size passed on the same line
     const sizeMatch = inputUrl.match(/\b([0-9]+(?:\.[0-9]+)?\s*(?:MB|GB|KB))\b/i);
@@ -345,9 +345,14 @@ export async function scrapeAndCreateFromModUrl(
 
     // 14. Save or Update in Database
     const supabase = getDbClient();
-    const existingApp = await getApplicationBySlug(slug);
+    let existingApp = await getApplicationBySlug(slug);
+    if (!existingApp && packageName) {
+      const { getApplicationByPackage } = await import("@/lib/db");
+      existingApp = await getApplicationByPackage(packageName);
+    }
 
     if (existingApp && supabase) {
+      const wasPublished = existingApp.status === "published";
       await supabase
         .from("applications")
         .update({
@@ -373,9 +378,14 @@ export async function scrapeAndCreateFromModUrl(
         }
       }
 
-      purgeAppCaches(slug);
-      const updated = await getApplicationBySlug(slug);
-      return { success: true, app: updated || existingApp };
+      purgeAppCaches(existingApp.slug || slug);
+      const updated = await getApplicationBySlug(existingApp.slug || slug);
+      return {
+        success: true,
+        app: updated || existingApp,
+        isNew: false,
+        wasAlreadyPublished: wasPublished,
+      };
     }
 
     // Create fresh application post
@@ -420,7 +430,7 @@ export async function scrapeAndCreateFromModUrl(
 
     const created = await createApplication(newAppData as any);
     purgeAppCaches(slug);
-    return { success: true, app: created };
+    return { success: true, app: created, isNew: true, wasAlreadyPublished: false };
   } catch (err: any) {
     console.error("scrapeAndCreateFromModUrl error:", err);
     return {

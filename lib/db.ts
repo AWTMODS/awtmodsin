@@ -302,6 +302,50 @@ export async function getApplicationBySlug(slug: string): Promise<Application | 
   return app || null;
 }
 
+export async function getApplicationByPackage(packageName: string): Promise<Application | null> {
+  const cleanPackage = packageName ? packageName.trim().toLowerCase() : "";
+  if (!cleanPackage) return null;
+
+  const supabase = getDbClient();
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from("applications")
+        .select(`
+          *,
+          category:categories(*),
+          versions:application_versions(
+            *,
+            download_sources(*)
+          ),
+          screenshots(*)
+        `)
+        .ilike("package_name", cleanPackage)
+        .limit(1)
+        .maybeSingle();
+
+      if (!error && data) {
+        const latest =
+          data.versions?.find((v: any) => v.is_latest) || data.versions?.[0];
+        const appData: Application = {
+          ...data,
+          latest_version: latest,
+          versions: data.versions,
+          downloads_count: 0,
+        };
+        return appData;
+      }
+    } catch {
+      // Fallback
+    }
+  }
+
+  const app = memoryApps.find(
+    (a) => a.package_name?.toLowerCase() === cleanPackage
+  );
+  return app || null;
+}
+
 export async function getApplicationById(id: string): Promise<Application | null> {
   const supabase = getDbClient();
 

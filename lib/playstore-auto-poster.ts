@@ -167,7 +167,7 @@ function decodeHtmlEntities(str: string): string {
  */
 export async function scrapeAndCreateFromPlayStore(
   inputUrlOrId: string
-): Promise<{ success: boolean; app?: Application; error?: string }> {
+): Promise<{ success: boolean; app?: Application; error?: string; isNew?: boolean; wasAlreadyPublished?: boolean }> {
   try {
     let appId = "";
     // Check if inputUrlOrId contains custom size (e.g. "https://play.google.com/store/apps/details?id=... 85 MB")
@@ -233,8 +233,13 @@ export async function scrapeAndCreateFromPlayStore(
     // Check if app already exists in database
     const supabase = getDbClient();
     let existingApp = await getApplicationBySlug(slug);
+    if (!existingApp && appId) {
+      const { getApplicationByPackage } = await import("@/lib/db");
+      existingApp = await getApplicationByPackage(appId);
+    }
 
     if (existingApp && supabase) {
+      const wasPublished = existingApp.status === "published";
       // Update existing app with fresh Play Store metadata
       await supabase
         .from("applications")
@@ -259,9 +264,14 @@ export async function scrapeAndCreateFromPlayStore(
         }
       }
 
-      purgeAppCaches(slug);
-      const updated = await getApplicationBySlug(slug);
-      return { success: true, app: updated || existingApp };
+      purgeAppCaches(existingApp.slug || slug);
+      const updated = await getApplicationBySlug(existingApp.slug || slug);
+      return {
+        success: true,
+        app: updated || existingApp,
+        isNew: false,
+        wasAlreadyPublished: wasPublished,
+      };
     }
 
     // Create fresh application entry
@@ -306,7 +316,7 @@ export async function scrapeAndCreateFromPlayStore(
 
     const created = await createApplication(newAppData as any);
     purgeAppCaches(slug);
-    return { success: true, app: created };
+    return { success: true, app: created, isNew: true, wasAlreadyPublished: false };
   } catch (err: any) {
     console.error("scrapeAndCreateFromPlayStore error:", err);
     return { success: false, error: err.message || "Failed to scrape Google Play Store" };

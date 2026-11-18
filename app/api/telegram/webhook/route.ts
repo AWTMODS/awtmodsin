@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { getSiteSettings, getApplicationBySlug, getApplicationById, getApplications, getDbClient, invalidateDbCache, getSiteStats } from "@/lib/db";
 import { isUserVip, recordUserInteraction, activateUserVip } from "@/lib/telegram-vip";
 import { broadcastToTelegram } from "@/lib/telegram-broadcast";
+import { checkAndMarkTelegramUpdate } from "@/lib/telegram-dedup";
 import {
   parseApkReleaseInfo,
   matchApplicationByApk,
@@ -173,6 +174,18 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
+
+    // ==========================================
+    // 0. Telegram Webhook Retry Deduplication
+    // Telegram re-sends the exact same update_id if a long background scrape
+    // takes longer than Telegram's 5s timeout. Rejecting duplicate updates immediately
+    // prevents duplicate execution loops, duplicate messages, and duplicate cards.
+    // ==========================================
+    const updateId = body?.update_id;
+    if (updateId && (await checkAndMarkTelegramUpdate(updateId))) {
+      console.log(`[Telegram Webhook] Deduplicated retry for update_id ${updateId}`);
+      return NextResponse.json({ ok: true, deduplicated: true, update_id: updateId });
+    }
 
     // ==========================================
     // 1. Handle Callback Queries
@@ -2144,7 +2157,22 @@ export async function POST(req: Request) {
         const result = await processLink(rawInput);
 
         if (result.success && result.app) {
-          await sendDraftPreviewToAdmin(result.app, adminChatId);
+          const isAlreadyLive = result.wasAlreadyPublished || result.app.status === "published";
+          if (isAlreadyLive) {
+            const siteUrl = settings.siteUrl || "https://www.awtmods.in";
+            const appUrl = `${siteUrl}/apps/${result.app.slug}.html`;
+            await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: chatId,
+                text: `✅ <b>App Already Live on Website!</b>\n\n📱 <b>${result.app.name}</b> is already published and live.\nMetadata and mod features have been refreshed.\n\n🌐 <a href="${appUrl}">View Live App on Website</a>`,
+                parse_mode: "HTML",
+              }),
+            }).catch(() => {});
+          } else {
+            await sendDraftPreviewToAdmin(result.app, adminChatId);
+          }
           purgeAppCaches(result.app.slug);
           return NextResponse.json({ ok: true, appCreated: result.app.name, developer: result.app.developer });
         } else {
@@ -2167,30 +2195,49 @@ export async function POST(req: Request) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             chat_id: chatId,
-            text: `📦 <b>Bulk Mod & App Import: ${totalCount} links detected!</b>\n<i>Scraping metadata, icons, and generating draft cards (Developer: Aadith C V)...</i>`,
+            text: `📦 <b>Bulk Mod & App Import: ${totalCount} links detected!</b>\n<i>Scraping metadata in fast parallel batches (Developer: Aadith C V)...</i>`,
             parse_mode: "HTML",
           }),
         }).catch(() => {});
 
         const successfulApps: any[] = [];
+        const alreadyLiveApps: any[] = [];
+        const newDrafts: any[] = [];
         const failedApps: { target: string; error: string }[] = [];
 
-        for (let i = 0; i < uniqueTargets.length; i++) {
-          const target = uniqueTargets[i];
-          try {
-            const result = await processLink(target);
-            if (result.success && result.app) {
-              successfulApps.push(result.app);
-              await sendDraftPreviewToAdmin(result.app, adminChatId);
-            } else {
-              failedApps.push({ target, error: result.error || "Failed to scrape" });
-            }
-          } catch (err: any) {
-            failedApps.push({ target, error: err.message || "Scraping failed" });
-          }
+        // Process in parallel chunks of 4 to stay fast and well within serverless timeouts
+        const CHUNK_SIZE = 4;
+        for (let i = 0; i < uniqueTargets.length; i += CHUNK_SIZE) {
+          const chunk = uniqueTargets.slice(i, i + CHUNK_SIZE);
+          await Promise.all(
+            chunk.map(async (target) => {
+              try {
+                const timeoutPromise = new Promise<{ success: false; error: string }>((resolve) =>
+                  setTimeout(() => resolve({ success: false, error: "Scrape timed out (7s)" }), 7000)
+                );
+                const result = await Promise.race([processLink(target), timeoutPromise]);
+                if (result.success && result.app) {
+                  successfulApps.push(result.app);
+                  if (result.wasAlreadyPublished || result.app.status === "published") {
+                    alreadyLiveApps.push(result.app);
+                  } else {
+                    newDrafts.push(result.app);
+                  }
+                } else {
+                  failedApps.push({ target, error: result.error || "Failed to scrape" });
+                }
+              } catch (err: any) {
+                failedApps.push({ target, error: err.message || "Scraping failed" });
+              }
+            })
+          );
+        }
 
-          // Gentle delay between Telegram messages to prevent HTTP 429 flood
-          if (i < uniqueTargets.length - 1) {
+        // Send draft cards ONLY for NEW drafts (NEVER for apps that are already published!)
+        for (let j = 0; j < newDrafts.length; j++) {
+          const draftApp = newDrafts[j];
+          await sendDraftPreviewToAdmin(draftApp, adminChatId).catch(() => {});
+          if (j < newDrafts.length - 1) {
             await new Promise((resolve) => setTimeout(resolve, 350));
           }
         }
@@ -2203,10 +2250,14 @@ export async function POST(req: Request) {
         const failCount = failedApps.length;
 
         let summaryText = `🎉 <b>Bulk Import Complete!</b>\n\n`;
-        summaryText += `✅ <b>Successfully Created:</b> ${successCount} / ${totalCount} draft posts\n`;
+        summaryText += `✅ <b>Total Processed:</b> ${successCount} / ${totalCount} apps\n`;
+        summaryText += `✨ <b>New Drafts Created:</b> ${newDrafts.length}\n`;
+        if (alreadyLiveApps.length > 0) {
+          summaryText += `🌐 <b>Already Live / Updated:</b> ${alreadyLiveApps.length}\n`;
+        }
         summaryText += `👤 <b>Developer:</b> Aadith C V\n`;
         if (failCount > 0) {
-          summaryText += `⚠️ <b>Failed (${failCount}):</b>\n`;
+          summaryText += `\n⚠️ <b>Failed (${failCount}):</b>\n`;
           for (const f of failedApps.slice(0, 5)) {
             const label = f.target.match(/id=([a-zA-Z0-9._]+)/i)?.[1] || f.target.slice(0, 35);
             summaryText += `• <code>${label}</code>: ${f.error}\n`;
@@ -2215,7 +2266,11 @@ export async function POST(req: Request) {
             summaryText += `<i>...and ${failedApps.length - 5} more</i>\n`;
           }
         }
-        summaryText += `\nAll drafts are ready! You can publish them with the <b>[ 🚀 Quick Publish ]</b> buttons above, or manage them in the dashboard:\n`;
+        if (newDrafts.length > 0) {
+          summaryText += `\nAll new drafts are ready! You can review and publish them with the <b>[ 🚀 Quick Publish ]</b> buttons above, or manage them in the dashboard:\n`;
+        } else {
+          summaryText += `\nAll apps are already live on the website! You can manage them in the dashboard:\n`;
+        }
         summaryText += `👉 <a href="https://www.awtmods.in/admin/apps">Manage Apps in Admin Panel</a>`;
 
         await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -2234,6 +2289,8 @@ export async function POST(req: Request) {
           bulkImport: true,
           total: totalCount,
           successCount,
+          newDrafts: newDrafts.length,
+          alreadyLive: alreadyLiveApps.length,
           failCount,
         });
       }

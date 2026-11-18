@@ -59,30 +59,30 @@ export function RadarLogsView({ scannerLogs: initialScannerLogs, activityLogs: i
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-[#141B17] border border-[#263129]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-card border border-border">
         <div>
           <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-[#B6F23A]/10 border border-[#B6F23A]/20 flex items-center justify-center text-[#B6F23A]">
+            <div className="h-8 w-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500">
               <Terminal className="h-4 w-4" />
             </div>
-            <h1 className="text-xl font-black text-[#F5F7F4] tracking-tight">
+            <h1 className="text-xl font-black text-white tracking-tight">
               Radar Logs & Audit Trail
             </h1>
           </div>
-          <p className="text-xs text-[#929B94] mt-1">
+          <p className="text-xs text-muted-foreground mt-1">
             Real-time execution diagnostics for Play Store automated scanners and admin workflow operations.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
           {/* Tab Switcher */}
-          <div className="flex items-center rounded-xl bg-[#080B0A] border border-[#263129] p-1">
+          <div className="flex items-center rounded-xl bg-background border border-border p-1">
             <button
               onClick={() => setActiveTab("scanner")}
               className={`px-3 py-1.5 text-xs rounded-lg font-bold transition-colors flex items-center gap-1.5 ${
                 activeTab === "scanner"
-                  ? "bg-[#141B17] text-[#B6F23A] shadow-xs"
-                  : "text-[#929B94] hover:text-[#F5F7F4]"
+                  ? "bg-card text-amber-500 shadow-xs"
+                  : "text-muted-foreground hover:text-white"
               }`}
             >
               <Radio className="h-3 w-3" />
@@ -92,8 +92,8 @@ export function RadarLogsView({ scannerLogs: initialScannerLogs, activityLogs: i
               onClick={() => setActiveTab("activity")}
               className={`px-3 py-1.5 text-xs rounded-lg font-bold transition-colors flex items-center gap-1.5 ${
                 activeTab === "activity"
-                  ? "bg-[#141B17] text-[#B6F23A] shadow-xs"
-                  : "text-[#929B94] hover:text-[#F5F7F4]"
+                  ? "bg-card text-amber-500 shadow-xs"
+                  : "text-muted-foreground hover:text-white"
               }`}
             >
               <Activity className="h-3 w-3" />
@@ -105,7 +105,7 @@ export function RadarLogsView({ scannerLogs: initialScannerLogs, activityLogs: i
             size="sm"
             onClick={handleManualScan}
             disabled={isScanning}
-            className="h-9 px-3.5 text-xs font-black rounded-xl bg-[#B6F23A] text-[#080B0A] hover:bg-[#B6F23A]/90 gap-1.5"
+            className="h-9 px-3.5 text-xs font-black rounded-xl bg-amber-500 text-black hover:bg-amber-400 gap-1.5"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${isScanning ? "animate-spin" : ""}`} />
             <span>{isScanning ? "Scanning..." : "Execute Scan"}</span>
@@ -115,22 +115,22 @@ export function RadarLogsView({ scannerLogs: initialScannerLogs, activityLogs: i
 
       {/* Tab Content: Scanner Runs */}
       {activeTab === "scanner" && (
-        <div className="rounded-2xl bg-[#141B17] border border-[#263129] overflow-hidden">
-          <div className="p-4 border-b border-[#263129] flex items-center justify-between">
-            <h3 className="text-xs font-black uppercase tracking-wider text-[#929B94]">
+        <div className="rounded-2xl bg-card border border-border overflow-hidden">
+          <div className="p-4 border-b border-border flex items-center justify-between">
+            <h3 className="text-xs font-black uppercase tracking-wider text-muted-foreground">
               Automated Scanner Execution History
             </h3>
-            <span className="text-[11px] text-[#929B94]">
+            <span className="text-[11px] text-muted-foreground">
               Retains up to 100 most recent scanner passes
             </span>
           </div>
 
           {scannerLogs.length === 0 ? (
-            <div className="p-12 text-center text-[#929B94] text-xs">
+            <div className="p-12 text-center text-muted-foreground text-xs">
               No scanner runs recorded yet. Click &quot;Execute Scan&quot; above to trigger your first run.
             </div>
           ) : (
-            <div className="divide-y divide-[#263129]">
+            <div className="divide-y divide-border">
               {scannerLogs.map((log) => {
                 const date = new Date(log.executed_at).toLocaleString([], {
                   month: "short",
@@ -145,14 +145,14 @@ export function RadarLogsView({ scannerLogs: initialScannerLogs, activityLogs: i
                 return (
                   <div
                     key={log.id}
-                    className="p-4 hover:bg-[#080B0A]/40 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs"
+                    className="p-4 hover:bg-muted/20 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs"
                   >
                     <div className="flex items-center gap-3">
                       <div
                         className={`h-7 w-7 rounded-lg flex items-center justify-center shrink-0 ${
                           isSuccess
-                            ? "bg-[#B6F23A]/10 text-[#B6F23A] border border-[#B6F23A]/20"
-                            : "bg-amber-500/10 text-amber-500 border border-amber-500/20"
+                            ? "bg-amber-500/10 text-amber-500 border border-amber-500/20"
+                            : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
                         }`}
                       >
                         {isSuccess ? (
@@ -164,34 +164,34 @@ export function RadarLogsView({ scannerLogs: initialScannerLogs, activityLogs: i
 
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="font-bold text-[#F5F7F4]">
+                          <span className="font-bold text-white">
                             Play Store Radar Scanner
                           </span>
                           <Badge
                             className={`text-[10px] font-mono px-1.5 py-0 ${
                               isSuccess
-                                ? "bg-[#B6F23A]/15 text-[#B6F23A] border-[#B6F23A]/30"
-                                : "bg-amber-500/15 text-amber-500 border-amber-500/30"
+                                ? "bg-amber-500/15 text-amber-500 border-amber-500/30"
+                                : "bg-rose-500/15 text-rose-400 border-rose-500/30"
                             }`}
                           >
                             Trigger: {log.trigger_type}
                           </Badge>
                         </div>
-                        <p className="text-[11px] text-[#929B94] font-mono mt-0.5">
+                        <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
                           {date}
                         </p>
                       </div>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-3 md:gap-4 font-mono text-[11px]">
-                      <div className="bg-[#080B0A] border border-[#263129] px-2.5 py-1 rounded-lg">
-                        <span className="text-[#929B94]">Apps Scanned: </span>
-                        <span className="text-[#F5F7F4] font-bold">{log.scanned_count}</span>
+                      <div className="bg-background border border-border px-2.5 py-1 rounded-lg">
+                        <span className="text-muted-foreground">Apps Scanned: </span>
+                        <span className="text-white font-bold">{log.scanned_count}</span>
                       </div>
 
-                      <div className="bg-[#080B0A] border border-[#263129] px-2.5 py-1 rounded-lg">
-                        <span className="text-[#929B94]">Updates Detected: </span>
-                        <span className="text-[#B6F23A] font-bold">{log.updates_detected}</span>
+                      <div className="bg-background border border-border px-2.5 py-1 rounded-lg">
+                        <span className="text-muted-foreground">Updates Detected: </span>
+                        <span className="text-amber-500 font-bold">{log.updates_detected}</span>
                       </div>
 
                       {log.errors_count > 0 && (
@@ -211,22 +211,22 @@ export function RadarLogsView({ scannerLogs: initialScannerLogs, activityLogs: i
 
       {/* Tab Content: Admin Activity Audit */}
       {activeTab === "activity" && (
-        <div className="rounded-2xl bg-[#141B17] border border-[#263129] overflow-hidden">
-          <div className="p-4 border-b border-[#263129] flex items-center justify-between">
-            <h3 className="text-xs font-black uppercase tracking-wider text-[#929B94]">
+        <div className="rounded-2xl bg-card border border-border overflow-hidden">
+          <div className="p-4 border-b border-border flex items-center justify-between">
+            <h3 className="text-xs font-black uppercase tracking-wider text-muted-foreground">
               Admin Operations & State Audit Trail
             </h3>
-            <span className="text-[11px] text-[#929B94]">
+            <span className="text-[11px] text-muted-foreground">
               Immutable audit history for all modding lifecycle transitions
             </span>
           </div>
 
           {activityLogs.length === 0 ? (
-            <div className="p-12 text-center text-[#929B94] text-xs">
+            <div className="p-12 text-center text-muted-foreground text-xs">
               No activity logs recorded yet.
             </div>
           ) : (
-            <div className="divide-y divide-[#263129]">
+            <div className="divide-y divide-border">
               {activityLogs.map((act) => {
                 const date = new Date(act.created_at).toLocaleString([], {
                   month: "short",
@@ -238,31 +238,31 @@ export function RadarLogsView({ scannerLogs: initialScannerLogs, activityLogs: i
                 return (
                   <div
                     key={act.id}
-                    className="p-4 hover:bg-[#080B0A]/40 transition-colors flex items-start gap-3 text-xs"
+                    className="p-4 hover:bg-muted/20 transition-colors flex items-start gap-3 text-xs"
                   >
-                    <div className="h-7 w-7 rounded-lg bg-[#080B0A] border border-[#263129] flex items-center justify-center text-[#B6F23A] shrink-0 mt-0.5">
+                    <div className="h-7 w-7 rounded-lg bg-background border border-border flex items-center justify-center text-amber-500 shrink-0 mt-0.5">
                       <Activity className="h-3.5 w-3.5" />
                     </div>
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
-                          <span className="font-bold text-[#F5F7F4]">{act.action}</span>
-                          <span className="text-[#929B94]">•</span>
-                          <span className="text-[#929B94] font-medium">{act.app_name}</span>
-                          <span className="text-[#929B94]">•</span>
-                          <span className="text-[#929B94] flex items-center gap-1">
+                          <span className="font-bold text-white">{act.action}</span>
+                          <span className="text-muted-foreground">•</span>
+                          <span className="text-muted-foreground font-medium">{act.app_name}</span>
+                          <span className="text-muted-foreground">•</span>
+                          <span className="text-muted-foreground flex items-center gap-1">
                             <User className="h-3 w-3" />
                             {act.performed_by || "Admin"}
                           </span>
                         </div>
-                        <span className="text-[11px] font-mono text-[#929B94] shrink-0">
+                        <span className="text-[11px] font-mono text-muted-foreground shrink-0">
                           {date}
                         </span>
                       </div>
 
                       {act.notes && (
-                        <div className="text-[11px] text-[#929B94] mt-1 bg-[#080B0A] p-2 rounded-xl border border-[#263129]">
+                        <div className="text-[11px] text-muted-foreground mt-1 bg-background p-2 rounded-xl border border-border">
                           {act.notes}
                         </div>
                       )}

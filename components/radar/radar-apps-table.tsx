@@ -135,7 +135,7 @@ export function RadarAppsTable({ initialApps, defaultStatus = "" }: RadarAppsTab
             placeholder="Search tracked apps by name or package..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full h-11 pl-10 pr-4 rounded-xl border border-[#263129] bg-[#141B17] text-xs sm:text-sm text-white focus:outline-none focus:border-[#B6F23A]"
+            className="w-full h-11 pl-10 pr-4 rounded-xl border border-border bg-card text-xs sm:text-sm text-white focus:outline-none focus:border-amber-500"
           />
         </div>
 
@@ -143,7 +143,7 @@ export function RadarAppsTable({ initialApps, defaultStatus = "" }: RadarAppsTab
           <select
             value={selectedStatus}
             onChange={(e) => setSelectedStatus(e.target.value)}
-            className="h-11 px-3 rounded-xl border border-[#263129] bg-[#141B17] text-xs font-semibold text-white focus:outline-none"
+            className="h-11 px-3 rounded-xl border border-border bg-card text-xs font-semibold text-white focus:outline-none"
           >
             <option value="">All Statuses ({apps.length})</option>
             <option value="UPDATE_DETECTED">🚨 Update Detected</option>
@@ -158,16 +158,16 @@ export function RadarAppsTable({ initialApps, defaultStatus = "" }: RadarAppsTab
             variant="outline"
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className="h-11 px-3.5 rounded-xl border-[#263129] bg-[#141B17] hover:bg-neutral-800 text-white text-xs gap-1.5"
+            className="h-11 px-3.5 rounded-xl border-border bg-card hover:bg-neutral-800 text-white text-xs gap-1.5"
           >
-            <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin text-[#B6F23A]" : ""}`} />
+            <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin text-amber-500" : ""}`} />
             <span>Refresh</span>
           </Button>
 
           <Button
             type="button"
             onClick={() => setShowAddModal(true)}
-            className="h-11 px-4 rounded-xl bg-[#B6F23A] hover:bg-[#B6F23A]/90 text-black font-extrabold text-xs gap-1.5 shadow-md shadow-[#B6F23A]/15"
+            className="h-11 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs gap-1.5 shadow-md shadow-amber-500/15"
           >
             <PlusCircle className="h-4 w-4" />
             <span>Add Tracked App</span>
@@ -176,10 +176,10 @@ export function RadarAppsTable({ initialApps, defaultStatus = "" }: RadarAppsTab
       </div>
 
       {/* Main Table */}
-      <div className="rounded-2xl border border-[#263129] bg-[#141B17] overflow-hidden shadow-xs">
+      <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-xs">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs text-[#929B94]">
-            <thead className="bg-[#101512] text-white uppercase text-[10px] tracking-wider border-b border-[#263129]">
+          <table className="w-full text-left text-xs text-muted-foreground">
+            <thead className="bg-muted/40 text-white uppercase text-[10px] tracking-wider border-b border-border">
               <tr>
                 <th className="py-3.5 px-4 font-bold">Application</th>
                 <th className="py-3.5 px-4 font-bold">Play Store Version</th>
@@ -188,20 +188,20 @@ export function RadarAppsTable({ initialApps, defaultStatus = "" }: RadarAppsTab
                 <th className="py-3.5 px-4 font-bold text-right">Workflow Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#263129]/60">
+            <tbody className="divide-y divide-border/60">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-12 text-center text-xs text-[#929B94]">
+                  <td colSpan={5} className="py-12 text-center text-xs text-muted-foreground">
                     No tracked applications found matching criteria.
                   </td>
                 </tr>
               ) : (
                 filtered.map((app) => (
-                  <tr key={app.id} className="hover:bg-[#101512]/50 transition-colors">
+                  <tr key={app.id} className="hover:bg-muted/20 transition-colors">
                     {/* App info */}
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-3">
-                        <div className="relative h-10 w-10 rounded-xl overflow-hidden border border-[#263129] bg-[#080B0A] shrink-0">
+                        <div className="relative h-10 w-10 rounded-xl overflow-hidden border border-border bg-background shrink-0">
                           {app.icon_url && (
                             <img
                               src={app.icon_url}
@@ -216,11 +216,11 @@ export function RadarAppsTable({ initialApps, defaultStatus = "" }: RadarAppsTab
                         <div className="min-w-0">
                           <Link
                             href={`/admin/radar/apps/${app.id}`}
-                            className="font-bold text-white hover:text-[#B6F23A] transition-colors truncate block"
+                            className="font-bold text-white hover:text-amber-400 transition-colors truncate block"
                           >
                             {app.app_name}
                           </Link>
-                          <div className="text-[10px] text-[#929B94] font-mono truncate max-w-[200px]">
+                          <div className="text-[10px] text-muted-foreground font-mono truncate max-w-[200px]">
                             {app.package_name}
                           </div>
                         </div>
@@ -231,8 +231,8 @@ export function RadarAppsTable({ initialApps, defaultStatus = "" }: RadarAppsTab
                     <td className="py-3 px-4 font-mono">
                       <div className="font-bold text-white">{app.current_play_store_version}</div>
                       {app.last_detected_version && app.last_detected_version !== app.current_play_store_version && (
-                        <span className="text-[10px] text-rose-400">
-                          New: {app.last_detected_version}
+                        <span className="text-[10px] text-amber-400">
+                          Site: {app.last_detected_version}
                         </span>
                       )}
                     </td>
@@ -241,27 +241,27 @@ export function RadarAppsTable({ initialApps, defaultStatus = "" }: RadarAppsTab
                     <td className="py-3 px-4">
                       <span className="inline-block px-2.5 py-1 rounded-full text-[10px] font-extrabold border uppercase">
                         {app.workflow_status === "UPDATE_DETECTED" && (
-                          <span className="text-rose-400 bg-rose-500/10 border-rose-500/20 px-2 py-0.5 rounded-full">
+                          <span className="text-amber-400 bg-amber-500/10 border-amber-500/20 px-2 py-0.5 rounded-full">
                             Update Detected
                           </span>
                         )}
                         {app.workflow_status === "MODDING_STARTED" && (
-                          <span className="text-[#B6F23A] bg-[#B6F23A]/10 border-[#B6F23A]/30 px-2 py-0.5 rounded-full">
+                          <span className="text-blue-400 bg-blue-500/10 border-blue-500/30 px-2 py-0.5 rounded-full">
                             Modding Started
                           </span>
                         )}
                         {app.workflow_status === "MODDED_COMPLETED" && (
-                          <span className="text-emerald-400 bg-emerald-500/10 border-emerald-500/30 px-2 py-0.5 rounded-full">
+                          <span className="text-purple-400 bg-purple-500/10 border-purple-500/30 px-2 py-0.5 rounded-full">
                             Modded Completed
                           </span>
                         )}
                         {app.workflow_status === "READY_TO_PUBLISH" && (
-                          <span className="text-amber-400 bg-amber-500/10 border-amber-500/30 px-2 py-0.5 rounded-full">
+                          <span className="text-emerald-400 bg-emerald-500/10 border-emerald-500/30 px-2 py-0.5 rounded-full">
                             Ready to Publish
                           </span>
                         )}
                         {app.workflow_status === "MOD_RELEASED" && (
-                          <span className="text-sky-400 bg-sky-500/10 border-sky-500/30 px-2 py-0.5 rounded-full">
+                          <span className="text-neutral-400 bg-neutral-800 border-neutral-700 px-2 py-0.5 rounded-full">
                             Mod Released
                           </span>
                         )}
@@ -269,7 +269,7 @@ export function RadarAppsTable({ initialApps, defaultStatus = "" }: RadarAppsTab
                     </td>
 
                     {/* Last scanned */}
-                    <td className="py-3 px-4 text-[11px]">
+                    <td className="py-3 px-4 text-[11px] text-muted-foreground">
                       {formatDate(app.last_scanned_at)}
                     </td>
 
@@ -283,7 +283,7 @@ export function RadarAppsTable({ initialApps, defaultStatus = "" }: RadarAppsTab
                               setActiveModalApp(app);
                               setModalType("start");
                             }}
-                            className="h-7 px-2.5 rounded-lg bg-[#B6F23A] text-black font-extrabold text-[11px]"
+                            className="h-7 px-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-[11px]"
                           >
                             Start Modding
                           </Button>
@@ -295,7 +295,7 @@ export function RadarAppsTable({ initialApps, defaultStatus = "" }: RadarAppsTab
                               setActiveModalApp(app);
                               setModalType("complete");
                             }}
-                            className="h-7 px-2.5 rounded-lg bg-emerald-500 text-black font-bold text-[11px]"
+                            className="h-7 px-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-bold text-[11px]"
                           >
                             Mark Completed
                           </Button>
@@ -307,7 +307,7 @@ export function RadarAppsTable({ initialApps, defaultStatus = "" }: RadarAppsTab
                               setActiveModalApp(app);
                               setModalType("ready");
                             }}
-                            className="h-7 px-2.5 rounded-lg bg-amber-500 text-black font-bold text-[11px]"
+                            className="h-7 px-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-bold text-[11px]"
                           >
                             Ready to Publish
                           </Button>
@@ -319,7 +319,7 @@ export function RadarAppsTable({ initialApps, defaultStatus = "" }: RadarAppsTab
                               setActiveModalApp(app);
                               setModalType("release");
                             }}
-                            className="h-7 px-2.5 rounded-lg bg-[#B6F23A] text-black font-bold text-[11px]"
+                            className="h-7 px-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-bold text-[11px]"
                           >
                             Mark Released
                           </Button>
@@ -354,10 +354,10 @@ export function RadarAppsTable({ initialApps, defaultStatus = "" }: RadarAppsTab
       {/* Add App Modal */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md">
-          <div className="relative w-full max-w-md rounded-3xl border border-[#263129] bg-[#141B17] p-6 text-left shadow-2xl space-y-4 animate-in zoom-in-95">
-            <div className="flex items-center justify-between pb-3 border-b border-[#263129]">
+          <div className="relative w-full max-w-md rounded-3xl border border-border bg-card p-6 text-left shadow-2xl space-y-4 animate-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-border">
               <div className="flex items-center gap-2">
-                <Radio className="h-5 w-5 text-[#B6F23A]" />
+                <Radio className="h-5 w-5 text-amber-500" />
                 <h3 className="text-base font-bold text-white">Track New Android App</h3>
               </div>
               <button
@@ -378,7 +378,7 @@ export function RadarAppsTable({ initialApps, defaultStatus = "" }: RadarAppsTab
                   placeholder="e.g. com.spotify.music or Play Store link"
                   value={inputPackage}
                   onChange={(e) => setInputPackage(e.target.value)}
-                  className="border-[#263129] bg-[#080B0A] text-xs font-mono text-white focus:border-[#B6F23A]"
+                  className="border-border bg-background text-xs font-mono text-white focus:border-amber-500"
                 />
               </div>
 
@@ -390,7 +390,7 @@ export function RadarAppsTable({ initialApps, defaultStatus = "" }: RadarAppsTab
                   placeholder="Auto-detected from Play Store if empty"
                   value={inputName}
                   onChange={(e) => setInputName(e.target.value)}
-                  className="border-[#263129] bg-[#080B0A] text-xs text-white focus:border-[#B6F23A]"
+                  className="border-border bg-background text-xs text-white focus:border-amber-500"
                 />
               </div>
 
@@ -400,14 +400,14 @@ export function RadarAppsTable({ initialApps, defaultStatus = "" }: RadarAppsTab
                   variant="outline"
                   onClick={() => setShowAddModal(false)}
                   disabled={isAdding}
-                  className="rounded-xl border-[#263129] text-xs"
+                  className="rounded-xl border-border text-xs"
                 >
                   Cancel
                 </Button>
                 <Button
                   type="submit"
                   disabled={isAdding}
-                  className="rounded-xl bg-[#B6F23A] text-black font-extrabold text-xs gap-1.5"
+                  className="rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs gap-1.5"
                 >
                   {isAdding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                   <span>Start Tracking</span>

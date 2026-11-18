@@ -86,15 +86,15 @@ export function StartModdingModal({ app, isOpen, onClose, onSuccess }: ModalProp
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md overflow-y-auto">
-      <div className="relative w-full max-w-xl max-h-[90vh] flex flex-col rounded-3xl border border-border bg-[#141B17] text-left shadow-2xl overflow-hidden my-auto animate-in zoom-in-95">
+      <div className="relative w-full max-w-xl max-h-[90vh] flex flex-col rounded-3xl border border-border bg-card text-left shadow-2xl overflow-hidden my-auto animate-in zoom-in-95">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 sm:p-5 border-b border-[#263129] bg-[#101512] shrink-0">
+        <div className="flex items-center justify-between p-4 sm:p-5 border-b border-border bg-muted/40 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-2xl bg-[#B6F23A]/10 text-[#B6F23A] flex items-center justify-center border border-[#B6F23A]/30">
+            <div className="h-10 w-10 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center border border-amber-500/30">
               <Play className="h-5 w-5 fill-current" />
             </div>
             <div>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-[#B6F23A]">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-amber-500">
                 Workflow Transition: Step 1 ➔ 2
               </span>
               <h3 className="text-base sm:text-lg font-bold text-white">
@@ -120,7 +120,7 @@ export function StartModdingModal({ app, isOpen, onClose, onSuccess }: ModalProp
               <select
                 value={priority}
                 onChange={(e) => setPriority(e.target.value as RadarPriority)}
-                className="w-full h-10 px-3 rounded-xl border border-[#263129] bg-[#080B0A] text-xs font-semibold text-white focus:outline-none focus:border-[#B6F23A]"
+                className="w-full h-10 px-3 rounded-xl border border-border bg-background text-xs font-semibold text-white focus:outline-none focus:border-amber-500"
               >
                 <option value="Low">Low Priority</option>
                 <option value="Medium">Medium Priority</option>
@@ -136,7 +136,7 @@ export function StartModdingModal({ app, isOpen, onClose, onSuccess }: ModalProp
                 type="text"
                 value={assignedModder}
                 onChange={(e) => setAssignedModder(e.target.value)}
-                className="w-full h-10 px-3 rounded-xl border border-[#263129] bg-[#080B0A] text-xs text-white focus:outline-none focus:border-[#B6F23A]"
+                className="w-full h-10 px-3 rounded-xl border border-border bg-background text-xs text-white focus:outline-none focus:border-amber-500"
               />
             </div>
           </div>
@@ -145,14 +145,14 @@ export function StartModdingModal({ app, isOpen, onClose, onSuccess }: ModalProp
             <label className="text-xs font-semibold text-neutral-300 block mb-1">
               Internal Modding Remarks <span className="text-destructive">*</span>
             </label>
-            <p className="text-[11px] text-[#929B94] mb-1.5">
+            <p className="text-[11px] text-muted-foreground mb-1.5">
               Private notes preserved in Supabase. Never displayed publicly. Supports multiline notes.
             </p>
             <Textarea
               rows={4}
               value={remarks}
               onChange={(e) => setRemarks(e.target.value)}
-              className="w-full rounded-xl border-[#263129] bg-[#080B0A] text-xs font-mono text-white focus:border-[#B6F23A]"
+              className="w-full rounded-xl border-border bg-background text-xs font-mono text-white focus:border-amber-500"
               placeholder="Enter remarks, login requirements, premium patch notes..."
             />
           </div>
@@ -165,7 +165,7 @@ export function StartModdingModal({ app, isOpen, onClose, onSuccess }: ModalProp
               rows={3}
               value={internalInstructions}
               onChange={(e) => setInternalInstructions(e.target.value)}
-              className="w-full rounded-xl border-[#263129] bg-[#080B0A] text-xs font-mono text-white focus:border-[#B6F23A]"
+              className="w-full rounded-xl border-border bg-background text-xs font-mono text-white focus:border-amber-500"
             />
           </div>
 
@@ -177,25 +177,25 @@ export function StartModdingModal({ app, isOpen, onClose, onSuccess }: ModalProp
               rows={2}
               value={testingRequirements}
               onChange={(e) => setTestingRequirements(e.target.value)}
-              className="w-full rounded-xl border-[#263129] bg-[#080B0A] text-xs font-mono text-white focus:border-[#B6F23A]"
+              className="w-full rounded-xl border-border bg-background text-xs font-mono text-white focus:border-amber-500"
             />
           </div>
 
           {/* Footer buttons */}
-          <div className="pt-2 flex items-center justify-end gap-2 border-t border-[#263129]">
+          <div className="pt-2 flex items-center justify-end gap-2 border-t border-border">
             <Button
               type="button"
               variant="outline"
               onClick={onClose}
               disabled={loading}
-              className="rounded-xl border-[#263129] text-xs"
+              className="rounded-xl border-border text-xs"
             >
               Cancel
             </Button>
             <Button
               type="submit"
               disabled={loading}
-              className="rounded-xl bg-[#B6F23A] text-black font-bold hover:bg-[#B6F23A]/90 text-xs gap-1.5"
+              className="rounded-xl bg-amber-500 text-black font-extrabold hover:bg-amber-400 text-xs gap-1.5"
             >
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4 fill-current" />}
               <span>Confirm &amp; Start Modding</span>
@@ -248,8 +248,8 @@ export function MarkCompletedModal({ app, isOpen, onClose, onSuccess }: ModalPro
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md overflow-y-auto">
-      <div className="relative w-full max-w-lg rounded-3xl border border-border bg-[#141B17] text-left shadow-2xl overflow-hidden my-auto animate-in zoom-in-95">
-        <div className="flex items-center justify-between p-4 sm:p-5 border-b border-[#263129] bg-[#101512]">
+      <div className="relative w-full max-w-lg rounded-3xl border border-border bg-card text-left shadow-2xl overflow-hidden my-auto animate-in zoom-in-95">
+        <div className="flex items-center justify-between p-4 sm:p-5 border-b border-border bg-muted/40">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/30">
               <CheckCircle2 className="h-5 w-5" />
@@ -269,7 +269,7 @@ export function MarkCompletedModal({ app, isOpen, onClose, onSuccess }: ModalPro
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
-          <p className="text-xs text-[#929B94]">
+          <p className="text-xs text-muted-foreground">
             This confirms that the APK modifications are built, tested, and ready for deployment staging.
             The app stays in Active Radar until final release.
           </p>
@@ -282,15 +282,15 @@ export function MarkCompletedModal({ app, isOpen, onClose, onSuccess }: ModalPro
               rows={3}
               value={completionRemarks}
               onChange={(e) => setCompletionRemarks(e.target.value)}
-              className="w-full rounded-xl border-[#263129] bg-[#080B0A] text-xs font-mono text-white focus:border-emerald-400"
+              className="w-full rounded-xl border-border bg-background text-xs font-mono text-white focus:border-emerald-400"
             />
           </div>
 
-          <div className="pt-2 flex items-center justify-end gap-2 border-t border-[#263129]">
-            <Button type="button" variant="outline" onClick={onClose} disabled={loading} className="rounded-xl border-[#263129] text-xs">
+          <div className="pt-2 flex items-center justify-end gap-2 border-t border-border">
+            <Button type="button" variant="outline" onClick={onClose} disabled={loading} className="rounded-xl border-border text-xs">
               Cancel
             </Button>
-            <Button type="submit" disabled={loading} className="rounded-xl bg-emerald-500 hover:bg-emerald-600 text-black font-bold text-xs gap-1.5">
+            <Button type="submit" disabled={loading} className="rounded-xl bg-emerald-500 hover:bg-emerald-600 text-black font-extrabold text-xs gap-1.5">
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
               <span>Mark Completed</span>
             </Button>
@@ -352,14 +352,14 @@ export function ReadyToPublishModal({ app, isOpen, onClose, onSuccess }: ModalPr
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md overflow-y-auto">
-      <div className="relative w-full max-w-lg rounded-3xl border border-border bg-[#141B17] text-left shadow-2xl overflow-hidden my-auto animate-in zoom-in-95">
-        <div className="flex items-center justify-between p-4 sm:p-5 border-b border-[#263129] bg-[#101512]">
+      <div className="relative w-full max-w-lg rounded-3xl border border-border bg-card text-left shadow-2xl overflow-hidden my-auto animate-in zoom-in-95">
+        <div className="flex items-center justify-between p-4 sm:p-5 border-b border-border bg-muted/40">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-2xl bg-amber-500/10 text-amber-400 flex items-center justify-center border border-amber-500/30">
+            <div className="h-10 w-10 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center border border-amber-500/30">
               <Package className="h-5 w-5" />
             </div>
             <div>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-amber-400">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-amber-500">
                 Workflow Transition: Step 3 ➔ 4
               </span>
               <h3 className="text-base sm:text-lg font-bold text-white">
@@ -380,7 +380,7 @@ export function ReadyToPublishModal({ app, isOpen, onClose, onSuccess }: ModalPr
             <Input
               value={finalModVersion}
               onChange={(e) => setFinalModVersion(e.target.value)}
-              className="border-[#263129] bg-[#080B0A] text-xs font-mono text-white focus:border-amber-400"
+              className="border-border bg-background text-xs font-mono text-white focus:border-amber-500"
             />
           </div>
 
@@ -391,7 +391,7 @@ export function ReadyToPublishModal({ app, isOpen, onClose, onSuccess }: ModalPr
             <Input
               value={downloadUrl}
               onChange={(e) => setDownloadUrl(e.target.value)}
-              className="border-[#263129] bg-[#080B0A] text-xs font-mono text-white focus:border-amber-400"
+              className="border-border bg-background text-xs font-mono text-white focus:border-amber-500"
             />
           </div>
 
@@ -403,15 +403,15 @@ export function ReadyToPublishModal({ app, isOpen, onClose, onSuccess }: ModalPr
               rows={3}
               value={releaseNotes}
               onChange={(e) => setReleaseNotes(e.target.value)}
-              className="border-[#263129] bg-[#080B0A] text-xs font-mono text-white focus:border-amber-400"
+              className="border-border bg-background text-xs font-mono text-white focus:border-amber-500"
             />
           </div>
 
-          <div className="pt-2 flex items-center justify-end gap-2 border-t border-[#263129]">
-            <Button type="button" variant="outline" onClick={onClose} disabled={loading} className="rounded-xl border-[#263129] text-xs">
+          <div className="pt-2 flex items-center justify-end gap-2 border-t border-border">
+            <Button type="button" variant="outline" onClick={onClose} disabled={loading} className="rounded-xl border-border text-xs">
               Cancel
             </Button>
-            <Button type="submit" disabled={loading} className="rounded-xl bg-amber-500 hover:bg-amber-600 text-black font-bold text-xs gap-1.5">
+            <Button type="submit" disabled={loading} className="rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs gap-1.5">
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Package className="h-4 w-4" />}
               <span>Mark Ready to Publish</span>
             </Button>
@@ -480,14 +480,14 @@ export function MarkReleasedModal({ app, isOpen, onClose, onSuccess }: ModalProp
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md overflow-y-auto">
-      <div className="relative w-full max-w-lg rounded-3xl border border-[#B6F23A]/40 bg-[#141B17] text-left shadow-2xl overflow-hidden my-auto animate-in zoom-in-95">
-        <div className="flex items-center justify-between p-4 sm:p-5 border-b border-[#263129] bg-[#101512]">
+      <div className="relative w-full max-w-lg rounded-3xl border border-amber-500/40 bg-card text-left shadow-2xl overflow-hidden my-auto animate-in zoom-in-95">
+        <div className="flex items-center justify-between p-4 sm:p-5 border-b border-border bg-muted/40">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-2xl bg-[#B6F23A]/20 text-[#B6F23A] flex items-center justify-center border border-[#B6F23A]/40">
+            <div className="h-10 w-10 rounded-2xl bg-amber-500/20 text-amber-500 flex items-center justify-center border border-amber-500/40">
               <Rocket className="h-5 w-5" />
             </div>
             <div>
-              <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#B6F23A]">
+              <span className="text-[10px] font-extrabold uppercase tracking-widest text-amber-500">
                 Final Step ➔ MOD_RELEASED
               </span>
               <h3 className="text-base sm:text-lg font-bold text-white">
@@ -501,12 +501,12 @@ export function MarkReleasedModal({ app, isOpen, onClose, onSuccess }: ModalProp
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
-          <div className="p-3.5 rounded-2xl bg-[#B6F23A]/5 border border-[#B6F23A]/20 space-y-1">
-            <div className="text-xs font-bold text-[#B6F23A] flex items-center gap-1.5">
+          <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-1">
+            <div className="text-xs font-bold text-amber-500 flex items-center gap-1.5">
               <ShieldCheck className="h-4 w-4" />
               <span>Mandatory Automated Workflow Action</span>
             </div>
-            <p className="text-[11px] text-[#929B94] leading-relaxed">
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
               Upon confirmation, this application is marked <strong>MOD_RELEASED</strong> and automatically removed from Active Radar and all modding queues. It will be permanently archived in <strong>Release History</strong>.
             </p>
           </div>
@@ -518,7 +518,7 @@ export function MarkReleasedModal({ app, isOpen, onClose, onSuccess }: ModalProp
             <Input
               value={releasedModVersion}
               onChange={(e) => setReleasedModVersion(e.target.value)}
-              className="border-[#263129] bg-[#080B0A] text-xs font-mono text-white focus:border-[#B6F23A]"
+              className="border-border bg-background text-xs font-mono text-white focus:border-amber-500"
             />
           </div>
 
@@ -529,7 +529,7 @@ export function MarkReleasedModal({ app, isOpen, onClose, onSuccess }: ModalProp
             <Input
               value={downloadUrl}
               onChange={(e) => setDownloadUrl(e.target.value)}
-              className="border-[#263129] bg-[#080B0A] text-xs font-mono text-white focus:border-[#B6F23A]"
+              className="border-border bg-background text-xs font-mono text-white focus:border-amber-500"
             />
           </div>
 
@@ -541,7 +541,7 @@ export function MarkReleasedModal({ app, isOpen, onClose, onSuccess }: ModalProp
               rows={2}
               value={changelog}
               onChange={(e) => setChangelog(e.target.value)}
-              className="border-[#263129] bg-[#080B0A] text-xs font-mono text-white focus:border-[#B6F23A]"
+              className="border-border bg-background text-xs font-mono text-white focus:border-amber-500"
             />
           </div>
 
@@ -552,18 +552,18 @@ export function MarkReleasedModal({ app, isOpen, onClose, onSuccess }: ModalProp
             <Input
               value={releaseRemarks}
               onChange={(e) => setReleaseRemarks(e.target.value)}
-              className="border-[#263129] bg-[#080B0A] text-xs text-white focus:border-[#B6F23A]"
+              className="border-border bg-background text-xs text-white focus:border-amber-500"
             />
           </div>
 
-          <div className="pt-2 flex items-center justify-end gap-2 border-t border-[#263129]">
-            <Button type="button" variant="outline" onClick={onClose} disabled={loading} className="rounded-xl border-[#263129] text-xs">
+          <div className="pt-2 flex items-center justify-end gap-2 border-t border-border">
+            <Button type="button" variant="outline" onClick={onClose} disabled={loading} className="rounded-xl border-border text-xs">
               Cancel
             </Button>
             <Button
               type="submit"
               disabled={loading}
-              className="rounded-xl bg-[#B6F23A] hover:bg-[#B6F23A]/90 text-black font-extrabold text-xs gap-1.5 shadow-lg shadow-[#B6F23A]/20"
+              className="rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs gap-1.5 shadow-lg shadow-amber-500/20"
             >
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}
               <span>Mark Released &amp; Archive from Radar</span>

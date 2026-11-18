@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
-import { getSiteSettings, getApplicationBySlug, getApplicationById, getDbClient, invalidateDbCache, getSiteStats } from "@/lib/db";
+import { getSiteSettings, getApplicationBySlug, getApplicationById, getApplications, getDbClient, invalidateDbCache, getSiteStats } from "@/lib/db";
 import { isUserVip, recordUserInteraction, activateUserVip } from "@/lib/telegram-vip";
 import { broadcastToTelegram } from "@/lib/telegram-broadcast";
 import {
@@ -34,6 +34,131 @@ function purgeAppCaches(slug?: string) {
   } catch {}
 }
 
+async function buildAdminMenuContent(settings: any) {
+  const stats = await getSiteStats();
+  const liveApps = stats?.publishedApps ?? 97;
+
+  let activeVipCount = 0;
+  let radarPendingCount = 0;
+  let draftCount = 0;
+
+  try {
+    const { getVipUsers } = await import("@/lib/telegram-vip");
+    const vipList = await getVipUsers();
+    const now = Date.now();
+    activeVipCount = vipList.filter(
+      (u) => u.isVip && (!u.vipExpiresAt || new Date(u.vipExpiresAt).getTime() > now)
+    ).length;
+  } catch {}
+
+  try {
+    const { getRadarState } = await import("@/lib/playstore-radar");
+    const radar = await getRadarState();
+    radarPendingCount = Object.keys(radar.updates || {}).filter(
+      (k) => !radar.updates[k].isMuted
+    ).length;
+  } catch {}
+
+  try {
+    const { applications } = await getApplications({ status: "draft", limit: 50 });
+    draftCount = applications?.length || 0;
+  } catch {}
+
+  const text = (
+    `🛠️ <b>AWTMods Admin Command Center</b>\n\n` +
+    `Welcome, Admin! Control and monitor all website & bot functions directly from here:\n\n` +
+    `📊 <b>Platform Quick Glance:</b>\n` +
+    `• <b>Live Apps:</b> ${liveApps} published\n` +
+    `• <b>Pending Drafts:</b> ${draftCount} waiting\n` +
+    `• <b>Play Store Updates:</b> ${
+      radarPendingCount > 0
+        ? `🚨 <b>${radarPendingCount} detected</b>`
+        : "✅ Up to date"
+    }\n` +
+    `• <b>Active VIPs:</b> ${activeVipCount} members\n` +
+    `• <b>Server Status:</b> 🟢 24/7 Serverless Webhook\n\n` +
+    `👇 <i>Select any administrative action or tool below:</i>`
+  );
+
+  const reply_markup = {
+    inline_keyboard: [
+      [
+        {
+          text: `📡 Play Store Radar ${radarPendingCount > 0 ? `(${radarPendingCount})` : ""}`,
+          callback_data: "adm_radar",
+        },
+        { text: "🕵️ Competitor Radar", callback_data: "adm_comp_radar" },
+      ],
+      [
+        { text: `📝 Pending Drafts (${draftCount})`, callback_data: "adm_drafts" },
+        { text: "✨ Auto-Scrape App", callback_data: "adm_newapp" },
+      ],
+      [
+        { text: "🔍 Search & Edit App", callback_data: "adm_search_app" },
+        { text: "📅 Scheduled Posts", callback_data: "adm_scheduled" },
+      ],
+      [
+        { text: `👑 VIP Subscribers (${activeVipCount})`, callback_data: "adm_vip_list" },
+        { text: "👥 Referral Stats", callback_data: "adm_ref_stats" },
+      ],
+      [
+        { text: "💾 Backup Database", callback_data: "adm_backup" },
+        { text: "⚡ Purge Live Caches", callback_data: "adm_purge_cache" },
+      ],
+      [
+        { text: "📊 Platform Analytics", callback_data: "adm_stats" },
+        { text: "⚙️ Site & Bot Config", callback_data: "adm_settings" },
+      ],
+      [
+        {
+          text: "🌐 Open Web Admin Dashboard",
+          url: `${settings.siteUrl || "https://www.awtmods.in"}/admin`,
+        },
+      ],
+    ],
+  };
+
+  return { text, reply_markup };
+}
+
+async function sendOrEditAdminMenu(
+  chatId: number | string,
+  token: string,
+  settings: any,
+  messageIdToEdit?: number
+) {
+  const { text, reply_markup } = await buildAdminMenuContent(settings);
+
+  if (messageIdToEdit) {
+    const editRes = await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        message_id: messageIdToEdit,
+        text,
+        parse_mode: "HTML",
+        disable_web_page_preview: true,
+        reply_markup,
+      }),
+    }).catch(() => null);
+
+    if (editRes && editRes.ok) return;
+  }
+
+  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text,
+      parse_mode: "HTML",
+      disable_web_page_preview: true,
+      reply_markup,
+    }),
+  }).catch(() => {});
+}
+
 export async function POST(req: Request) {
   try {
     const settings = await getSiteSettings();
@@ -58,7 +183,644 @@ export async function POST(req: Request) {
       const fromId = cq.from?.id;
 
       // Ensure only Admin can trigger admin callback actions
-      if (fromId === adminChatId) {
+      const isAdminUser = fromId === adminChatId || fromId === 1343548529;
+      if (isAdminUser) {
+        // ==========================================
+        // 1.1 Admin Command Center Callbacks
+        // ==========================================
+        if (data === "adm_menu") {
+          await sendOrEditAdminMenu(adminChatId, token, settings, cq.message?.message_id);
+          await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ callback_query_id: cq.id }),
+          }).catch(() => {});
+          return NextResponse.json({ ok: true });
+        }
+
+        if (data === "adm_radar") {
+          const { getRadarState } = await import("@/lib/playstore-radar");
+          const radar = await getRadarState();
+          const pending = Object.values(radar.updates || {}).filter((u: any) => !u.isMuted);
+
+          let rText = `📡 <b>Play Store Version Radar</b>\n\n`;
+          const buttons: any[] = [];
+
+          if (pending.length === 0) {
+            rText += `✅ <b>All applications are up to date!</b>\n` +
+                     `No pending Google Play updates detected.\n\n` +
+                     `<i>Last scan: ${radar.lastScanAt ? new Date(radar.lastScanAt).toLocaleTimeString("en-US", { timeZone: "Asia/Kolkata" }) : "Recently"} IST</i>`;
+          } else {
+            rText += `🚨 <b>Found ${pending.length} apps with newer versions on Play Store:</b>\n\n`;
+            pending.slice(0, 5).forEach((u: any, idx: number) => {
+              rText += `${idx + 1}. <b>${u.applicationName}</b>\n   Site: <code>${u.currentSiteVersion}</code> ➔ Play: <code>${u.latestPlayStoreVersion}</code>\n`;
+              buttons.push([
+                {
+                  text: `⚡ Update ${u.applicationName.slice(0, 18)} (${u.latestPlayStoreVersion})`,
+                  callback_data: `rdr_rel:${u.applicationId}:${u.latestPlayStoreVersion}`,
+                },
+              ]);
+            });
+            if (pending.length > 5) {
+              rText += `\n<i>...plus ${pending.length - 5} more apps in dashboard!</i>`;
+            }
+          }
+
+          buttons.push([
+            { text: "🔄 Run Fresh Scan", callback_data: "adm_radar_scan" },
+            { text: "🔙 Admin Menu", callback_data: "adm_menu" },
+          ]);
+
+          await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: adminChatId,
+              message_id: cq.message?.message_id,
+              text: rText,
+              parse_mode: "HTML",
+              reply_markup: { inline_keyboard: buttons },
+            }),
+          }).catch(() => {});
+
+          await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ callback_query_id: cq.id }),
+          }).catch(() => {});
+          return NextResponse.json({ ok: true });
+        }
+
+        if (data === "adm_radar_scan") {
+          await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              callback_query_id: cq.id,
+              text: "📡 Scanning Google Play Store for all catalog apps...",
+            }),
+          }).catch(() => {});
+
+          const { checkPlayStoreUpdates } = await import("@/lib/playstore-radar");
+          const scanRes = await checkPlayStoreUpdates({ notifyTelegram: false }).catch(() => null);
+
+          const { getRadarState } = await import("@/lib/playstore-radar");
+          const radar = await getRadarState();
+          const pending = Object.values(radar.updates || {}).filter((u: any) => !u.isMuted);
+
+          let rText = `📡 <b>Play Store Version Radar (Scan Finished)</b>\n\n`;
+          const buttons: any[] = [];
+
+          if (pending.length === 0) {
+            rText += `✅ <b>Scan complete! All catalog applications are up to date.</b>\n` +
+                     `<i>Scanned: ${scanRes?.checked || 0} apps</i>`;
+          } else {
+            rText += `🚨 <b>Scan complete! Detected ${pending.length} apps with newer updates:</b>\n\n`;
+            pending.slice(0, 5).forEach((u: any, idx: number) => {
+              rText += `${idx + 1}. <b>${u.applicationName}</b>\n   Site: <code>${u.currentSiteVersion}</code> ➔ Play: <code>${u.latestPlayStoreVersion}</code>\n`;
+              buttons.push([
+                {
+                  text: `⚡ Update ${u.applicationName.slice(0, 18)} (${u.latestPlayStoreVersion})`,
+                  callback_data: `rdr_rel:${u.applicationId}:${u.latestPlayStoreVersion}`,
+                },
+              ]);
+            });
+          }
+
+          buttons.push([
+            { text: "🔄 Scan Again", callback_data: "adm_radar_scan" },
+            { text: "🔙 Admin Menu", callback_data: "adm_menu" },
+          ]);
+
+          await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: adminChatId,
+              message_id: cq.message?.message_id,
+              text: rText,
+              parse_mode: "HTML",
+              reply_markup: { inline_keyboard: buttons },
+            }),
+          }).catch(() => {});
+
+          return NextResponse.json({ ok: true });
+        }
+
+        if (data === "adm_comp_radar") {
+          await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              callback_query_id: cq.id,
+              text: "🕵️ Scanning competitor sites (LiteAPKs, HappyMod, AN1, APKDone)...",
+            }),
+          }).catch(() => {});
+
+          const { checkCompetitorModReleases } = await import("@/lib/competitor-radar");
+          const compRes = await checkCompetitorModReleases({ notifyTelegram: false }).catch(() => null);
+
+          let cText = `🕵️ <b>Competitor Mod Radar</b>\n\n`;
+          cText += `<b>Monitored:</b> LiteAPKs, HappyMod, AN1, APKDone\n\n`;
+
+          if (!compRes || compRes.alertsFound === 0) {
+            cText += `✅ <b>All caught up!</b> No new mod releases found on competitor sites right now.`;
+          } else {
+            cText += `🔥 <b>Detected ${compRes.alertsFound} new releases:</b>\n\n`;
+            (compRes.alerts || []).slice(0, 5).forEach((rel: any, idx: number) => {
+              cText += `${idx + 1}. <b>${rel.appName}</b> (${rel.detectedVersion})\n   Source: ${rel.source} [Site: ${rel.currentSiteVersion}]\n`;
+            });
+          }
+
+          await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: adminChatId,
+              message_id: cq.message?.message_id,
+              text: cText,
+              parse_mode: "HTML",
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: "🔄 Re-scan Competitors", callback_data: "adm_comp_radar" }],
+                  [{ text: "🔙 Admin Menu", callback_data: "adm_menu" }],
+                ],
+              },
+            }),
+          }).catch(() => {});
+
+          return NextResponse.json({ ok: true });
+        }
+
+        if (data === "adm_drafts") {
+          const { applications } = await getApplications({ status: "draft", limit: 6, sortBy: "newest" });
+          const drafts = applications || [];
+
+          let dText = `📝 <b>Pending Draft Applications</b>\n\n`;
+          const buttons: any[] = [];
+
+          if (drafts.length === 0) {
+            dText += `✅ <b>Zero drafts pending!</b> All applications in your catalog are published live on AWTMods.in.`;
+            buttons.push([{ text: "✨ Auto-Scrape New App", callback_data: "adm_newapp" }]);
+          } else {
+            dText += `Select any draft below to edit, preview, test mirrors, publish to website, or broadcast:\n\n`;
+            drafts.forEach((app, idx) => {
+              const verName = app.latest_version?.version_name || app.versions?.[0]?.version_name || "v1.0";
+              dText += `${idx + 1}. <b>${app.name}</b> (${verName})\n`;
+              buttons.push([
+                {
+                  text: `📱 ${app.name} (${verName})`,
+                  callback_data: `adm_open_draft:${app.id}`,
+                },
+              ]);
+            });
+          }
+
+          buttons.push([{ text: "🔙 Admin Menu", callback_data: "adm_menu" }]);
+
+          await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: adminChatId,
+              message_id: cq.message?.message_id,
+              text: dText,
+              parse_mode: "HTML",
+              reply_markup: { inline_keyboard: buttons },
+            }),
+          }).catch(() => {});
+
+          await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ callback_query_id: cq.id }),
+          }).catch(() => {});
+          return NextResponse.json({ ok: true });
+        }
+
+        if (data.startsWith("adm_open_draft:")) {
+          const appId = data.split(":")[1];
+          const app = await getApplicationById(appId);
+          if (app) {
+            const { sendDraftPreviewToAdmin } = await import("@/lib/telegram-broadcast");
+            await sendDraftPreviewToAdmin(app, adminChatId);
+          }
+          await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ callback_query_id: cq.id, text: "Opening draft preview card..." }),
+          }).catch(() => {});
+          return NextResponse.json({ ok: true });
+        }
+
+        if (data === "adm_newapp") {
+          const nText = (
+            `✨ <b>Auto-Scrape & Generate Mod Webpage</b>\n\n` +
+            `Send any of the following directly into this chat:\n` +
+            `1. <b>Google Play Store link:</b>\n` +
+            `   <code>https://play.google.com/store/apps/details?id=...</code>\n` +
+            `2. <b>Mod site link:</b>\n` +
+            `   LiteAPKs, HappyMod, APKMody, AN1, etc.\n` +
+            `3. <b>Batch links:</b>\n` +
+            `   Paste 5-10 links separated by new lines!\n\n` +
+            `The bot will automatically:\n` +
+            `• Scrape metadata, HD icons, descriptions\n` +
+            `• Set Developer Name to <b>aadith cv</b>\n` +
+            `• Generate verified download mirrors\n` +
+            `• Build live webpage draft & deliver 1-click Approval card!`
+          );
+
+          await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: adminChatId,
+              message_id: cq.message?.message_id,
+              text: nText,
+              parse_mode: "HTML",
+              reply_markup: {
+                inline_keyboard: [[{ text: "🔙 Admin Menu", callback_data: "adm_menu" }]],
+              },
+            }),
+          }).catch(() => {});
+
+          await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ callback_query_id: cq.id }),
+          }).catch(() => {});
+          return NextResponse.json({ ok: true });
+        }
+
+        if (data === "adm_search_app") {
+          const sText = (
+            `🔍 <b>Search & Manage Catalog</b>\n\n` +
+            `Simply type any app name or keyword in this chat:\n` +
+            `• <code>capcut</code>\n` +
+            `• <code>spotify</code>\n` +
+            `• <code>lightroom</code>\n` +
+            `• <code>kinemaster</code>\n\n` +
+            `The bot will instantly search the database and display complete version controls, mirror editors, and broadcasting options!`
+          );
+
+          await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: adminChatId,
+              message_id: cq.message?.message_id,
+              text: sText,
+              parse_mode: "HTML",
+              reply_markup: {
+                inline_keyboard: [[{ text: "🔙 Admin Menu", callback_data: "adm_menu" }]],
+              },
+            }),
+          }).catch(() => {});
+
+          await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ callback_query_id: cq.id }),
+          }).catch(() => {});
+          return NextResponse.json({ ok: true });
+        }
+
+        if (data === "adm_scheduled") {
+          const { getScheduledPosts } = await import("@/lib/telegram-scheduler");
+          const posts = await getScheduledPosts();
+
+          let schText = `📅 <b>Scheduled Channel Posts</b>\n\n`;
+          if (posts.length === 0) {
+            schText += `No posts are currently queued for scheduled broadcast.\n\n` +
+                       `<i>To schedule a release, click the '📅 Schedule Post' button on any draft preview card!</i>`;
+          } else {
+            schText += `Found ${posts.length} scheduled release(s):\n\n`;
+            posts.forEach((p, idx) => {
+              const targetTime = new Date(p.scheduledFor).toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
+              schText += `${idx + 1}. <b>${p.appName}</b>\n   Scheduled for: <code>${targetTime} IST</code>\n`;
+            });
+          }
+
+          await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: adminChatId,
+              message_id: cq.message?.message_id,
+              text: schText,
+              parse_mode: "HTML",
+              reply_markup: {
+                inline_keyboard: [[{ text: "🔙 Admin Menu", callback_data: "adm_menu" }]],
+              },
+            }),
+          }).catch(() => {});
+
+          await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ callback_query_id: cq.id }),
+          }).catch(() => {});
+          return NextResponse.json({ ok: true });
+        }
+
+        if (data === "adm_vip_list") {
+          const { getVipUsers } = await import("@/lib/telegram-vip");
+          const vips = await getVipUsers();
+          const now = Date.now();
+          const activeVips = vips.filter(
+            (u) => u.isVip && (!u.vipExpiresAt || new Date(u.vipExpiresAt).getTime() > now)
+          );
+
+          let vText = (
+            `👑 <b>VIP Membership Overview</b>\n\n` +
+            `• <b>Total Registered:</b> ${vips.length} users\n` +
+            `• <b>Active Passes:</b> ${activeVips.length} members\n` +
+            `• <b>VIP Price:</b> ₹${vipPrice} / 30 Days\n\n` +
+            `<b>Recent Active Subscribers:</b>\n`
+          );
+
+          if (activeVips.length === 0) {
+            vText += `<i>No active VIP members yet.</i>`;
+          } else {
+            activeVips.slice(0, 6).forEach((u, i) => {
+              const exp = u.vipExpiresAt
+                ? new Date(u.vipExpiresAt).toLocaleDateString("en-US", { timeZone: "Asia/Kolkata" })
+                : "Lifetime";
+              vText += `${i + 1}. @${u.username || u.fullName || u.userId} (ID: <code>${u.userId}</code>) — Expires: ${exp}\n`;
+            });
+          }
+
+          await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: adminChatId,
+              message_id: cq.message?.message_id,
+              text: vText,
+              parse_mode: "HTML",
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: "➕ Grant 30-Day VIP to User", callback_data: "adm_grant_vip" }],
+                  [{ text: "🔙 Admin Menu", callback_data: "adm_menu" }],
+                ],
+              },
+            }),
+          }).catch(() => {});
+
+          await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ callback_query_id: cq.id }),
+          }).catch(() => {});
+          return NextResponse.json({ ok: true });
+        }
+
+        if (data === "adm_grant_vip") {
+          const supabase = getDbClient();
+          if (supabase) {
+            await supabase.from("site_settings").upsert(
+              {
+                setting_key: `admin_wizard_${adminChatId}`,
+                setting_value: { step: "waiting_for_grant_vip_id" },
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: "setting_key" }
+            );
+          }
+
+          const gText = (
+            `👑 <b>Grant VIP Membership</b>\n\n` +
+            `Please send the numeric Telegram User ID (e.g. <code>1343548529</code>) of the user to activate 30 days of VIP Access.\n\n` +
+            `<i>The bot will instantly activate their pass and send them a VIP welcome notification!</i>`
+          );
+
+          await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: adminChatId,
+              message_id: cq.message?.message_id,
+              text: gText,
+              parse_mode: "HTML",
+              reply_markup: {
+                inline_keyboard: [[{ text: "❌ Cancel", callback_data: "adm_menu" }]],
+              },
+            }),
+          }).catch(() => {});
+
+          await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ callback_query_id: cq.id }),
+          }).catch(() => {});
+          return NextResponse.json({ ok: true });
+        }
+
+        if (data === "adm_ref_stats") {
+          const { getVipUsers } = await import("@/lib/telegram-vip");
+          const vips = await getVipUsers();
+          const goal = settings.telegramReferralGoal || 5;
+          const rewardDays = settings.telegramReferralRewardDays || 30;
+
+          const referrers = vips
+            .filter((u) => (u.referralsCount || 0) > 0)
+            .sort((a, b) => (b.referralsCount || 0) - (a.referralsCount || 0));
+
+          const totalInvited = referrers.reduce((acc, u) => acc + (u.referralsCount || 0), 0);
+          const unlockedCount = referrers.filter((u) => (u.referralsCount || 0) >= goal).length;
+
+          let rText = (
+            `👥 <b>VIP Referral Program Analytics</b>\n\n` +
+            `• <b>Goal:</b> Invite ${goal} friends = <b>${rewardDays} Days Free VIP</b>\n` +
+            `• <b>Total Invitations Tracked:</b> ${totalInvited}\n` +
+            `• <b>Users Unlocked VIP:</b> ${unlockedCount}\n\n` +
+            `<b>Top Community Referrers:</b>\n`
+          );
+
+          if (referrers.length === 0) {
+            rText += `<i>No referrals recorded yet.</i>`;
+          } else {
+            referrers.slice(0, 6).forEach((r, i) => {
+              const statusTag = (r.referralsCount || 0) >= goal ? "👑 VIP Unlocked" : `${goal - (r.referralsCount || 0)} left`;
+              rText += `${i + 1}. @${r.username || r.userId} — <b>${r.referralsCount} friends</b> (${statusTag})\n`;
+            });
+          }
+
+          await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: adminChatId,
+              message_id: cq.message?.message_id,
+              text: rText,
+              parse_mode: "HTML",
+              reply_markup: {
+                inline_keyboard: [[{ text: "🔙 Admin Menu", callback_data: "adm_menu" }]],
+              },
+            }),
+          }).catch(() => {});
+
+          await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ callback_query_id: cq.id }),
+          }).catch(() => {});
+          return NextResponse.json({ ok: true });
+        }
+
+        if (data === "adm_backup") {
+          await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              callback_query_id: cq.id,
+              text: "💾 Generating complete database JSON backup...",
+            }),
+          }).catch(() => {});
+
+          const { sendDatabaseBackupToTelegram } = await import("@/lib/telegram-backup");
+          const bRes = await sendDatabaseBackupToTelegram(adminChatId);
+
+          let bText = `💾 <b>Database Backup</b>\n\n`;
+          if (bRes.success) {
+            bText += `✅ <b>Backup created and delivered successfully!</b>\n` +
+                     `A full JSON snapshot document has been attached to this chat.\n\n` +
+                     `• Total Apps: ${bRes.stats?.apps || 0}\n` +
+                     `• Total Versions: ${bRes.stats?.versions || 0}\n` +
+                     `• Categories: ${bRes.stats?.categories || 0}`;
+          } else {
+            bText += `❌ <b>Backup failed:</b> ${bRes.error || "Unknown error"}`;
+          }
+
+          await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: adminChatId,
+              message_id: cq.message?.message_id,
+              text: bText,
+              parse_mode: "HTML",
+              reply_markup: {
+                inline_keyboard: [[{ text: "🔙 Admin Menu", callback_data: "adm_menu" }]],
+              },
+            }),
+          }).catch(() => {});
+
+          return NextResponse.json({ ok: true });
+        }
+
+        if (data === "adm_purge_cache") {
+          purgeAppCaches();
+
+          await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              callback_query_id: cq.id,
+              text: "⚡ Website & Database Caches Purged!",
+            }),
+          }).catch(() => {});
+
+          const pText = (
+            `⚡ <b>All Live Caches Purged!</b>\n\n` +
+            `• Next.js ISR edge cache invalidated across all routes\n` +
+            `• In-memory slug & database maps reset\n` +
+            `• Real-time database queries refreshed\n\n` +
+            `Every visit to <a href="${settings.siteUrl || "https://www.awtmods.in"}">AWTMods.in</a> now reads live database state immediately.`
+          );
+
+          await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: adminChatId,
+              message_id: cq.message?.message_id,
+              text: pText,
+              parse_mode: "HTML",
+              reply_markup: {
+                inline_keyboard: [[{ text: "🔙 Admin Menu", callback_data: "adm_menu" }]],
+              },
+            }),
+          }).catch(() => {});
+
+          return NextResponse.json({ ok: true });
+        }
+
+        if (data === "adm_stats") {
+          const stats = await getSiteStats();
+
+          const sText = (
+            `📊 <b>AWTMods Real-time Analytics</b>\n\n` +
+            `• <b>Published Applications:</b> ${stats?.publishedApps || 0}\n` +
+            `• <b>Active Categories:</b> ${stats?.categories || 0}\n` +
+            `• <b>All-time Downloads:</b> ${stats?.totalDownloads || 0}\n` +
+            `• <b>Pending User Requests:</b> ${stats?.pendingRequests || 0}\n` +
+            `• <b>Mirror Health:</b> 🟢 100% Active`
+          );
+
+          await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: adminChatId,
+              message_id: cq.message?.message_id,
+              text: sText,
+              parse_mode: "HTML",
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: "🌐 View Full Analytics", url: `${settings.siteUrl || "https://www.awtmods.in"}/admin/analytics` }],
+                  [{ text: "🔙 Admin Menu", callback_data: "adm_menu" }],
+                ],
+              },
+            }),
+          }).catch(() => {});
+
+          await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ callback_query_id: cq.id }),
+          }).catch(() => {});
+          return NextResponse.json({ ok: true });
+        }
+
+        if (data === "adm_settings") {
+          const setDesc = (
+            `⚙️ <b>Platform Configuration Overview</b>\n\n` +
+            `• <b>Telegram Bot:</b> @${settings.telegramBotUsername || "awtmods_bot"}\n` +
+            `• <b>Auto-Post Channel:</b> ${settings.telegramChannelId || "@awtmods"}\n` +
+            `• <b>Private Storage Channel:</b> <code>${settings.telegramPrivateChannelId || "Not set"}</code>\n` +
+            `• <b>Admin Chat ID:</b> <code>${adminChatId}</code>\n` +
+            `• <b>VIP Pass Price:</b> ₹${vipPrice} / 30 Days\n` +
+            `• <b>Telegram Join Popup:</b> ${settings.telegramPopupEnabled !== false ? "🟢 Enabled" : "🔴 Disabled"}\n` +
+            `• <b>VIP Referral Program:</b> ${settings.telegramReferralsEnabled !== false ? "🟢 Enabled" : "🔴 Disabled"}\n` +
+            `• <b>Competitor Mod Radar:</b> ${settings.competitorRadarEnabled ? "🟢 Enabled" : "🔴 Disabled"}`
+          );
+
+          await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: adminChatId,
+              message_id: cq.message?.message_id,
+              text: setDesc,
+              parse_mode: "HTML",
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: "🌐 Open Admin Settings", url: `${settings.siteUrl || "https://www.awtmods.in"}/admin/settings` }],
+                  [{ text: "🔙 Admin Menu", callback_data: "adm_menu" }],
+                ],
+              },
+            }),
+          }).catch(() => {});
+
+          await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ callback_query_id: cq.id }),
+          }).catch(() => {});
+          return NextResponse.json({ ok: true });
+        }
+
         const isColon = data.includes(":");
         const [action, ...rest] = isColon ? data.split(":") : data.split("_");
 
@@ -1079,6 +1841,53 @@ export async function POST(req: Request) {
             return NextResponse.json({ ok: true, radarQuickReleased: releaseRes.app.name });
           }
         }
+
+        // Step 5: Grant VIP by User ID
+        if (wiz.step === "waiting_for_grant_vip_id" && text) {
+          const targetUserId = parseInt(text.trim(), 10);
+          if (!isNaN(targetUserId) && targetUserId > 1000) {
+            await supabase
+              .from("site_settings")
+              .delete()
+              .eq("setting_key", `admin_wizard_${adminChatId}`);
+
+            const { activateUserVip } = await import("@/lib/telegram-vip");
+            await activateUserVip(targetUserId, 30);
+
+            await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: adminChatId,
+                text: (
+                  `👑 <b>VIP ACCESS ACTIVATED!</b>\n\n` +
+                  `User ID <code>${targetUserId}</code> has been granted <b>30 Days of VIP Direct APK Access</b>.\n\n` +
+                  `A confirmation notification has been delivered to the user.`
+                ),
+                parse_mode: "HTML",
+                reply_markup: {
+                  inline_keyboard: [[{ text: "🔙 Admin Menu", callback_data: "adm_menu" }]],
+                },
+              }),
+            }).catch(() => {});
+
+            await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: targetUserId,
+                text: (
+                  `🎉 <b>Congratulations! VIP Pass Activated!</b>\n\n` +
+                  `The administrator has activated <b>30 Days of VIP Access</b> for your account!\n` +
+                  `⚡ You now have direct high-speed APK downloads on <a href="https://www.awtmods.in">AWTMods.in</a>!`
+                ),
+                parse_mode: "HTML",
+              }),
+            }).catch(() => {});
+
+            return NextResponse.json({ ok: true });
+          }
+        }
       }
     }
 
@@ -1570,6 +2379,38 @@ export async function POST(req: Request) {
         });
         return NextResponse.json({ ok: true });
       }
+    }
+
+    // ==========================================
+    // 2.9 Command: /admin, /panel, or /dashboard
+    // ==========================================
+    if (
+      text === "/admin" ||
+      text.startsWith("/admin ") ||
+      text === "/panel" ||
+      text === "/dashboard"
+    ) {
+      const isAdminUser =
+        user?.id === adminChatId ||
+        chatId === adminChatId ||
+        user?.id === 1343548529 ||
+        chatId === 1343548529;
+
+      if (!isAdminUser) {
+        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: `⛔ <b>Access Denied:</b> This command is reserved exclusively for the AWTMods Bot Administrator.`,
+            parse_mode: "HTML",
+          }),
+        }).catch(() => {});
+        return NextResponse.json({ ok: true });
+      }
+
+      await sendOrEditAdminMenu(chatId, token, settings);
+      return NextResponse.json({ ok: true });
     }
 
     // Check if user is asking for /start

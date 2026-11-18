@@ -2188,17 +2188,115 @@ export async function POST(req: Request) {
           return NextResponse.json({ ok: false, error: result.error });
         }
       } else {
-        // --- BULK APPS & MODS IMPORT FLOW ---
+        // --- BULK APPS & MODS IMPORT FLOW WITH LIVE PROGRESS ---
         const totalCount = uniqueTargets.length;
-        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: `📦 <b>Bulk Mod & App Import: ${totalCount} links detected!</b>\n<i>Scraping metadata in fast parallel batches (Developer: Aadith C V)...</i>`,
-            parse_mode: "HTML",
-          }),
-        }).catch(() => {});
+        const escapeTgHtml = (str: string) =>
+          (str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+        type ItemStatus = "pending" | "drafted" | "live" | "failed";
+        interface ImportProgressItem {
+          index: number;
+          target: string;
+          status: ItemStatus;
+          appName?: string;
+          error?: string;
+        }
+
+        const items: ImportProgressItem[] = uniqueTargets.map((target, idx) => ({
+          index: idx + 1,
+          target,
+          status: "pending",
+        }));
+
+        const buildProgressText = (isComplete: boolean = false) => {
+          const completedCount = items.filter((i) => i.status !== "pending").length;
+          const percent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+          const filled = Math.min(10, Math.round((percent / 100) * 10));
+          const empty = 10 - filled;
+          const progressBar = "█".repeat(filled) + "░".repeat(empty);
+
+          let msg = isComplete
+            ? `🎉 <b>Bulk Mod & App Import Complete!</b>\n`
+            : `📦 <b>Bulk Mod & App Import: ${totalCount} links detected!</b>\n`;
+
+          msg += `📊 <b>Progress:</b> [${progressBar}] <b>${percent}%</b> (${completedCount}/${totalCount} completed)\n\n`;
+
+          // Show status of each link
+          for (const item of items) {
+            const defaultLabel =
+              item.target.match(/id=([a-zA-Z0-9._]+)/i)?.[1] ||
+              item.target.replace(/^https?:\/\//i, "").slice(0, 28);
+            const safeAppName = escapeTgHtml(
+              item.appName ? item.appName.replace(/MOD APK.*$/i, "").trim() : defaultLabel
+            );
+
+            if (item.status === "drafted") {
+              msg += `${item.index}. ✅ <b>Drafted:</b> ${safeAppName}\n`;
+            } else if (item.status === "live") {
+              msg += `${item.index}. 🌐 <b>Live (Updated):</b> ${safeAppName}\n`;
+            } else if (item.status === "failed") {
+              msg += `${item.index}. ❌ <b>Failed:</b> <code>${escapeTgHtml(defaultLabel)}</code> (${escapeTgHtml(item.error || "Failed")})\n`;
+            } else {
+              msg += `${item.index}. ⏳ <i>Processing...</i>\n`;
+            }
+          }
+
+          if (isComplete) {
+            const draftedCount = items.filter((i) => i.status === "drafted").length;
+            const liveCount = items.filter((i) => i.status === "live").length;
+            const failedCount = items.filter((i) => i.status === "failed").length;
+
+            msg += `\n👤 <b>Developer:</b> Aadith C V\n`;
+            if (draftedCount > 0) {
+              msg += `✨ <b>New Drafts Ready:</b> ${draftedCount} (Interactive cards sent below)\n`;
+            }
+            if (liveCount > 0) {
+              msg += `🌐 <b>Already Live / Refreshed:</b> ${liveCount}\n`;
+            }
+            if (failedCount > 0) {
+              msg += `⚠️ <b>Failed Links:</b> ${failedCount}\n`;
+            }
+            msg += `👉 <a href="https://www.awtmods.in/admin/apps">Manage Apps in Admin Panel</a>`;
+          }
+
+          return msg;
+        };
+
+        // Send initial progress message
+        let progressMsgId: number | null = null;
+        try {
+          const initRes = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: chatId,
+              text: buildProgressText(false),
+              parse_mode: "HTML",
+              disable_web_page_preview: true,
+            }),
+          });
+          const initData = await initRes.json();
+          if (initData?.ok && initData.result?.message_id) {
+            progressMsgId = initData.result.message_id;
+          }
+        } catch {}
+
+        const updateTelegramProgress = async (isComplete: boolean = false) => {
+          if (!progressMsgId) return;
+          try {
+            await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: chatId,
+                message_id: progressMsgId,
+                text: buildProgressText(isComplete),
+                parse_mode: "HTML",
+                disable_web_page_preview: true,
+              }),
+            });
+          } catch {}
+        };
 
         const successfulApps: any[] = [];
         const alreadyLiveApps: any[] = [];
@@ -2210,30 +2308,49 @@ export async function POST(req: Request) {
         for (let i = 0; i < uniqueTargets.length; i += CHUNK_SIZE) {
           const chunk = uniqueTargets.slice(i, i + CHUNK_SIZE);
           await Promise.all(
-            chunk.map(async (target) => {
+            chunk.map(async (target, chunkIdx) => {
+              const globalIdx = i + chunkIdx;
+              const item = items[globalIdx];
               try {
                 const timeoutPromise = new Promise<{ success: false; error: string }>((resolve) =>
                   setTimeout(() => resolve({ success: false, error: "Scrape timed out (7s)" }), 7000)
                 );
                 const result = await Promise.race([processLink(target), timeoutPromise]);
                 if (result.success && result.app) {
+                  item.appName = result.app.name;
                   successfulApps.push(result.app);
                   if (result.wasAlreadyPublished || result.app.status === "published") {
+                    item.status = "live";
                     alreadyLiveApps.push(result.app);
                   } else {
+                    item.status = "drafted";
                     newDrafts.push(result.app);
                   }
                 } else {
-                  failedApps.push({ target, error: result.error || "Failed to scrape" });
+                  item.status = "failed";
+                  item.error = result.error || "Failed to scrape";
+                  failedApps.push({ target, error: item.error });
                 }
               } catch (err: any) {
-                failedApps.push({ target, error: err.message || "Scraping failed" });
+                item.status = "failed";
+                item.error = err.message || "Scraping failed";
+                failedApps.push({ target, error: item.error || "Scraping failed" });
               }
             })
           );
+
+          // Update the progress card in Telegram with current percentage and drafted app names
+          await updateTelegramProgress(false);
+
+          if (i + CHUNK_SIZE < uniqueTargets.length) {
+            await new Promise((resolve) => setTimeout(resolve, 300));
+          }
         }
 
-        // Send draft cards ONLY for NEW drafts (NEVER for apps that are already published!)
+        // Final completion update for the progress card (100%)
+        await updateTelegramProgress(true);
+
+        // Send interactive draft preview cards ONLY for NEW drafts (NEVER for apps already live!)
         for (let j = 0; j < newDrafts.length; j++) {
           const draftApp = newDrafts[j];
           await sendDraftPreviewToAdmin(draftApp, adminChatId).catch(() => {});
@@ -2245,53 +2362,14 @@ export async function POST(req: Request) {
         // Invalidate website caches so all newly created drafts show up immediately in Admin
         purgeAppCaches();
 
-        // Send consolidated summary to admin
-        const successCount = successfulApps.length;
-        const failCount = failedApps.length;
-
-        let summaryText = `🎉 <b>Bulk Import Complete!</b>\n\n`;
-        summaryText += `✅ <b>Total Processed:</b> ${successCount} / ${totalCount} apps\n`;
-        summaryText += `✨ <b>New Drafts Created:</b> ${newDrafts.length}\n`;
-        if (alreadyLiveApps.length > 0) {
-          summaryText += `🌐 <b>Already Live / Updated:</b> ${alreadyLiveApps.length}\n`;
-        }
-        summaryText += `👤 <b>Developer:</b> Aadith C V\n`;
-        if (failCount > 0) {
-          summaryText += `\n⚠️ <b>Failed (${failCount}):</b>\n`;
-          for (const f of failedApps.slice(0, 5)) {
-            const label = f.target.match(/id=([a-zA-Z0-9._]+)/i)?.[1] || f.target.slice(0, 35);
-            summaryText += `• <code>${label}</code>: ${f.error}\n`;
-          }
-          if (failedApps.length > 5) {
-            summaryText += `<i>...and ${failedApps.length - 5} more</i>\n`;
-          }
-        }
-        if (newDrafts.length > 0) {
-          summaryText += `\nAll new drafts are ready! You can review and publish them with the <b>[ 🚀 Quick Publish ]</b> buttons above, or manage them in the dashboard:\n`;
-        } else {
-          summaryText += `\nAll apps are already live on the website! You can manage them in the dashboard:\n`;
-        }
-        summaryText += `👉 <a href="https://www.awtmods.in/admin/apps">Manage Apps in Admin Panel</a>`;
-
-        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: summaryText,
-            parse_mode: "HTML",
-            disable_web_page_preview: true,
-          }),
-        }).catch(() => {});
-
         return NextResponse.json({
           ok: true,
           bulkImport: true,
           total: totalCount,
-          successCount,
+          successCount: successfulApps.length,
           newDrafts: newDrafts.length,
           alreadyLive: alreadyLiveApps.length,
-          failCount,
+          failCount: failedApps.length,
         });
       }
     }

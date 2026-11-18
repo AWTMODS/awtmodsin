@@ -253,7 +253,11 @@ export async function checkPlayStoreUpdates(options?: {
     await Promise.all(
       batch.map(async (app: any) => {
         try {
-          const detail = await gplay.app({ appId: app.package_name }).catch(() => null);
+          // Fetch details with 3.5s timeout per app to prevent serverless stalls
+          const detail = await Promise.race([
+            gplay.app({ appId: app.package_name }),
+            new Promise<null>((resolve) => setTimeout(() => resolve(null), 3500)),
+          ]).catch(() => null);
           if (!detail || !detail.version || detail.version === "VARY") return;
 
           const playStoreVer = String(detail.version).trim();

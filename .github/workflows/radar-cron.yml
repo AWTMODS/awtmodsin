@@ -1,0 +1,31 @@
+name: 24/7 Play Store & Competitor Radar Background Scanner
+
+on:
+  schedule:
+    # Trigger every 30 minutes continuously 24/7
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+    # Allows manual trigger from GitHub Actions dashboard anytime
+
+concurrency:
+  group: radar-cron
+  cancel-in-progress: false
+
+jobs:
+  run-radar-check:
+    name: Execute 24/7 Radar Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Ping Radar & Cron Endpoint
+        run: |
+          echo "Triggering AWTMODS 24/7 Play Store Version Radar & Scheduled Task Cron..."
+          HTTP_STATUS=$(curl -s -o /tmp/cron_response.json -w "%{http_code}" -X GET "https://www.awtmods.in/api/cron/check-updates?limit=40" -H "User-Agent: GitHub-Actions-24x7-Radar" --max-time 90)
+          echo "HTTP Status Code: $HTTP_STATUS"
+          cat /tmp/cron_response.json
+          if [ "$HTTP_STATUS" -ne 200 ]; then
+            echo "Cron check returned non-200 status code: $HTTP_STATUS"
+            exit 1
+          fi
+          echo "24/7 Radar check successfully executed and synced!"

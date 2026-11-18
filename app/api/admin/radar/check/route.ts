@@ -66,9 +66,12 @@ export async function POST(req: Request) {
       notifyTelegram,
     });
 
+    const freshState = await getRadarState();
+
     return NextResponse.json({
       success: true,
       message: `Checked ${result.checked} apps. Found ${result.updatesFound} new updates.`,
+      radar: freshState,
       ...result,
     });
   } catch (err: any) {

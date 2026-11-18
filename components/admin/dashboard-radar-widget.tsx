@@ -38,31 +38,32 @@ export function DashboardRadarWidget({
     const ms = new Date(isoString).getTime();
     if (isNaN(ms)) return "Recently";
     const diffMins = Math.floor((Date.now() - ms) / 60000);
-    if (diffMins < 1) return "Just now";
-    if (diffMins < 60) return `${diffMins} min${diffMins === 1 ? "" : "s"} ago`;
+    const timeStr = new Date(isoString).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    if (diffMins < 1) return `Just now (${timeStr})`;
+    if (diffMins < 60) return `${diffMins}m ago (${timeStr})`;
     const diffHours = Math.floor(diffMins / 60);
     if (diffHours < 24) {
-      return `${diffHours} hr${diffHours === 1 ? "" : "s"} ago (${new Date(isoString).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})`;
+      return `${diffHours}h ago (${timeStr})`;
     }
     return new Date(isoString).toLocaleDateString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
   };
 
-  // Automated background scan executor
+  // Automated background scan executor (fast, non-blocking, no telegram flood)
   const triggerAutoScan = async () => {
     setIsScanning(true);
     try {
       const res = await fetch("/api/admin/radar/check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ notifyTelegram: true }),
+        body: JSON.stringify({ notifyTelegram: false, limit: 50 }),
       });
       const data = await res.json();
-      if (data.success) {
-        const stateRes = await fetch("/api/admin/radar/check", { cache: "no-store" });
-        const stateData = await stateRes.json();
-        if (stateData.radar?.updates) {
-          setUpdates(stateData.radar.updates);
-          setLastScanAt(stateData.radar.lastScanAt || new Date().toISOString());
+      if (data.success && data.radar) {
+        if (data.radar.updates) {
+          setUpdates(data.radar.updates);
+        }
+        if (data.radar.lastScanAt) {
+          setLastScanAt(data.radar.lastScanAt);
         }
       }
     } catch {
@@ -111,7 +112,7 @@ export function DashboardRadarWidget({
       const res = await fetch("/api/admin/radar/check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ notifyTelegram: true }),
+        body: JSON.stringify({ notifyTelegram: true, limit: 60 }),
       });
       const data = await res.json();
       if (data.success) {
@@ -120,12 +121,13 @@ export function DashboardRadarWidget({
         } else {
           toast.success("✅ All applications are up-to-date with Google Play!");
         }
-        // Refresh state
-        const stateRes = await fetch("/api/admin/radar/check", { cache: "no-store" });
-        const stateData = await stateRes.json();
-        if (stateData.radar?.updates) {
-          setUpdates(stateData.radar.updates);
-          setLastScanAt(stateData.radar.lastScanAt || new Date().toISOString());
+        if (data.radar) {
+          if (data.radar.updates) {
+            setUpdates(data.radar.updates);
+          }
+          if (data.radar.lastScanAt) {
+            setLastScanAt(data.radar.lastScanAt);
+          }
         }
       } else {
         toast.error(data.error || "Radar scan failed");

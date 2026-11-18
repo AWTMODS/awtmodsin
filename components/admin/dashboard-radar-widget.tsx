@@ -212,7 +212,7 @@ export function DashboardRadarWidget({
             <span>{isScanning ? "Scanning Play Store..." : "Scan Radar"}</span>
           </Button>
 
-          <Link href="/admin/apps?status=radar_updates">
+          <Link href="/admin/radar">
             <Button size="sm" variant="ghost" className="rounded-xl text-xs gap-1 font-semibold text-muted-foreground hover:text-foreground">
               <span>View All</span>
               <ArrowRight className="h-3.5 w-3.5" />
@@ -267,11 +267,11 @@ export function DashboardRadarWidget({
 
                 <div className="flex items-center gap-2 pt-1 border-t border-border/40">
                   <Link
-                    href={`/admin/versions`}
+                    href={`/admin/radar/apps/${app.appId}`}
                     className="w-full text-center text-xs font-bold py-1.5 px-3 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-500 hover:bg-amber-500/20 inline-flex items-center justify-center gap-1.5 transition-colors"
                   >
                     <Zap className="h-3.5 w-3.5" />
-                    <span>Quick Release Mod</span>
+                    <span>Manage Mod Pipeline</span>
                   </Link>
                 </div>
               </div>

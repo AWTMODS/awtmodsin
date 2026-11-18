@@ -3,6 +3,8 @@ import {
   getCategories,
   getApplications,
   getTrendingAndroidApps,
+  getTrendingAndroidGames,
+  getTrendingPCSoftware,
   getSiteSettings,
 } from "@/lib/db";
 import { HeroSection } from "@/components/homepage/hero-section";
@@ -20,12 +22,16 @@ export default async function HomePage() {
     stats,
     { applications: publishedApps },
     trendingApps,
+    trendingGames,
+    trendingPCSoftware,
     categories,
     settings,
   ] = await Promise.all([
     getSiteStats(),
     getApplications({ limit: 40, sortBy: "newest" }),
     getTrendingAndroidApps(12),
+    getTrendingAndroidGames(12),
+    getTrendingPCSoftware(12),
     getCategories(),
     getSiteSettings(),
   ]);
@@ -87,6 +93,8 @@ export default async function HomePage() {
         totalApps={stats.publishedApps ?? stats.totalApps}
         featuredApps={featuredApps}
         trendingApps={trendingApps}
+        trendingGames={trendingGames}
+        trendingPCSoftware={trendingPCSoftware}
         latestReleases={latestReleases}
         categories={categories}
       />

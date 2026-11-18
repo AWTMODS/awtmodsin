@@ -17,6 +17,9 @@ import {
   X,
   Sparkles,
   Bot,
+  Smartphone,
+  Gamepad2,
+  Monitor,
 } from "lucide-react";
 import { Logo } from "@/components/layout/logo";
 import { cn } from "@/lib/utils";
@@ -24,6 +27,9 @@ import { cn } from "@/lib/utils";
 const adminNavItems = [
   { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
   { name: "Applications", href: "/admin/apps", icon: Layers },
+  { name: "📱 Android Apps", href: "/admin/apps?type=apps", icon: Smartphone, isSub: true },
+  { name: "🎮 Android Games", href: "/admin/apps?type=games", icon: Gamepad2, isSub: true },
+  { name: "💻 PC Software", href: "/admin/apps?type=pc", icon: Monitor, isSub: true },
   { name: "Add New App", href: "/admin/apps/new", icon: PlusCircle },
   { name: "Categories", href: "/admin/categories", icon: LayoutGrid },
   { name: "Version Management", href: "/admin/versions", icon: GitBranch },
@@ -103,6 +109,7 @@ function SidebarNavContent({ onClose }: { onClose?: () => void }) {
                   (pathname.startsWith("/admin/apps/") && !pathname.startsWith("/admin/apps/new"))
                 : pathname === item.href || pathname.startsWith(item.href + "/");
 
+            const isSub = (item as any).isSub;
             return (
               <Link
                 key={item.href}
@@ -112,13 +119,14 @@ function SidebarNavContent({ onClose }: { onClose?: () => void }) {
                   if (onClose) onClose();
                 }}
                 className={cn(
-                  "flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-colors",
-                  isActive
-                    ? "bg-primary text-primary-foreground shadow-xs font-bold"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                  "flex items-center gap-2.5 rounded-xl transition-colors",
+                  isSub
+                    ? "pl-8 pr-3 py-1.5 text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                    : "px-3.5 py-2.5 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted",
+                  isActive && !isSub && "bg-primary text-primary-foreground shadow-xs font-bold"
                 )}
               >
-                <Icon className="h-4 w-4 shrink-0" />
+                <Icon className={isSub ? "h-3.5 w-3.5 shrink-0" : "h-4 w-4 shrink-0"} />
                 <span>{item.name}</span>
               </Link>
             );

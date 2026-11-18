@@ -17,6 +17,8 @@ import {
   Clock,
   Radio,
   Monitor,
+  Gamepad2,
+  ArrowRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Application, AppCategory } from "@/lib/types";
@@ -27,6 +29,8 @@ interface HeroSectionProps {
   totalApps?: number;
   featuredApps?: Application[];
   trendingApps?: Application[];
+  trendingGames?: Application[];
+  trendingPCSoftware?: Application[];
   latestReleases?: Application[];
   categories?: AppCategory[];
 }
@@ -84,6 +88,8 @@ export function HeroSection({
   totalApps,
   featuredApps = [],
   trendingApps = [],
+  trendingGames = [],
+  trendingPCSoftware = [],
   latestReleases = [],
   categories = [],
 }: HeroSectionProps) {
@@ -92,6 +98,8 @@ export function HeroSection({
 
   const latestScrollRef = useRef<HTMLDivElement>(null);
   const trendingScrollRef = useRef<HTMLDivElement>(null);
+  const gamesScrollRef = useRef<HTMLDivElement>(null);
+  const pcScrollRef = useRef<HTMLDivElement>(null);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -116,6 +124,20 @@ export function HeroSection({
     if (trendingScrollRef.current) {
       const scrollAmount = direction === "left" ? -320 : 320;
       trendingScrollRef.current.scrollBy({ left: scrollAmount, behavior: "smooth" });
+    }
+  };
+
+  const scrollGames = (direction: "left" | "right") => {
+    if (gamesScrollRef.current) {
+      const scrollAmount = direction === "left" ? -320 : 320;
+      gamesScrollRef.current.scrollBy({ left: scrollAmount, behavior: "smooth" });
+    }
+  };
+
+  const scrollPC = (direction: "left" | "right") => {
+    if (pcScrollRef.current) {
+      const scrollAmount = direction === "left" ? -320 : 320;
+      pcScrollRef.current.scrollBy({ left: scrollAmount, behavior: "smooth" });
     }
   };
 
@@ -486,6 +508,248 @@ export function HeroSection({
                   ) : (
                     <span className="mt-2 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 truncate max-w-full">
                       Verified APK
+                    </span>
+                  )}
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 3. GAMES ON ANDROID HORIZONTAL CAROUSEL */}
+        {trendingGames.length > 0 && (
+          <div className="pt-2 border-t border-border/50 space-y-3.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                <h2 className="text-base sm:text-lg font-bold text-foreground flex items-center gap-1.5">
+                  <span>Games on Android</span>
+                  <Gamepad2 className="h-4 w-4 text-emerald-500" />
+                </h2>
+                <span className="text-xs text-muted-foreground hidden sm:inline">
+                  • Top played &amp; modded mobile games
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Link
+                  href="/categories/games"
+                  className="hidden sm:inline-flex items-center gap-1 text-xs font-semibold text-emerald-500 hover:text-emerald-400 transition-colors mr-1"
+                >
+                  <span>View All Games</span>
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+                {/* Navigation Arrows */}
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => scrollGames("left")}
+                    aria-label="Scroll left"
+                    className="p-1.5 rounded-xl border border-border bg-card hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => scrollGames("right")}
+                    aria-label="Scroll right"
+                    className="p-1.5 rounded-xl border border-border bg-card hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Horizontal Touch Scroll Row for Games */}
+            <div
+              ref={gamesScrollRef}
+              className="flex items-stretch gap-3.5 overflow-x-auto pb-2 scroll-smooth -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none]"
+              style={{ WebkitOverflowScrolling: "touch" }}
+            >
+              {trendingGames.map((app) => (
+                <Link
+                  key={`game-${app.id}`}
+                  href={getAppUrl(app.slug)}
+                  className="group flex-shrink-0 w-36 sm:w-44 flex flex-col items-center text-center p-3 sm:p-3.5 rounded-2xl border border-border bg-card/80 hover:bg-card hover:border-neutral-500/50 transition-all duration-200 select-none shadow-xs"
+                >
+                  <div className="relative mb-2">
+                    <div className="relative w-16 h-16 sm:w-18 sm:h-18 rounded-2xl overflow-hidden border border-border/80 bg-secondary/50 shadow-sm group-hover:scale-105 transition-transform duration-200">
+                      <AppIcon src={app.icon_url} alt={app.name} />
+                    </div>
+                    {app.downloads_24h && app.downloads_24h > 0 ? (
+                      <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.5 rounded-full bg-emerald-500 text-[9px] font-extrabold text-black uppercase tracking-wider shadow">
+                        +{app.downloads_24h} 24h
+                      </span>
+                    ) : app.is_trending ? (
+                      <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.5 rounded-full bg-emerald-500 text-[9px] font-extrabold text-black uppercase tracking-wider shadow">
+                        HOT
+                      </span>
+                    ) : (
+                      <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[9px] font-extrabold uppercase tracking-wider shadow">
+                        GAME
+                      </span>
+                    )}
+                  </div>
+
+                  <h3 className="text-xs sm:text-sm font-bold text-foreground truncate w-full group-hover:text-primary transition-colors">
+                    {app.name}
+                  </h3>
+
+                  <div className="flex items-center gap-1 text-[11px] text-muted-foreground mt-1">
+                    {Number(app.rating) > 0 ? (
+                      <>
+                        <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                        <span className="font-bold text-foreground">
+                          {Number(app.rating).toFixed(1)}
+                        </span>
+                      </>
+                    ) : null}
+                    {app.downloads_24h && app.downloads_24h > 0 ? (
+                      <>
+                        {Number(app.rating) > 0 ? <span>•</span> : null}
+                        <span className="font-semibold text-emerald-500">+{app.downloads_24h} today</span>
+                      </>
+                    ) : app.downloads_count && app.downloads_count > 0 ? (
+                      <>
+                        {Number(app.rating) > 0 ? <span>•</span> : null}
+                        <span>{formatNumber(app.downloads_count)}</span>
+                      </>
+                    ) : !Number(app.rating) ? (
+                      <span className="truncate max-w-[100px]">
+                        Android Game
+                      </span>
+                    ) : null}
+                  </div>
+
+                  {app.mod_features && app.mod_features.length > 0 ? (
+                    <span className="mt-2 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-secondary text-foreground/90 border border-border/80 truncate max-w-full">
+                      {app.mod_features[0]}
+                    </span>
+                  ) : (
+                    <span className="mt-2 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 truncate max-w-full">
+                      Mod Game APK
+                    </span>
+                  )}
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 4. PC SOFTWARES HORIZONTAL CAROUSEL */}
+        {trendingPCSoftware.length > 0 && (
+          <div className="pt-2 border-t border-border/50 space-y-3.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="flex h-2.5 w-2.5 rounded-full bg-blue-500 animate-pulse" />
+                <h2 className="text-base sm:text-lg font-bold text-foreground flex items-center gap-1.5">
+                  <span>PC Softwares</span>
+                  <Monitor className="h-4 w-4 text-blue-500" />
+                </h2>
+                <span className="text-xs text-muted-foreground hidden sm:inline">
+                  • Top Windows &amp; desktop applications
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Link
+                  href="/pc-software"
+                  className="hidden sm:inline-flex items-center gap-1 text-xs font-semibold text-blue-500 hover:text-blue-400 transition-colors mr-1"
+                >
+                  <span>View All PC Software</span>
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+                {/* Navigation Arrows */}
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => scrollPC("left")}
+                    aria-label="Scroll left"
+                    className="p-1.5 rounded-xl border border-border bg-card hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => scrollPC("right")}
+                    aria-label="Scroll right"
+                    className="p-1.5 rounded-xl border border-border bg-card hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Horizontal Touch Scroll Row for PC Softwares */}
+            <div
+              ref={pcScrollRef}
+              className="flex items-stretch gap-3.5 overflow-x-auto pb-2 scroll-smooth -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none]"
+              style={{ WebkitOverflowScrolling: "touch" }}
+            >
+              {trendingPCSoftware.map((app) => (
+                <Link
+                  key={`pc-${app.id}`}
+                  href={getAppUrl(app.slug)}
+                  className="group flex-shrink-0 w-36 sm:w-44 flex flex-col items-center text-center p-3 sm:p-3.5 rounded-2xl border border-border bg-card/80 hover:bg-card hover:border-neutral-500/50 transition-all duration-200 select-none shadow-xs"
+                >
+                  <div className="relative mb-2">
+                    <div className="relative w-16 h-16 sm:w-18 sm:h-18 rounded-2xl overflow-hidden border border-border/80 bg-secondary/50 shadow-sm group-hover:scale-105 transition-transform duration-200">
+                      <AppIcon src={app.icon_url} alt={app.name} />
+                    </div>
+                    {app.downloads_24h && app.downloads_24h > 0 ? (
+                      <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.5 rounded-full bg-blue-500 text-[9px] font-extrabold text-white uppercase tracking-wider shadow">
+                        +{app.downloads_24h} 24h
+                      </span>
+                    ) : app.is_trending ? (
+                      <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.5 rounded-full bg-blue-500 text-[9px] font-extrabold text-white uppercase tracking-wider shadow">
+                        HOT
+                      </span>
+                    ) : (
+                      <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 text-[9px] font-extrabold uppercase tracking-wider shadow">
+                        PC
+                      </span>
+                    )}
+                  </div>
+
+                  <h3 className="text-xs sm:text-sm font-bold text-foreground truncate w-full group-hover:text-primary transition-colors">
+                    {app.name}
+                  </h3>
+
+                  <div className="flex items-center gap-1 text-[11px] text-muted-foreground mt-1">
+                    {Number(app.rating) > 0 ? (
+                      <>
+                        <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                        <span className="font-bold text-foreground">
+                          {Number(app.rating).toFixed(1)}
+                        </span>
+                      </>
+                    ) : null}
+                    {app.downloads_24h && app.downloads_24h > 0 ? (
+                      <>
+                        {Number(app.rating) > 0 ? <span>•</span> : null}
+                        <span className="font-semibold text-blue-500">+{app.downloads_24h} today</span>
+                      </>
+                    ) : app.downloads_count && app.downloads_count > 0 ? (
+                      <>
+                        {Number(app.rating) > 0 ? <span>•</span> : null}
+                        <span>{formatNumber(app.downloads_count)}</span>
+                      </>
+                    ) : !Number(app.rating) ? (
+                      <span className="truncate max-w-[100px]">
+                        Windows / PC
+                      </span>
+                    ) : null}
+                  </div>
+
+                  {app.mod_features && app.mod_features.length > 0 ? (
+                    <span className="mt-2 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-secondary text-foreground/90 border border-border/80 truncate max-w-full">
+                      {app.mod_features[0]}
+                    </span>
+                  ) : (
+                    <span className="mt-2 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 truncate max-w-full">
+                      PC Software
                     </span>
                   )}
                 </Link>

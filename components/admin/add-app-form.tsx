@@ -23,6 +23,7 @@ import {
   Sparkles,
   Monitor,
   Smartphone,
+  Gamepad2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -49,8 +50,19 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
   const [autoGenerating, setAutoGenerating] = useState(false);
 
   // SECTION A: Basic Info
+  const initialType = (initialApp as any)?.platform === "pc" || initialApp?.category?.slug === "pc-software"
+    ? "pc"
+    : (initialApp?.category?.slug === "games" || initialApp?.name?.toLowerCase().includes("game"))
+    ? "game"
+    : searchParams.get("type") === "pc"
+    ? "pc"
+    : searchParams.get("type") === "games"
+    ? "game"
+    : "app";
+
+  const [itemType, setItemType] = useState<"app" | "game" | "pc">(initialType);
   const [platform, setPlatform] = useState<"android" | "pc">(
-    (initialApp as any)?.platform || (initialApp?.category?.slug === "pc-software" ? "pc" : "android")
+    (initialApp as any)?.platform || (initialApp?.category?.slug === "pc-software" || initialType === "pc" ? "pc" : "android")
   );
   const [name, setName] = useState(initialApp?.name || "");
   const [slug, setSlug] = useState(initialApp?.slug || "");
@@ -66,9 +78,10 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
     initialApp?.description || ""
   );
 
-  const handlePlatformChange = (newPlatform: "android" | "pc") => {
-    setPlatform(newPlatform);
-    if (newPlatform === "pc") {
+  const handleTypeChange = (newType: "app" | "game" | "pc") => {
+    setItemType(newType);
+    if (newType === "pc") {
+      setPlatform("pc");
       const pcCat = categories.find((c) => c.slug === "pc-software");
       if (pcCat) {
         setCategoryId(pcCat.id);
@@ -79,7 +92,20 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
       if (architecture === "arm64-v8a") {
         setArchitecture("x64 (64-bit)");
       }
+    } else if (newType === "game") {
+      setPlatform("android");
+      const gameCat = categories.find((c) => c.slug === "games" || c.name.toLowerCase().includes("game"));
+      if (gameCat) {
+        setCategoryId(gameCat.id);
+      }
+      if (androidRequirement === "Windows 10 / 11 (64-bit)") {
+        setAndroidRequirement("Android 7.0+");
+      }
+      if (architecture === "x64 (64-bit)") {
+        setArchitecture("arm64-v8a");
+      }
     } else {
+      setPlatform("android");
       if (androidRequirement === "Windows 10 / 11 (64-bit)") {
         setAndroidRequirement("Android 7.0+");
       }
@@ -87,6 +113,10 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
         setArchitecture("arm64-v8a");
       }
     }
+  };
+
+  const handlePlatformChange = (newPlatform: "android" | "pc") => {
+    handleTypeChange(newPlatform === "pc" ? "pc" : "app");
   };
 
   // Mod Features Unlocked
@@ -685,36 +715,49 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
           </p>
         </div>
 
-        {/* Platform Selector Toggle */}
+        {/* Platform & Item Type Selector Toggle */}
         <div className="space-y-1.5 pb-2">
           <label className="text-xs font-semibold uppercase text-foreground">
-            Target Platform <span className="text-destructive">*</span>
+            Type / Category <span className="text-destructive">*</span>
           </label>
-          <div className="grid grid-cols-2 gap-3 max-w-md">
+          <div className="grid grid-cols-3 gap-2.5 max-w-lg">
             <button
               type="button"
-              onClick={() => handlePlatformChange("android")}
-              className={`flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border text-sm font-semibold transition-all ${
-                platform === "android"
-                  ? "border-foreground bg-foreground text-background shadow-xs"
+              onClick={() => handleTypeChange("app")}
+              className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl border text-xs sm:text-sm font-semibold transition-all ${
+                itemType === "app"
+                  ? "border-emerald-500 bg-emerald-500 text-white shadow-xs font-bold"
                   : "border-border bg-secondary/50 text-muted-foreground hover:text-foreground"
               }`}
             >
               <Smartphone className="h-4 w-4" />
-              <span>Android APK</span>
+              <span>📱 Android App</span>
             </button>
 
             <button
               type="button"
-              onClick={() => handlePlatformChange("pc")}
-              className={`flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border text-sm font-semibold transition-all ${
-                platform === "pc"
-                  ? "border-foreground bg-foreground text-background shadow-xs"
+              onClick={() => handleTypeChange("game")}
+              className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl border text-xs sm:text-sm font-semibold transition-all ${
+                itemType === "game"
+                  ? "border-amber-500 bg-amber-500 text-black shadow-xs font-bold"
+                  : "border-border bg-secondary/50 text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Gamepad2 className="h-4 w-4" />
+              <span>🎮 Game</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleTypeChange("pc")}
+              className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl border text-xs sm:text-sm font-semibold transition-all ${
+                itemType === "pc"
+                  ? "border-blue-500 bg-blue-500 text-white shadow-xs font-bold"
                   : "border-border bg-secondary/50 text-muted-foreground hover:text-foreground"
               }`}
             >
               <Monitor className="h-4 w-4" />
-              <span>PC / Windows</span>
+              <span>💻 PC Software</span>
             </button>
           </div>
         </div>

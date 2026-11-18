@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
-import { getSiteSettings, getApplicationBySlug, getApplicationById, getApplications, getDbClient, invalidateDbCache, getSiteStats } from "@/lib/db";
+import { getSiteSettings, getApplicationBySlug, getApplicationById, getApplications, getDbClient, invalidateDbCache, getSiteStats, createModRequest } from "@/lib/db";
 import { isUserVip, recordUserInteraction, activateUserVip } from "@/lib/telegram-vip";
 import { broadcastToTelegram } from "@/lib/telegram-broadcast";
 import { checkAndMarkTelegramUpdate } from "@/lib/telegram-dedup";
@@ -1815,7 +1815,6 @@ export async function POST(req: Request) {
       if (data.startsWith("req_app:") || data.startsWith("req_app_")) {
         const requestedName = decodeURIComponent(data.includes(":") ? data.slice(8) : data.slice(8)).trim();
         if (requestedName) {
-          const { createModRequest } = await import("@/lib/db");
           const requester = cq.from?.username
             ? `@${cq.from.username}`
             : cq.from?.first_name
@@ -2874,7 +2873,6 @@ export async function POST(req: Request) {
         : `Telegram User #${chatId}`;
 
       if (requestedName) {
-        const { createModRequest } = await import("@/lib/db");
         await createModRequest({
           app_name: requestedName,
           features_requested: "Requested via Telegram Bot /request command",

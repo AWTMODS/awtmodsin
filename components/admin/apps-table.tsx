@@ -32,12 +32,14 @@ interface AppsTableProps {
   initialApps: Application[];
   categories: AppCategory[];
   defaultStatus?: string;
+  defaultType?: string;
 }
 
 export function AppsTable({
   initialApps,
   categories,
   defaultStatus = "",
+  defaultType = "all",
 }: AppsTableProps) {
   const router = useRouter();
   const [apps, setApps] = useState<Application[]>(initialApps);
@@ -45,6 +47,11 @@ export function AppsTable({
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedStatus, setSelectedStatus] = useState(defaultStatus);
+  const [typeFilter, setTypeFilter] = useState<"all" | "apps" | "games" | "pc">(
+    defaultType === "games" || defaultType === "pc" || defaultType === "apps"
+      ? (defaultType as any)
+      : "all"
+  );
 
   // Sync state whenever initialApps changes from server refresh
   useEffect(() => {
@@ -117,6 +124,7 @@ export function AppsTable({
   // Auto-Generate Quick Modal States
   const [showAutoModal, setShowAutoModal] = useState(false);
   const [quickQuery, setQuickQuery] = useState("");
+  const [quickType, setQuickType] = useState<"apps" | "games" | "pc">("apps");
   const [quickStatus, setQuickStatus] = useState<"published" | "draft">("published");
   const [quickLoading, setQuickLoading] = useState(false);
 
@@ -133,6 +141,8 @@ export function AppsTable({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           query: q,
+          platform: quickType === "pc" ? "pc" : "android",
+          categorySlug: quickType === "games" ? "games" : quickType === "pc" ? "pc-software" : undefined,
           createImmediately: true,
           status: quickStatus,
         }),
@@ -162,6 +172,21 @@ export function AppsTable({
     }
   };
 
+  const allCount = apps.length;
+  const pcCount = apps.filter(
+    (app) => (app as any).platform === "pc" || app.category?.slug === "pc-software"
+  ).length;
+  const gamesCount = apps.filter((app) => {
+    const isPC = (app as any).platform === "pc" || app.category?.slug === "pc-software";
+    if (isPC) return false;
+    const catSlug = app.category?.slug?.toLowerCase() || "";
+    const catName = app.category?.name?.toLowerCase() || "";
+    const name = app.name.toLowerCase();
+    const pkg = (app.package_name || "").toLowerCase();
+    return catSlug === "games" || catName.includes("game") || name.includes("game") || pkg.includes("game");
+  }).length;
+  const androidAppsCount = Math.max(0, allCount - pcCount - gamesCount);
+
   const filteredApps = apps.filter((app) => {
     const matchesSearch =
       !search ||
@@ -178,7 +203,23 @@ export function AppsTable({
         ? !!radarUpdates[app.id]
         : app.status === selectedStatus);
 
-    return matchesSearch && matchesCategory && matchesStatus;
+    const isPC = (app as any).platform === "pc" || app.category?.slug === "pc-software";
+    const catSlug = app.category?.slug?.toLowerCase() || "";
+    const catName = app.category?.name?.toLowerCase() || "";
+    const name = app.name.toLowerCase();
+    const pkg = (app.package_name || "").toLowerCase();
+    const isGame = !isPC && (catSlug === "games" || catName.includes("game") || name.includes("game") || pkg.includes("game"));
+
+    let matchesType = true;
+    if (typeFilter === "apps") {
+      matchesType = !isPC && !isGame;
+    } else if (typeFilter === "games") {
+      matchesType = isGame;
+    } else if (typeFilter === "pc") {
+      matchesType = isPC;
+    }
+
+    return matchesSearch && matchesCategory && matchesStatus && matchesType;
   });
 
   const handleToggleStatus = async (app: Application) => {
@@ -242,6 +283,69 @@ export function AppsTable({
 
   return (
     <div className="space-y-4">
+      {/* Platform & Type Tabs (All / Android Apps / Android Games / PC Software) */}
+      <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-secondary/60 border border-border overflow-x-auto scrollbar-none [scrollbar-width:none]">
+        <button
+          type="button"
+          onClick={() => setTypeFilter("all")}
+          className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
+            typeFilter === "all"
+              ? "bg-card text-foreground shadow-xs border border-border"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <span>All Items</span>
+          <span className="px-1.5 py-0.5 rounded-md bg-muted text-[10px] font-bold">
+            {allCount}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setTypeFilter("apps")}
+          className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
+            typeFilter === "apps"
+              ? "bg-card text-emerald-500 shadow-xs border border-emerald-500/30"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <span>📱 Android Apps</span>
+          <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-500 text-[10px] font-bold">
+            {androidAppsCount}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setTypeFilter("games")}
+          className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
+            typeFilter === "games"
+              ? "bg-card text-amber-500 shadow-xs border border-amber-500/30"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <span>🎮 Android Games</span>
+          <span className="px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-500 text-[10px] font-bold">
+            {gamesCount}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setTypeFilter("pc")}
+          className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
+            typeFilter === "pc"
+              ? "bg-card text-blue-500 shadow-xs border border-blue-500/30"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <span>💻 PC Software</span>
+          <span className="px-1.5 py-0.5 rounded-md bg-blue-500/10 text-blue-500 text-[10px] font-bold">
+            {pcCount}
+          </span>
+        </button>
+      </div>
+
       {/* Search, Filter & Action Toolbar */}
       <div className="flex flex-col gap-3">
         {/* Search Input */}
@@ -451,9 +555,17 @@ export function AppsTable({
                           <Badge variant="outline" className="text-[11px] font-normal">
                             {app.category?.name || "General"}
                           </Badge>
-                          {(app.platform === "pc" || app.category?.slug === "pc-software") && (
-                            <span className="text-[9px] font-bold uppercase tracking-wider text-sky-500 bg-sky-500/10 px-1.5 py-0.5 rounded border border-sky-500/20">
-                              PC / Windows
+                          {(app.platform === "pc" || app.category?.slug === "pc-software") ? (
+                            <span className="text-[9px] font-bold uppercase tracking-wider text-blue-500 bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20">
+                              💻 PC Software
+                            </span>
+                          ) : (app.category?.slug === "games" || app.category?.name?.toLowerCase().includes("game") || app.name.toLowerCase().includes("game") || (app.package_name && app.package_name.includes("game"))) ? (
+                            <span className="text-[9px] font-bold uppercase tracking-wider text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                              🎮 Android Game
+                            </span>
+                          ) : (
+                            <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                              📱 Android App
                             </span>
                           )}
                         </div>
@@ -577,6 +689,47 @@ export function AppsTable({
 
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold uppercase text-foreground">
+                  Package Type
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setQuickType("apps")}
+                    className={`py-2 px-2.5 rounded-xl text-xs font-bold border transition-colors flex items-center justify-center gap-1.5 ${
+                      quickType === "apps"
+                        ? "bg-emerald-500 text-white border-emerald-500"
+                        : "bg-secondary/60 text-muted-foreground border-border hover:bg-secondary"
+                    }`}
+                  >
+                    <span>📱 App</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setQuickType("games")}
+                    className={`py-2 px-2.5 rounded-xl text-xs font-bold border transition-colors flex items-center justify-center gap-1.5 ${
+                      quickType === "games"
+                        ? "bg-amber-500 text-black border-amber-500"
+                        : "bg-secondary/60 text-muted-foreground border-border hover:bg-secondary"
+                    }`}
+                  >
+                    <span>🎮 Game</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setQuickType("pc")}
+                    className={`py-2 px-2.5 rounded-xl text-xs font-bold border transition-colors flex items-center justify-center gap-1.5 ${
+                      quickType === "pc"
+                        ? "bg-blue-500 text-white border-blue-500"
+                        : "bg-secondary/60 text-muted-foreground border-border hover:bg-secondary"
+                    }`}
+                  >
+                    <span>💻 PC Software</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase text-foreground">
                   Post Initial Status
                 </label>
                 <div className="grid grid-cols-2 gap-2">
@@ -613,7 +766,7 @@ export function AppsTable({
                   onClick={() => {
                     setShowAutoModal(false);
                     router.push(
-                      `/admin/apps/new?autoQuery=${encodeURIComponent(quickQuery.trim())}`
+                      `/admin/apps/new?autoQuery=${encodeURIComponent(quickQuery.trim())}&type=${quickType}`
                     );
                   }}
                   disabled={quickLoading || !quickQuery.trim()}

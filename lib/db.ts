@@ -570,6 +570,189 @@ export async function getTrendingAndroidApps(limit: number = 10): Promise<Applic
   return androidApps.slice(0, limit);
 }
 
+/**
+ * Retrieves the top trending Android Games ranked by 24h downloads, trending flag, and rating.
+ */
+export async function getTrendingAndroidGames(limit: number = 10): Promise<Application[]> {
+  const supabase = getDbClient();
+  if (supabase) {
+    try {
+      const now = new Date();
+      const since24h = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+
+      const { data: recentDownloads } = await supabase
+        .from("downloads")
+        .select("application_id")
+        .gte("downloaded_at", since24h);
+
+      const dl24hMap: Record<string, number> = {};
+      if (recentDownloads) {
+        recentDownloads.forEach((d: any) => {
+          if (d.application_id) {
+            dl24hMap[d.application_id] = (dl24hMap[d.application_id] || 0) + 1;
+          }
+        });
+      }
+
+      // Query published games
+      const { data: appsData, error } = await supabase
+        .from("applications")
+        .select(`
+          *,
+          category:categories(*),
+          versions:application_versions(*, download_sources(*)),
+          screenshots(*)
+        `)
+        .eq("status", "published")
+        .or("platform.eq.android,platform.is.null");
+
+      if (!error && appsData) {
+        const gameApps = appsData.filter((item: any) => {
+          const catSlug = item.category?.slug?.toLowerCase() || "";
+          const catName = item.category?.name?.toLowerCase() || "";
+          const appName = item.name?.toLowerCase() || "";
+          return (
+            catSlug === "games" ||
+            catName.includes("game") ||
+            appName.includes("mod game") ||
+            (item.package_name && item.package_name.includes("game"))
+          );
+        });
+
+        const appIds = gameApps.map((a: any) => a.id);
+        const totalDlMap: Record<string, number> = {};
+        if (appIds.length > 0) {
+          const { data: allDls } = await supabase
+            .from("downloads")
+            .select("application_id")
+            .in("application_id", appIds);
+          if (allDls) {
+            allDls.forEach((d: any) => {
+              if (d.application_id) totalDlMap[d.application_id] = (totalDlMap[d.application_id] || 0) + 1;
+            });
+          }
+        }
+
+        const mappedGames: Application[] = gameApps.map((item: any) => ({
+          ...item,
+          downloads_24h: dl24hMap[item.id] || 0,
+          downloads_count: totalDlMap[item.id] || 0,
+          latest_version: item.versions?.find((v: any) => v.is_latest) || item.versions?.[0],
+        }));
+
+        mappedGames.sort((a, b) => {
+          const dl24A = a.downloads_24h || 0;
+          const dl24B = b.downloads_24h || 0;
+          if (dl24B !== dl24A) return dl24B - dl24A;
+          if (b.is_trending && !a.is_trending) return 1;
+          if (!b.is_trending && a.is_trending) return -1;
+          const totalA = a.downloads_count || 0;
+          const totalB = b.downloads_count || 0;
+          if (totalB !== totalA) return totalB - totalA;
+          return (b.rating || 0) - (a.rating || 0);
+        });
+
+        return mappedGames.slice(0, limit);
+      }
+    } catch (err) {
+      console.error("Error in getTrendingAndroidGames:", err);
+    }
+  }
+
+  // Memory fallback
+  const gameApps = memoryApps
+    .filter((a) => a.status === "published" && (a.category?.slug === "games" || a.name.toLowerCase().includes("game")))
+    .map((a) => ({ ...a, downloads_24h: 0 }));
+  return gameApps.slice(0, limit);
+}
+
+/**
+ * Retrieves the top trending PC software ranked by downloads, trending flag, and rating.
+ */
+export async function getTrendingPCSoftware(limit: number = 10): Promise<Application[]> {
+  const supabase = getDbClient();
+  if (supabase) {
+    try {
+      const now = new Date();
+      const since24h = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+
+      const { data: recentDownloads } = await supabase
+        .from("downloads")
+        .select("application_id")
+        .gte("downloaded_at", since24h);
+
+      const dl24hMap: Record<string, number> = {};
+      if (recentDownloads) {
+        recentDownloads.forEach((d: any) => {
+          if (d.application_id) {
+            dl24hMap[d.application_id] = (dl24hMap[d.application_id] || 0) + 1;
+          }
+        });
+      }
+
+      // Query published PC software
+      const { data: appsData, error } = await supabase
+        .from("applications")
+        .select(`
+          *,
+          category:categories(*),
+          versions:application_versions(*, download_sources(*)),
+          screenshots(*)
+        `)
+        .eq("status", "published");
+
+      if (!error && appsData) {
+        const pcApps = appsData.filter(
+          (item: any) => item.platform === "pc" || item.category?.slug === "pc-software"
+        );
+
+        const appIds = pcApps.map((a: any) => a.id);
+        const totalDlMap: Record<string, number> = {};
+        if (appIds.length > 0) {
+          const { data: allDls } = await supabase
+            .from("downloads")
+            .select("application_id")
+            .in("application_id", appIds);
+          if (allDls) {
+            allDls.forEach((d: any) => {
+              if (d.application_id) totalDlMap[d.application_id] = (totalDlMap[d.application_id] || 0) + 1;
+            });
+          }
+        }
+
+        const mappedPC: Application[] = pcApps.map((item: any) => ({
+          ...item,
+          downloads_24h: dl24hMap[item.id] || 0,
+          downloads_count: totalDlMap[item.id] || 0,
+          latest_version: item.versions?.find((v: any) => v.is_latest) || item.versions?.[0],
+        }));
+
+        mappedPC.sort((a, b) => {
+          const dl24A = a.downloads_24h || 0;
+          const dl24B = b.downloads_24h || 0;
+          if (dl24B !== dl24A) return dl24B - dl24A;
+          if (b.is_trending && !a.is_trending) return 1;
+          if (!b.is_trending && a.is_trending) return -1;
+          const totalA = a.downloads_count || 0;
+          const totalB = b.downloads_count || 0;
+          if (totalB !== totalA) return totalB - totalA;
+          return (b.rating || 0) - (a.rating || 0);
+        });
+
+        return mappedPC.slice(0, limit);
+      }
+    } catch (err) {
+      console.error("Error in getTrendingPCSoftware:", err);
+    }
+  }
+
+  // Memory fallback
+  const pcApps = memoryApps
+    .filter((a) => a.status === "published" && (a.platform === "pc" || a.category?.slug === "pc-software"))
+    .map((a) => ({ ...a, downloads_24h: 0 }));
+  return pcApps.slice(0, limit);
+}
+
 export async function getLatestReleases(): Promise<Application[]> {
   const { applications } = await getApplications({ limit: 6, sortBy: "newest" });
   return applications;
@@ -1286,7 +1469,7 @@ export async function createModRequest(newReq: {
         .upsert(
           {
             setting_key: "community_mod_requests",
-            setting_value: JSON.stringify(updatedList),
+            setting_value: updatedList,
             updated_at: new Date().toISOString(),
           },
           { onConflict: "setting_key" }
@@ -1295,6 +1478,31 @@ export async function createModRequest(newReq: {
       console.error("createModRequest error:", err);
     }
   }
+
+  // Instant notification to Admin in Telegram
+  try {
+    const settings = await getSiteSettings();
+    const token = settings.telegramBotToken || process.env.TELEGRAM_BOT_TOKEN;
+    const adminChatId = settings.telegramAdminChatId || 1343548529;
+    if (token && adminChatId) {
+      fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: adminChatId,
+          text: (
+            `🙋‍♂️ <b>New Community MOD Request!</b>\n\n` +
+            `📱 <b>App:</b> <code>${created.app_name}</code>\n` +
+            `👤 <b>Requester:</b> ${created.requester_name}\n` +
+            `📝 <b>Features:</b> ${created.features_requested}\n\n` +
+            `⚡ Review &amp; approve in the <a href="https://www.awtmods.in/admin/requests">AWTMods Admin Panel</a>`
+          ),
+          parse_mode: "HTML",
+          disable_web_page_preview: true,
+        }),
+      }).catch(() => {});
+    }
+  } catch {}
 
   try {
     const { revalidatePath } = await import("next/cache");
@@ -1325,7 +1533,7 @@ export async function upvoteModRequest(id: string): Promise<number> {
         .upsert(
           {
             setting_key: "community_mod_requests",
-            setting_value: JSON.stringify(updatedList),
+            setting_value: updatedList,
             updated_at: new Date().toISOString(),
           },
           { onConflict: "setting_key" }
@@ -1370,7 +1578,7 @@ export async function updateModRequestStatus(
         .upsert(
           {
             setting_key: "community_mod_requests",
-            setting_value: JSON.stringify(updatedList),
+            setting_value: updatedList,
             updated_at: new Date().toISOString(),
           },
           { onConflict: "setting_key" }
@@ -1404,7 +1612,7 @@ export async function deleteModRequest(id: string): Promise<boolean> {
         .upsert(
           {
             setting_key: "community_mod_requests",
-            setting_value: JSON.stringify(updatedList),
+            setting_value: updatedList,
             updated_at: new Date().toISOString(),
           },
           { onConflict: "setting_key" }

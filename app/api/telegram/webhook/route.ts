@@ -1016,14 +1016,28 @@ export async function POST(req: Request) {
               ],
             ];
 
-            // 3. Edit original message in-place (caption if photo, or text if regular message)
+            // 3. Update the reply markup buttons directly first so the buttons ALWAYS update in-place
+            if (cq.message?.message_id) {
+              await fetch(`https://api.telegram.org/bot${token}/editMessageReplyMarkup`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: adminChatId,
+                  message_id: cq.message.message_id,
+                  reply_markup: { inline_keyboard: updatedButtons },
+                }),
+              }).catch(() => {});
+            }
+
+            // 4. Also update status line in caption/text if present
             const existingCaption = cq.message?.caption;
             const existingText = cq.message?.text;
+            const statusDraftRegex = /📌\s*(?:<b>)?Website Status:?(?:<\/b>)?\s*(?:<code>)?\s*📁?\s*DRAFT(?:\s*\(Unpublished\))?(?:<\/code>)?/i;
 
-            if (existingCaption !== undefined) {
+            if (existingCaption !== undefined && statusDraftRegex.test(existingCaption)) {
               const updatedCaption = existingCaption.replace(
-                /(📌\s*<b>Website Status:<\/b>\s*<code>).*?(<\/code>)/,
-                `$1🌐 PUBLISHED (Live)$2`
+                statusDraftRegex,
+                `📌 <b>Website Status:</b> <code>🌐 PUBLISHED (Live)</code>`
               );
               await fetch(`https://api.telegram.org/bot${token}/editMessageCaption`, {
                 method: "POST",
@@ -1036,10 +1050,10 @@ export async function POST(req: Request) {
                   reply_markup: { inline_keyboard: updatedButtons },
                 }),
               }).catch(() => {});
-            } else if (existingText !== undefined) {
+            } else if (existingText !== undefined && statusDraftRegex.test(existingText)) {
               const updatedText = existingText.replace(
-                /(📌\s*<b>Website Status:<\/b>\s*<code>).*?(<\/code>)/,
-                `$1🌐 PUBLISHED (Live)$2`
+                statusDraftRegex,
+                `📌 <b>Website Status:</b> <code>🌐 PUBLISHED (Live)</code>`
               );
               await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
                 method: "POST",
@@ -1049,16 +1063,6 @@ export async function POST(req: Request) {
                   message_id: cq.message?.message_id,
                   text: updatedText,
                   parse_mode: "HTML",
-                  reply_markup: { inline_keyboard: updatedButtons },
-                }),
-              }).catch(() => {});
-            } else if (cq.message?.message_id) {
-              await fetch(`https://api.telegram.org/bot${token}/editMessageReplyMarkup`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  chat_id: adminChatId,
-                  message_id: cq.message.message_id,
                   reply_markup: { inline_keyboard: updatedButtons },
                 }),
               }).catch(() => {});
@@ -1120,14 +1124,28 @@ export async function POST(req: Request) {
               ],
             ];
 
-            // 3. Edit original message in-place
+            // 3. Update the reply markup buttons directly first so the buttons ALWAYS update in-place
+            if (cq.message?.message_id) {
+              await fetch(`https://api.telegram.org/bot${token}/editMessageReplyMarkup`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: adminChatId,
+                  message_id: cq.message.message_id,
+                  reply_markup: { inline_keyboard: updatedButtons },
+                }),
+              }).catch(() => {});
+            }
+
+            // 4. Also update status line in caption/text if present
             const existingCaption = cq.message?.caption;
             const existingText = cq.message?.text;
+            const statusPublishedRegex = /📌\s*(?:<b>)?Website Status:?(?:<\/b>)?\s*(?:<code>)?\s*🌐?\s*PUBLISHED(?:\s*\(Live\))?(?:<\/code>)?/i;
 
-            if (existingCaption !== undefined) {
+            if (existingCaption !== undefined && statusPublishedRegex.test(existingCaption)) {
               const updatedCaption = existingCaption.replace(
-                /(📌\s*<b>Website Status:<\/b>\s*<code>).*?(<\/code>)/,
-                `$1📁 DRAFT (Unpublished)$2`
+                statusPublishedRegex,
+                `📌 <b>Website Status:</b> <code>📁 DRAFT (Unpublished)</code>`
               );
               await fetch(`https://api.telegram.org/bot${token}/editMessageCaption`, {
                 method: "POST",
@@ -1140,10 +1158,10 @@ export async function POST(req: Request) {
                   reply_markup: { inline_keyboard: updatedButtons },
                 }),
               }).catch(() => {});
-            } else if (existingText !== undefined) {
+            } else if (existingText !== undefined && statusPublishedRegex.test(existingText)) {
               const updatedText = existingText.replace(
-                /(📌\s*<b>Website Status:<\/b>\s*<code>).*?(<\/code>)/,
-                `$1📁 DRAFT (Unpublished)$2`
+                statusPublishedRegex,
+                `📌 <b>Website Status:</b> <code>📁 DRAFT (Unpublished)</code>`
               );
               await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
                 method: "POST",
@@ -1153,16 +1171,6 @@ export async function POST(req: Request) {
                   message_id: cq.message?.message_id,
                   text: updatedText,
                   parse_mode: "HTML",
-                  reply_markup: { inline_keyboard: updatedButtons },
-                }),
-              }).catch(() => {});
-            } else if (cq.message?.message_id) {
-              await fetch(`https://api.telegram.org/bot${token}/editMessageReplyMarkup`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  chat_id: adminChatId,
-                  message_id: cq.message.message_id,
                   reply_markup: { inline_keyboard: updatedButtons },
                 }),
               }).catch(() => {});

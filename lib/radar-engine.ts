@@ -433,26 +433,101 @@ export async function getRadarAppById(id: string): Promise<{
   releases: RadarRelease[];
 }> {
   const state = await loadState();
-  const app = state.apps.find((a) => a.id === id || a.package_name === id) || null;
+  const cleanId = (id || "").trim().toLowerCase();
+
+  let app = state.apps.find((a) => {
+    const aId = (a.id || "").toLowerCase();
+    const pkg = (a.package_name || "").toLowerCase();
+    return (
+      aId === cleanId ||
+      aId === `radar-${cleanId}` ||
+      `radar-${aId}` === cleanId ||
+      pkg === cleanId ||
+      (aId.includes(cleanId) && cleanId.length > 8) ||
+      (cleanId.includes(aId) && aId.length > 8)
+    );
+  }) || null;
+
+  // If not found in local radar state, search directly in the Supabase catalog
+  if (!app) {
+    const supabase = getDbClient();
+    if (supabase) {
+      try {
+        const { data: dbApp } = await supabase
+          .from("applications")
+          .select(`
+            id, name, package_name, slug, icon_url, developer,
+            category:categories(name),
+            versions:application_versions(version_name)
+          `)
+          .or(`id.eq.${id},package_name.eq.${id},slug.eq.${id}`)
+          .maybeSingle();
+
+        if (dbApp && dbApp.package_name) {
+          const now = new Date().toISOString();
+          const ver = dbApp.versions?.[0]?.version_name || "v1.0.0";
+          const newAppId = `radar-${dbApp.id}`;
+          const newCycleId = `cycle-${Date.now()}`;
+
+          app = {
+            id: newAppId,
+            package_name: dbApp.package_name.trim(),
+            app_name: dbApp.name,
+            play_store_url: `https://play.google.com/store/apps/details?id=${dbApp.package_name.trim()}`,
+            icon_url: dbApp.icon_url,
+            developer: dbApp.developer || "Aadith C V",
+            category: dbApp.category?.name || "Tools",
+            current_play_store_version: ver,
+            last_detected_version: ver,
+            is_active_tracking: true,
+            workflow_status: "UPDATE_DETECTED",
+            last_scanned_at: now,
+            last_detected_at: now,
+            created_at: now,
+            updated_at: now,
+          };
+
+          const newCycle: RadarModdingCycle = {
+            id: newCycleId,
+            radar_app_id: newAppId,
+            cycle_number: 1,
+            target_play_store_version: ver,
+            mod_version: `${ver} VIP Mod`,
+            workflow_status: "UPDATE_DETECTED",
+            priority: "Medium",
+            assigned_modder: "Aadith C V",
+            created_at: now,
+            updated_at: now,
+          };
+
+          state.apps.unshift(app);
+          state.cycles.unshift(newCycle);
+          await persistState(state);
+        }
+      } catch (err) {
+        console.error("Error auto-resolving app in getRadarAppById:", err);
+      }
+    }
+  }
 
   if (!app) {
     return { app: null, cycles: [], remarks: [], activities: [], releases: [] };
   }
 
   const cycles = state.cycles
-    .filter((c) => c.radar_app_id === app.id)
+    .filter((c) => c.radar_app_id === app.id || c.radar_app_id === id)
     .sort((a, b) => b.cycle_number - a.cycle_number);
 
   const remarks = state.remarks
-    .filter((r) => r.radar_app_id === app.id)
+    .filter((r) => r.radar_app_id === app.id || r.radar_app_id === id)
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   const activities = state.activities
-    .filter((act) => act.radar_app_id === app.id)
+    .filter((act) => act.radar_app_id === app.id || act.radar_app_id === id)
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   const releases = state.releases
-    .filter((rel) => rel.radar_app_id === app.id)
+    .filter((rel) => rel.radar_app_id === app.id || rel.radar_app_id === id)
     .sort((a, b) => new Date(b.released_at).getTime() - new Date(a.released_at).getTime());
 
   const current_cycle = cycles[0];

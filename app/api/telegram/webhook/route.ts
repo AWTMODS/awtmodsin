@@ -1828,19 +1828,35 @@ export async function POST(req: Request) {
             requester_name: requester,
           }).catch((err) => console.error("Failed to save bot mod request:", err));
         }
+
+        const targetUserChat = cq.message?.chat?.id || userChatId;
         await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            chat_id: userChatId,
+            chat_id: targetUserChat,
             text: (
               `✅ <b>MOD Request Submitted!</b>\n\n` +
               `Our team has received your request for <b>"${requestedName}"</b>.\n` +
-              `We will add it to AWTMods.in soon! Make sure to stay in our channel @awtmods for the release alert.`
+              `It is now listed in our community queue on <a href="https://www.awtmods.in/requests">AWTMods.in/requests</a>!\n\n` +
+              `Make sure to stay in our channel @awtmods for the release alert.`
             ),
             parse_mode: "HTML",
+            disable_web_page_preview: true,
           }),
-        });
+        }).catch(() => {});
+
+        await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            callback_query_id: cq.id,
+            text: `✅ Request for "${requestedName}" submitted!`,
+            show_alert: true,
+          }),
+        }).catch(() => {});
+
+        return NextResponse.json({ ok: true, requestSubmitted: requestedName });
       }
 
       // Stop Telegram spinner
@@ -2843,6 +2859,65 @@ export async function POST(req: Request) {
 
       await sendOrEditAdminMenu(chatId, token, settings);
       return NextResponse.json({ ok: true });
+    }
+
+    // ==========================================
+    // Handle /request or /modrequest command
+    // ==========================================
+    if (text.startsWith("/request") || text.startsWith("/modrequest")) {
+      const parts = text.split(" ");
+      const requestedName = parts.slice(1).join(" ").trim();
+      const requester = user?.username
+        ? `@${user.username}`
+        : user?.first_name
+        ? `${user.first_name} (Telegram)`
+        : `Telegram User #${chatId}`;
+
+      if (requestedName) {
+        const { createModRequest } = await import("@/lib/db");
+        await createModRequest({
+          app_name: requestedName,
+          features_requested: "Requested via Telegram Bot /request command",
+          requester_name: requester,
+        }).catch((err) => console.error("Failed to create mod request from command:", err));
+
+        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: (
+              `✅ <b>MOD Request Submitted!</b>\n\n` +
+              `📱 <b>App:</b> <code>${requestedName}</code>\n` +
+              `👤 <b>Requester:</b> ${requester}\n\n` +
+              `Your request is now live in the <a href="https://www.awtmods.in/requests">Community Requests</a> board on our website! Our team and community can now review and upvote it.`
+            ),
+            parse_mode: "HTML",
+            disable_web_page_preview: true,
+          }),
+        }).catch(() => {});
+        return NextResponse.json({ ok: true, requested: requestedName });
+      } else {
+        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: (
+              `🙋‍♂️ <b>How to Request an App or Game MOD:</b>\n\n` +
+              `Type: <code>/request [App Name]</code>\n\n` +
+              `<b>Examples:</b>\n` +
+              `• <code>/request Spotify Premium</code>\n` +
+              `• <code>/request Minecraft PE</code>\n` +
+              `• <code>/request InShot Pro</code>\n\n` +
+              `Your request will immediately appear on <a href="https://www.awtmods.in/requests">AWTMods.in/requests</a> and in the Admin Panel!`
+            ),
+            parse_mode: "HTML",
+            disable_web_page_preview: true,
+          }),
+        }).catch(() => {});
+        return NextResponse.json({ ok: true });
+      }
     }
 
     // Check if user is asking for /start

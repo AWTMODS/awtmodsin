@@ -1222,8 +1222,8 @@ export async function getApplicationReviews(
 // ==========================================
 // COMMUNITY MOD REQUESTS ENGINE
 // ==========================================
-// MOD REQUESTS MANAGEMENT
-// ==========================================
+
+let memoryModRequests: import("./types").ModRequest[] = [];
 
 export async function getModRequests(): Promise<import("./types").ModRequest[]> {
   const supabase = getDbClient();
@@ -1235,14 +1235,26 @@ export async function getModRequests(): Promise<import("./types").ModRequest[]> 
         .eq("setting_key", "community_mod_requests")
         .maybeSingle();
 
-      if (!error && data?.setting_value && Array.isArray(data.setting_value)) {
-        return data.setting_value as import("./types").ModRequest[];
+      if (!error && data?.setting_value) {
+        if (Array.isArray(data.setting_value)) {
+          memoryModRequests = data.setting_value;
+          return data.setting_value as import("./types").ModRequest[];
+        }
+        if (typeof data.setting_value === "string") {
+          try {
+            const parsed = JSON.parse(data.setting_value);
+            if (Array.isArray(parsed)) {
+              memoryModRequests = parsed;
+              return parsed as import("./types").ModRequest[];
+            }
+          } catch {}
+        }
       }
     } catch {
       // Fallback
     }
   }
-  return [];
+  return memoryModRequests;
 }
 
 export async function createModRequest(newReq: {
@@ -1264,13 +1276,19 @@ export async function createModRequest(newReq: {
   };
 
   const updatedList = [created, ...allRequests];
+  memoryModRequests = updatedList;
+
   const supabase = getDbClient();
   if (supabase) {
     try {
       await supabase
         .from("site_settings")
         .upsert(
-          { setting_key: "community_mod_requests", setting_value: updatedList, updated_at: new Date().toISOString() },
+          {
+            setting_key: "community_mod_requests",
+            setting_value: JSON.stringify(updatedList),
+            updated_at: new Date().toISOString(),
+          },
           { onConflict: "setting_key" }
         );
     } catch (err) {
@@ -1297,6 +1315,7 @@ export async function upvoteModRequest(id: string): Promise<number> {
     }
     return r;
   });
+  memoryModRequests = updatedList;
 
   const supabase = getDbClient();
   if (supabase) {
@@ -1304,7 +1323,11 @@ export async function upvoteModRequest(id: string): Promise<number> {
       await supabase
         .from("site_settings")
         .upsert(
-          { setting_key: "community_mod_requests", setting_value: updatedList, updated_at: new Date().toISOString() },
+          {
+            setting_key: "community_mod_requests",
+            setting_value: JSON.stringify(updatedList),
+            updated_at: new Date().toISOString(),
+          },
           { onConflict: "setting_key" }
         );
     } catch (err) {
@@ -1337,6 +1360,7 @@ export async function updateModRequestStatus(
     }
     return r;
   });
+  memoryModRequests = updatedList;
 
   const supabase = getDbClient();
   if (supabase) {
@@ -1344,7 +1368,11 @@ export async function updateModRequestStatus(
       const { error } = await supabase
         .from("site_settings")
         .upsert(
-          { setting_key: "community_mod_requests", setting_value: updatedList, updated_at: new Date().toISOString() },
+          {
+            setting_key: "community_mod_requests",
+            setting_value: JSON.stringify(updatedList),
+            updated_at: new Date().toISOString(),
+          },
           { onConflict: "setting_key" }
         );
 
@@ -1366,6 +1394,7 @@ export async function updateModRequestStatus(
 export async function deleteModRequest(id: string): Promise<boolean> {
   const allRequests = await getModRequests();
   const updatedList = allRequests.filter((r) => r.id !== id);
+  memoryModRequests = updatedList;
 
   const supabase = getDbClient();
   if (supabase) {
@@ -1373,7 +1402,11 @@ export async function deleteModRequest(id: string): Promise<boolean> {
       const { error } = await supabase
         .from("site_settings")
         .upsert(
-          { setting_key: "community_mod_requests", setting_value: updatedList, updated_at: new Date().toISOString() },
+          {
+            setting_key: "community_mod_requests",
+            setting_value: JSON.stringify(updatedList),
+            updated_at: new Date().toISOString(),
+          },
           { onConflict: "setting_key" }
         );
 

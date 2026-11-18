@@ -235,6 +235,57 @@ async function loadState(): Promise<RadarInMemoryState> {
     await persistState(inMemoryState);
   }
 
+  // Sync real detected Play Store versions and changelogs from playstore_radar_state
+  try {
+    const supabase = getDbClient();
+    if (supabase) {
+      const { data: radarSetting } = await supabase
+        .from("site_settings")
+        .select("setting_value")
+        .eq("setting_key", "playstore_radar_state")
+        .maybeSingle();
+
+      if (radarSetting?.setting_value?.updates) {
+        const updatesMap = radarSetting.setting_value.updates;
+        let didSync = false;
+
+        inMemoryState.apps.forEach((app) => {
+          const rawId = app.id.replace(/^radar-/, "");
+          const update =
+            updatesMap[rawId] ||
+            updatesMap[app.id] ||
+            Object.values(updatesMap).find(
+              (u: any) => u.packageName === app.package_name
+            );
+
+          if (update && update.playStoreVersion) {
+            const playVer = update.playStoreVersion.replace(/^v+/i, "");
+            const siteVer = (update.currentModVersion || "").replace(/^v+/i, "");
+
+            if (app.current_play_store_version !== playVer) {
+              app.current_play_store_version = playVer;
+              if (siteVer) app.last_detected_version = siteVer;
+              didSync = true;
+            }
+          }
+        });
+
+        if (didSync) {
+          inMemoryState.cycles.forEach((c) => {
+            const parentApp = inMemoryState.apps.find((a) => a.id === c.radar_app_id);
+            if (parentApp) {
+              c.target_play_store_version = parentApp.current_play_store_version;
+              c.mod_version = `${parentApp.current_play_store_version} VIP Mod`;
+            }
+          });
+          await persistState(inMemoryState);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("playstore_radar_state sync error:", err);
+  }
+
   return inMemoryState;
 }
 
@@ -507,9 +558,34 @@ export async function getRadarAppById(id: string): Promise<{
 
         if (dbApp && dbApp.package_name) {
           const now = new Date().toISOString();
-          const ver = dbApp.versions?.[0]?.version_name || "v1.0.0";
+          const ver = (dbApp.versions?.[0]?.version_name || "1.0.0").replace(/^v+/i, "");
           const newAppId = `radar-${dbApp.id}`;
           const newCycleId = `cycle-${Date.now()}`;
+
+          // Check if playstore_radar_state already detected a newer Play Store version!
+          let playStoreVer = ver;
+          let siteModVer = ver;
+          let changelogText = "";
+
+          const { data: radarSetting } = await supabase
+            .from("site_settings")
+            .select("setting_value")
+            .eq("setting_key", "playstore_radar_state")
+            .maybeSingle();
+
+          if (radarSetting?.setting_value?.updates) {
+            const updates = radarSetting.setting_value.updates;
+            const update =
+              updates[dbApp.id] ||
+              Object.values(updates).find(
+                (u: any) => u.packageName === dbApp.package_name.trim() || u.slug === dbApp.slug
+              );
+            if (update && update.playStoreVersion) {
+              playStoreVer = update.playStoreVersion.replace(/^v+/i, "");
+              siteModVer = (update.currentModVersion || ver).replace(/^v+/i, "");
+              changelogText = update.changelog || "";
+            }
+          }
 
           app = {
             id: newAppId,
@@ -519,8 +595,8 @@ export async function getRadarAppById(id: string): Promise<{
             icon_url: dbApp.icon_url,
             developer: dbApp.developer || "Aadith C V",
             category: dbApp.category?.name || "Tools",
-            current_play_store_version: ver,
-            last_detected_version: ver,
+            current_play_store_version: playStoreVer,
+            last_detected_version: siteModVer,
             is_active_tracking: true,
             workflow_status: "UPDATE_DETECTED",
             last_scanned_at: now,
@@ -533,11 +609,12 @@ export async function getRadarAppById(id: string): Promise<{
             id: newCycleId,
             radar_app_id: newAppId,
             cycle_number: 1,
-            target_play_store_version: ver,
-            mod_version: `${ver} VIP Mod`,
+            target_play_store_version: playStoreVer,
+            mod_version: `${playStoreVer} VIP Mod`,
             workflow_status: "UPDATE_DETECTED",
             priority: "Medium",
             assigned_modder: "Aadith C V",
+            changelog: changelogText,
             created_at: now,
             updated_at: now,
           };
@@ -549,6 +626,49 @@ export async function getRadarAppById(id: string): Promise<{
       } catch (err) {
         console.error("Error auto-resolving app in getRadarAppById:", err);
       }
+    }
+  }
+
+  // Double check and sync with playstore_radar_state for existing tracked apps
+  if (app) {
+    const supabase = getDbClient();
+    if (supabase) {
+      try {
+        const { data: radarSetting } = await supabase
+          .from("site_settings")
+          .select("setting_value")
+          .eq("setting_key", "playstore_radar_state")
+          .maybeSingle();
+
+        if (radarSetting?.setting_value?.updates) {
+          const updates = radarSetting.setting_value.updates;
+          const cleanAppId = app.id.replace(/^radar-/, "");
+          const update =
+            updates[cleanAppId] ||
+            updates[app.id] ||
+            Object.values(updates).find(
+              (u: any) => u.packageName === app?.package_name
+            );
+
+          if (update && update.playStoreVersion) {
+            const detectedPlayVer = update.playStoreVersion.replace(/^v+/i, "");
+            const detectedSiteVer = (update.currentModVersion || "").replace(/^v+/i, "");
+
+            if (app.current_play_store_version !== detectedPlayVer) {
+              app.current_play_store_version = detectedPlayVer;
+              if (detectedSiteVer) app.last_detected_version = detectedSiteVer;
+
+              const matchingCycle = state.cycles.find((c) => c.radar_app_id === app?.id);
+              if (matchingCycle) {
+                matchingCycle.target_play_store_version = detectedPlayVer;
+                matchingCycle.mod_version = `${detectedPlayVer} VIP Mod`;
+                if (update.changelog) matchingCycle.changelog = update.changelog;
+              }
+              await persistState(state);
+            }
+          }
+        }
+      } catch {}
     }
   }
 

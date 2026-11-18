@@ -50,6 +50,21 @@ interface RadarAppDetailProps {
   activities: RadarActivityLog[];
 }
 
+// Clean version formatter preventing duplicate "vv"
+const formatCleanVersion = (val?: string) => {
+  if (!val) return "v1.0.0";
+  const trimmed = val.trim();
+  const stripped = trimmed.replace(/^v+/i, "");
+  return `v${stripped}`;
+};
+
+const formatModLabel = (val?: string, fallbackVer?: string) => {
+  if (!val) return fallbackVer ? `${formatCleanVersion(fallbackVer)} VIP Mod` : "v1.0.0 VIP Mod";
+  const trimmed = val.trim();
+  const stripped = trimmed.replace(/^v+/i, "");
+  return stripped.toLowerCase().includes("mod") ? `v${stripped}` : `v${stripped} VIP Mod`;
+};
+
 export function RadarAppDetail({
   app: initialApp,
   cycle: initialCycle,
@@ -76,31 +91,31 @@ export function RadarAppDetail({
     switch (status) {
       case "UPDATE_DETECTED":
         return (
-          <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30 text-xs py-1 px-3">
+          <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30 text-xs py-1 px-3 font-bold">
             Update Detected
           </Badge>
         );
       case "MODDING_STARTED":
         return (
-          <Badge className="bg-blue-500/15 text-blue-400 border-blue-500/30 text-xs py-1 px-3">
+          <Badge className="bg-blue-500/15 text-blue-400 border-blue-500/30 text-xs py-1 px-3 font-bold">
             Modding Started
           </Badge>
         );
       case "MODDED_COMPLETED":
         return (
-          <Badge className="bg-purple-500/15 text-purple-400 border-purple-500/30 text-xs py-1 px-3">
+          <Badge className="bg-purple-500/15 text-purple-400 border-purple-500/30 text-xs py-1 px-3 font-bold">
             Modded Completed
           </Badge>
         );
       case "READY_TO_PUBLISH":
         return (
-          <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-xs py-1 px-3">
+          <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-xs py-1 px-3 font-bold">
             Ready to Publish
           </Badge>
         );
       case "MOD_RELEASED":
         return (
-          <Badge className="bg-[#B6F23A]/15 text-[#B6F23A] border-[#B6F23A]/30 text-xs py-1 px-3">
+          <Badge className="bg-[#B6F23A]/15 text-[#B6F23A] border-[#B6F23A]/30 text-xs py-1 px-3 font-bold">
             Mod Released
           </Badge>
         );
@@ -216,20 +231,20 @@ export function RadarAppDetail({
             <div className="grid grid-cols-2 gap-3 pt-3 border-t border-[#263129]">
               <div className="p-3 rounded-xl bg-[#080B0A] border border-[#263129]">
                 <span className="text-[11px] font-sans text-[#929B94] block">
-                  Last Tracked / Mod Version
+                  Current Website / Mod Version
                 </span>
                 <span className="text-sm font-mono font-bold text-[#F5F7F4]">
-                  v{cycle?.mod_version || app.last_detected_version || "1.0.0"}
+                  {formatCleanVersion(app.last_detected_version || "1.0.0")}
                 </span>
               </div>
 
               <div className="p-3 rounded-xl bg-[#080B0A] border border-[#263129]">
-                <span className="text-[11px] font-sans text-amber-400 block">
-                  Play Store Version
+                <span className="text-[11px] font-sans text-amber-400 block font-bold">
+                  Play Store Version (Detected)
                 </span>
                 <span className="text-sm font-mono font-black text-amber-400 flex items-center gap-1.5">
                   <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
-                  v{app.current_play_store_version || "1.0.0"}
+                  {formatCleanVersion(app.current_play_store_version)}
                 </span>
               </div>
             </div>
@@ -243,7 +258,7 @@ export function RadarAppDetail({
                   Admin Modding Pipeline Control
                 </h2>
                 <p className="text-xs text-[#929B94] mt-0.5">
-                  Manual stage advancement for modders and release managers
+                  Step-by-step admin action control (Only clicking advances stages)
                 </p>
               </div>
               <Badge className="bg-[#263129] text-[#F5F7F4] text-xs">
@@ -251,54 +266,66 @@ export function RadarAppDetail({
               </Badge>
             </div>
 
-            {/* Active Workflow Buttons */}
+            {/* Active Workflow Buttons with Stage Highlighting */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2">
+              {/* Button 1: Start Modding */}
               <Button
                 size="sm"
-                variant="outline"
                 onClick={() => setActiveModal("start")}
-                className={`h-10 text-xs font-bold rounded-xl border-[#263129] ${
+                className={`h-10 text-xs rounded-xl transition-all ${
                   app.workflow_status === "UPDATE_DETECTED"
-                    ? "bg-blue-600/20 text-blue-400 border-blue-500/40 hover:bg-blue-600/30"
-                    : "bg-[#080B0A] text-[#929B94] hover:text-[#F5F7F4]"
+                    ? "bg-[#B6F23A] text-[#080B0A] hover:bg-[#B6F23A]/90 font-black shadow-md ring-2 ring-[#B6F23A]/30"
+                    : "variant-outline border-[#263129] bg-[#080B0A] text-[#929B94] hover:text-[#F5F7F4] font-medium"
                 }`}
               >
                 <Play className="h-3.5 w-3.5 mr-1" />
                 <span>Start Modding</span>
               </Button>
 
+              {/* Button 2: Mod Completed */}
               <Button
                 size="sm"
-                variant="outline"
                 onClick={() => setActiveModal("completed")}
-                className={`h-10 text-xs font-bold rounded-xl border-[#263129] ${
+                disabled={app.workflow_status === "UPDATE_DETECTED"}
+                className={`h-10 text-xs rounded-xl transition-all ${
                   app.workflow_status === "MODDING_STARTED"
-                    ? "bg-purple-600/20 text-purple-400 border-purple-500/40 hover:bg-purple-600/30"
-                    : "bg-[#080B0A] text-[#929B94] hover:text-[#F5F7F4]"
+                    ? "bg-purple-600 text-white hover:bg-purple-500 font-black shadow-md ring-2 ring-purple-500/30"
+                    : app.workflow_status === "UPDATE_DETECTED"
+                    ? "border-[#263129] bg-[#080B0A] text-[#929B94]/40 cursor-not-allowed border"
+                    : "border-[#263129] bg-[#080B0A] text-[#929B94] hover:text-[#F5F7F4] font-medium border"
                 }`}
               >
                 <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
                 <span>Mod Completed</span>
               </Button>
 
+              {/* Button 3: Ready to Publish */}
               <Button
                 size="sm"
-                variant="outline"
                 onClick={() => setActiveModal("ready")}
-                className={`h-10 text-xs font-bold rounded-xl border-[#263129] ${
+                disabled={app.workflow_status === "UPDATE_DETECTED" || app.workflow_status === "MODDING_STARTED"}
+                className={`h-10 text-xs rounded-xl transition-all ${
                   app.workflow_status === "MODDED_COMPLETED"
-                    ? "bg-emerald-600/20 text-emerald-400 border-emerald-500/40 hover:bg-emerald-600/30"
-                    : "bg-[#080B0A] text-[#929B94] hover:text-[#F5F7F4]"
+                    ? "bg-amber-500 text-[#080B0A] hover:bg-amber-400 font-black shadow-md ring-2 ring-amber-500/30"
+                    : app.workflow_status === "UPDATE_DETECTED" || app.workflow_status === "MODDING_STARTED"
+                    ? "border-[#263129] bg-[#080B0A] text-[#929B94]/40 cursor-not-allowed border"
+                    : "border-[#263129] bg-[#080B0A] text-[#929B94] hover:text-[#F5F7F4] font-medium border"
                 }`}
               >
                 <FileCheck className="h-3.5 w-3.5 mr-1" />
                 <span>Ready to Publish</span>
               </Button>
 
+              {/* Button 4: Release Mod */}
               <Button
                 size="sm"
                 onClick={() => setActiveModal("release")}
-                className="h-10 text-xs font-black rounded-xl bg-[#B6F23A] text-[#080B0A] hover:bg-[#B6F23A]/90 shadow-xs"
+                disabled={app.workflow_status !== "READY_TO_PUBLISH"}
+                className={`h-10 text-xs rounded-xl transition-all ${
+                  app.workflow_status === "READY_TO_PUBLISH"
+                    ? "bg-[#B6F23A] text-[#080B0A] hover:bg-[#B6F23A]/90 font-black shadow-md ring-2 ring-[#B6F23A]/30"
+                    : "border-[#263129] bg-[#080B0A] text-[#929B94]/40 cursor-not-allowed border"
+                }`}
               >
                 <Send className="h-3.5 w-3.5 mr-1" />
                 <span>Release Mod</span>
@@ -318,7 +345,7 @@ export function RadarAppDetail({
                     <strong className="text-[#F5F7F4]">
                       {cycle.modding_started_at
                         ? new Date(cycle.modding_started_at).toLocaleDateString()
-                        : "In Progress"}
+                        : (app.workflow_status === "UPDATE_DETECTED" ? "Pending (Not Started)" : "In Progress")}
                     </strong>
                   </span>
                 </div>
@@ -326,6 +353,12 @@ export function RadarAppDetail({
                   <div className="pt-2 border-t border-[#263129]/60 text-[#929B94]">
                     <span className="text-[#B6F23A] font-bold">Testing Requirements: </span>
                     {cycle.testing_requirements}
+                  </div>
+                )}
+                {cycle.changelog && (
+                  <div className="pt-2 border-t border-[#263129]/60 text-[#929B94] italic">
+                    <span className="text-amber-400 font-bold not-italic">Play Store Changelog: </span>
+                    &ldquo;{cycle.changelog.replace(/<[^>]*>/g, "").trim()}&rdquo;
                   </div>
                 )}
               </div>
@@ -431,16 +464,16 @@ export function RadarAppDetail({
 
             <div className="space-y-2">
               <div className="p-3 rounded-xl bg-[#080B0A] border border-[#263129] text-xs space-y-1">
-                <span className="text-[10px] uppercase font-mono text-[#929B94]">Current Target Mod</span>
+                <span className="text-[10px] uppercase font-mono text-[#929B94]">Target Mod Version</span>
                 <p className="font-bold font-mono text-[#B6F23A]">
-                  v{cycle?.mod_version || "Pending Mod"}
+                  {formatModLabel(cycle?.mod_version, app.current_play_store_version)}
                 </p>
               </div>
 
               <div className="p-3 rounded-xl bg-[#080B0A] border border-[#263129] text-xs space-y-1">
-                <span className="text-[10px] uppercase font-mono text-[#929B94]">Latest Play Store Detected</span>
+                <span className="text-[10px] uppercase font-mono text-amber-400">Play Store Version Detected</span>
                 <p className="font-bold font-mono text-amber-400">
-                  v{app.current_play_store_version}
+                  {formatCleanVersion(app.current_play_store_version)}
                 </p>
               </div>
 

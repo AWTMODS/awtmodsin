@@ -910,6 +910,31 @@ export async function POST(req: Request) {
               ? `https://t.me/${channelClean}/${bRes.messageId}`
               : `https://t.me/${channelClean}`;
 
+            // Edit the original wizard message buttons in-place to mark broadcasted
+            if (cq.message?.message_id) {
+              const liveAppUrl = `${settings.siteUrl || "https://www.awtmods.in"}/apps/${app.slug}.html`;
+              const broadcastedButtons = [
+                [
+                  { text: "✅ Broadcasted to Channel", url: postLink },
+                  { text: "🌐 View Live App", url: liveAppUrl },
+                ],
+                [
+                  { text: "📁 Save as Draft", callback_data: `wiz_draft:${app.id}` },
+                  { text: "⏰ Schedule Another", callback_data: `wiz_sched:${app.id}` },
+                ],
+              ];
+
+              await fetch(`https://api.telegram.org/bot${token}/editMessageReplyMarkup`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: adminChatId,
+                  message_id: cq.message.message_id,
+                  reply_markup: { inline_keyboard: broadcastedButtons },
+                }),
+              }).catch(() => {});
+            }
+
             await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -939,7 +964,7 @@ export async function POST(req: Request) {
           }
         }
 
-        // Action: Publish on Website Only
+        // Action: Publish on Website Only (Edit buttons in-place, no duplicate messages)
         if (action === "wiz_pubsite") {
           const appId = rest[0];
           const app = await getApplicationById(appId);
@@ -960,26 +985,90 @@ export async function POST(req: Request) {
             const siteUrl = settings.siteUrl || "https://www.awtmods.in";
             const appUrl = `${siteUrl}/apps/${app.slug}.html`;
 
-            await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            // 1. Toast alert to admin
+            await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                chat_id: adminChatId,
-                text: (
-                  `🌐 <b>${app.name} is now PUBLISHED Live on Website!</b>\n\n` +
-                  `🔗 <b>Live URL:</b> <a href="${appUrl}">${appUrl}</a>\n\n` +
-                  `<i>It is now visible in the website catalog and search! You can still broadcast it to @${settings.telegramChannelId?.replace(/^@/, "") || "awtmods"} below whenever you're ready:</i>`
-                ),
-                parse_mode: "HTML",
+                callback_query_id: cq.id,
+                text: `🌐 Published! ${app.name} is now LIVE on website.`,
+                show_alert: false,
               }),
-            });
+            }).catch(() => {});
 
-            const { sendDraftPreviewToAdmin } = await import("@/lib/telegram-broadcast");
-            await sendDraftPreviewToAdmin(app, adminChatId);
+            // 2. Updated inline buttons (Row 2 toggles to "Save as Draft" + "View Live App")
+            const updatedButtons = [
+              [
+                { text: "🚀 Approve & Broadcast Now", callback_data: `wiz_approve:${app.id}` },
+                { text: "⏰ Schedule Post", callback_data: `wiz_sched:${app.id}` },
+              ],
+              [
+                { text: "📁 Save as Draft", callback_data: `wiz_draft:${app.id}` },
+                { text: "🌐 View Live App", url: appUrl },
+              ],
+              [
+                { text: "🔢 Edit Version Code", callback_data: `wiz_code:${app.id}` },
+                { text: "📦 Edit App Size", callback_data: `wiz_size:${app.id}` },
+              ],
+              [
+                { text: "🖼️ Change Logo Photo", callback_data: `wiz_logo:${app.id}` },
+                { text: "📝 Edit Mod Features", callback_data: `wiz_feat:${app.id}` },
+              ],
+            ];
+
+            // 3. Edit original message in-place (caption if photo, or text if regular message)
+            const existingCaption = cq.message?.caption;
+            const existingText = cq.message?.text;
+
+            if (existingCaption !== undefined) {
+              const updatedCaption = existingCaption.replace(
+                /(📌\s*<b>Website Status:<\/b>\s*<code>).*?(<\/code>)/,
+                `$1🌐 PUBLISHED (Live)$2`
+              );
+              await fetch(`https://api.telegram.org/bot${token}/editMessageCaption`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: adminChatId,
+                  message_id: cq.message?.message_id,
+                  caption: updatedCaption,
+                  parse_mode: "HTML",
+                  reply_markup: { inline_keyboard: updatedButtons },
+                }),
+              }).catch(() => {});
+            } else if (existingText !== undefined) {
+              const updatedText = existingText.replace(
+                /(📌\s*<b>Website Status:<\/b>\s*<code>).*?(<\/code>)/,
+                `$1🌐 PUBLISHED (Live)$2`
+              );
+              await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: adminChatId,
+                  message_id: cq.message?.message_id,
+                  text: updatedText,
+                  parse_mode: "HTML",
+                  reply_markup: { inline_keyboard: updatedButtons },
+                }),
+              }).catch(() => {});
+            } else if (cq.message?.message_id) {
+              await fetch(`https://api.telegram.org/bot${token}/editMessageReplyMarkup`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: adminChatId,
+                  message_id: cq.message.message_id,
+                  reply_markup: { inline_keyboard: updatedButtons },
+                }),
+              }).catch(() => {});
+            }
+
+            return NextResponse.json({ ok: true, published: true });
           }
         }
 
-        // Action: Keep / Save as Draft on Website
+        // Action: Keep / Save as Draft on Website (Edit buttons in-place, no duplicate messages)
         if (action === "wiz_draft") {
           const appId = rest[0];
           const app = await getApplicationById(appId);
@@ -997,21 +1086,89 @@ export async function POST(req: Request) {
           }
 
           if (app) {
-            await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            const siteUrl = settings.siteUrl || "https://www.awtmods.in";
+            const appUrl = `${siteUrl}/apps/${app.slug}.html`;
+
+            // 1. Toast alert to admin
+            await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                chat_id: adminChatId,
-                text: (
-                  `📁 <b>${app.name} Saved as DRAFT</b>\n\n` +
-                  `✅ <i>This app is hidden from the public website catalog until you choose to publish it.</i>`
-                ),
-                parse_mode: "HTML",
+                callback_query_id: cq.id,
+                text: `📁 Saved as Draft! ${app.name} is now unpublished.`,
+                show_alert: false,
               }),
-            });
+            }).catch(() => {});
 
-            const { sendDraftPreviewToAdmin } = await import("@/lib/telegram-broadcast");
-            await sendDraftPreviewToAdmin(app, adminChatId);
+            // 2. Updated inline buttons (Row 2 toggles to "Publish on Website" + "Preview on Website")
+            const updatedButtons = [
+              [
+                { text: "🚀 Approve & Broadcast Now", callback_data: `wiz_approve:${app.id}` },
+                { text: "⏰ Schedule Post", callback_data: `wiz_sched:${app.id}` },
+              ],
+              [
+                { text: "🌐 Publish on Website", callback_data: `wiz_pubsite:${app.id}` },
+                { text: "👀 Preview on Website", url: appUrl },
+              ],
+              [
+                { text: "🔢 Edit Version Code", callback_data: `wiz_code:${app.id}` },
+                { text: "📦 Edit App Size", callback_data: `wiz_size:${app.id}` },
+              ],
+              [
+                { text: "🖼️ Change Logo Photo", callback_data: `wiz_logo:${app.id}` },
+                { text: "📝 Edit Mod Features", callback_data: `wiz_feat:${app.id}` },
+              ],
+            ];
+
+            // 3. Edit original message in-place
+            const existingCaption = cq.message?.caption;
+            const existingText = cq.message?.text;
+
+            if (existingCaption !== undefined) {
+              const updatedCaption = existingCaption.replace(
+                /(📌\s*<b>Website Status:<\/b>\s*<code>).*?(<\/code>)/,
+                `$1📁 DRAFT (Unpublished)$2`
+              );
+              await fetch(`https://api.telegram.org/bot${token}/editMessageCaption`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: adminChatId,
+                  message_id: cq.message?.message_id,
+                  caption: updatedCaption,
+                  parse_mode: "HTML",
+                  reply_markup: { inline_keyboard: updatedButtons },
+                }),
+              }).catch(() => {});
+            } else if (existingText !== undefined) {
+              const updatedText = existingText.replace(
+                /(📌\s*<b>Website Status:<\/b>\s*<code>).*?(<\/code>)/,
+                `$1📁 DRAFT (Unpublished)$2`
+              );
+              await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: adminChatId,
+                  message_id: cq.message?.message_id,
+                  text: updatedText,
+                  parse_mode: "HTML",
+                  reply_markup: { inline_keyboard: updatedButtons },
+                }),
+              }).catch(() => {});
+            } else if (cq.message?.message_id) {
+              await fetch(`https://api.telegram.org/bot${token}/editMessageReplyMarkup`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: adminChatId,
+                  message_id: cq.message.message_id,
+                  reply_markup: { inline_keyboard: updatedButtons },
+                }),
+              }).catch(() => {});
+            }
+
+            return NextResponse.json({ ok: true, draft: true });
           }
         }
 

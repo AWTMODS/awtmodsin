@@ -15,7 +15,7 @@ interface TelegramJoinPopupProps {
 export function TelegramJoinPopup({
   telegramUrl = "https://t.me/awtmods",
   enabled = true,
-  delaySeconds = 3,
+  delaySeconds = 1,
   title = "Join our Telegram",
   description = "Get new premium unlocked apps first, plus update alerts and support from the community.",
 }: TelegramJoinPopupProps) {
@@ -23,61 +23,44 @@ export function TelegramJoinPopup({
   const [isOpen, setIsOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
-  const [popupUrl, setPopupUrl] = useState(telegramUrl);
-  const [popupEnabled, setPopupEnabled] = useState(enabled);
-  const [popupDelay, setPopupDelay] = useState(delaySeconds);
-  const [popupTitle, setPopupTitle] = useState(title);
-  const [popupDesc, setPopupDesc] = useState(description);
-
-  // Fetch real-time public settings from admin config
-  useEffect(() => {
-    fetch("/api/settings/public")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data) {
-          if (data.telegramUrl) setPopupUrl(data.telegramUrl);
-          if (typeof data.telegramPopupEnabled === "boolean")
-            setPopupEnabled(data.telegramPopupEnabled);
-          if (typeof data.telegramPopupDelay === "number")
-            setPopupDelay(data.telegramPopupDelay);
-          if (data.telegramPopupTitle) setPopupTitle(data.telegramPopupTitle);
-          if (data.telegramPopupDesc) setPopupDesc(data.telegramPopupDesc);
-        }
-      })
-      .catch(() => {});
-  }, []);
-
   useEffect(() => {
     setMounted(true);
 
-    // Never show inside admin console
+    // Never show on admin pages
     if (pathname && pathname.startsWith("/admin")) {
       return;
     }
 
-    if (!popupEnabled) return;
+    if (!enabled) return;
 
-    // Check localStorage status
-    try {
-      const isJoined = localStorage.getItem("awtmods_tg_joined");
-      if (isJoined === "true") {
-        return;
-      }
+    // Check force preview query param (?tg_popup=1 or ?preview_tg=1)
+    const isForced =
+      typeof window !== "undefined" &&
+      (window.location.search.includes("tg_popup=1") ||
+        window.location.search.includes("preview_tg=1"));
 
-      const snoozeUntil = localStorage.getItem("awtmods_tg_snooze_until");
-      if (snoozeUntil && Number(snoozeUntil) > Date.now()) {
-        return;
+    if (!isForced) {
+      try {
+        const isJoined = localStorage.getItem("awtmods_tg_joined");
+        if (isJoined === "true") {
+          return;
+        }
+
+        const snoozeUntil = localStorage.getItem("awtmods_tg_snooze_until");
+        if (snoozeUntil && Number(snoozeUntil) > Date.now()) {
+          return;
+        }
+      } catch {
+        // Fallback for private browsing mode
       }
-    } catch {
-      // LocalStorage access might fail in private browsing mode
     }
 
-    // Trigger timer after configured delay
+    // Trigger timer after short delay (default 1s for immediate prompt)
     const timer = setTimeout(() => {
       setIsOpen(true);
-    }, Math.max(1, popupDelay) * 1000);
+    }, isForced ? 100 : Math.max(0.5, delaySeconds) * 1000);
 
-    // Allow manual opening (e.g. from admin preview or header links)
+    // Allow manual opening via custom window event
     const handleManualOpen = () => {
       setIsOpen(true);
     };
@@ -88,7 +71,7 @@ export function TelegramJoinPopup({
       clearTimeout(timer);
       window.removeEventListener("awtmods_open_tg_popup", handleManualOpen);
     };
-  }, [pathname, popupEnabled, popupDelay]);
+  }, [pathname, enabled, delaySeconds]);
 
   // Handle ESC key to dismiss
   useEffect(() => {
@@ -111,7 +94,7 @@ export function TelegramJoinPopup({
       localStorage.setItem("awtmods_tg_joined", "true");
     } catch {}
 
-    window.open(popupUrl, "_blank", "noopener,noreferrer");
+    window.open(telegramUrl, "_blank", "noopener,noreferrer");
     setIsOpen(false);
     toast.success("Welcome to AWTMods Telegram Community! 🚀");
   };
@@ -142,20 +125,20 @@ export function TelegramJoinPopup({
       role="dialog"
       aria-modal="true"
       aria-labelledby="tg-popup-title"
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+      className="fixed inset-0 z-[999999] flex items-end sm:items-center justify-center p-0 sm:p-4 select-none pointer-events-auto"
     >
-      {/* Backdrop overlay */}
+      {/* Dark backdrop overlay */}
       <div
         onClick={handleNotNow}
-        className="fixed inset-0 bg-black/75 backdrop-blur-sm transition-opacity duration-300 animate-in fade-in"
+        className="fixed inset-0 bg-black/80 backdrop-blur-xs transition-opacity duration-300 animate-in fade-in"
       />
 
       {/* Modal / Bottom Sheet Card */}
-      <div className="relative z-10 w-full sm:max-w-[420px] bg-[#161619] border-t sm:border border-white/10 rounded-t-[32px] sm:rounded-[28px] p-6 sm:p-8 shadow-2xl transition-all duration-300 animate-in slide-in-from-bottom-8 sm:zoom-in-95">
+      <div className="relative z-10 w-full sm:max-w-[400px] bg-[#161619] border-t sm:border border-white/10 rounded-t-[32px] sm:rounded-[28px] p-6 sm:p-7 shadow-2xl transition-all duration-300 animate-in slide-in-from-bottom-8 sm:zoom-in-95">
         {/* Mobile handle indicator */}
-        <div className="sm:hidden w-12 h-1 bg-white/20 rounded-full mx-auto mb-4" />
+        <div className="sm:hidden w-10 h-1 bg-white/20 rounded-full mx-auto mb-4" />
 
-        {/* Telegram Icon in rounded container */}
+        {/* Telegram Icon Container */}
         <div className="w-14 h-14 rounded-2xl bg-[#232328] border border-white/5 flex items-center justify-center mx-auto mb-4 shadow-inner">
           <svg
             className="w-7 h-7 text-[#24A1DE]"
@@ -167,20 +150,20 @@ export function TelegramJoinPopup({
           </svg>
         </div>
 
-        {/* Content */}
-        <div className="text-center space-y-2 mb-6">
+        {/* Heading & Subtitle */}
+        <div className="text-center space-y-1.5 mb-6">
           <h2
             id="tg-popup-title"
             className="text-xl sm:text-2xl font-bold tracking-tight text-white"
           >
-            {popupTitle}
+            {title}
           </h2>
-          <p className="text-xs sm:text-sm text-zinc-400 max-w-xs mx-auto leading-relaxed">
-            {popupDesc}
+          <p className="text-xs sm:text-[13px] text-zinc-400 max-w-xs mx-auto leading-relaxed">
+            {description}
           </p>
         </div>
 
-        {/* Actions */}
+        {/* Action Buttons */}
         <div className="space-y-2.5">
           {/* 1. Join Telegram Button */}
           <button
@@ -197,7 +180,7 @@ export function TelegramJoinPopup({
             <span>Join Telegram</span>
           </button>
 
-          {/* 2. I already joined */}
+          {/* 2. I already joined Button */}
           <button
             type="button"
             onClick={handleAlreadyJoined}
@@ -206,8 +189,8 @@ export function TelegramJoinPopup({
             I already joined
           </button>
 
-          {/* 3. Not now */}
-          <div className="text-center pt-1.5">
+          {/* 3. Not now Button */}
+          <div className="text-center pt-1">
             <button
               type="button"
               onClick={handleNotNow}

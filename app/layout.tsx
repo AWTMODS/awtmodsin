@@ -5,6 +5,7 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { Toaster } from "sonner";
 import { TelegramJoinPopup } from "@/components/telegram-join-popup";
+import { getSiteSettings } from "@/lib/db";
 
 const siteUrl =
   process.env.NEXT_PUBLIC_SITE_URL || "https://awtmodsin.vercel.app";
@@ -87,11 +88,13 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const settings = await getSiteSettings().catch(() => null);
+
   return (
     <html lang="en" suppressHydrationWarning className="dark">
       <body className="font-sans min-h-screen bg-background text-foreground antialiased">
@@ -118,7 +121,16 @@ export default function RootLayout({
               },
             }}
           />
-          <TelegramJoinPopup />
+          <TelegramJoinPopup
+            telegramUrl={settings?.telegramUrl || "https://t.me/awtmods"}
+            enabled={settings?.telegramPopupEnabled !== false}
+            delaySeconds={settings?.telegramPopupDelay ?? 1}
+            title={settings?.telegramPopupTitle || "Join our Telegram"}
+            description={
+              settings?.telegramPopupDesc ||
+              "Get new premium unlocked apps first, plus update alerts and support from the community."
+            }
+          />
         </ThemeProvider>
       </body>
     </html>

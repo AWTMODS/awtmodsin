@@ -352,6 +352,18 @@ export function SettingsManager({
                 placeholder="Get new premium unlocked apps first, plus update alerts and support from the community."
               />
             </div>
+
+            <div className="sm:col-span-3 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => window.open("/?preview_tg=1", "_blank")}
+                className="rounded-xl text-xs font-semibold gap-1.5 border-sky-500/40 text-sky-500 hover:bg-sky-500/10"
+              >
+                <span>👀 Preview Telegram Join Popup on Live Website</span>
+              </Button>
+            </div>
           </div>
         </div>
       </div>

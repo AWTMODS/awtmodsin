@@ -32,27 +32,18 @@ interface ModalProps {
  * 1. Start Modding Modal with Remarks System
  */
 export function StartModdingModal({ app, isOpen, onClose, onSuccess }: ModalProps) {
-  const [priority, setPriority] = useState<RadarPriority>("High");
-  const [assignedModder, setAssignedModder] = useState("Aadith C V");
-  const [remarks, setRemarks] = useState(
-    "Waiting for latest clean APK base.\nVerify login and cloud sync compatibility.\nInvestigate unlocked premium features.\nRun installation tests on Android 14/15."
-  );
-  const [internalInstructions, setInternalInstructions] = useState(
-    "1. Decompile with apktool.\n2. Patch signature verification & license check.\n3. Remove ads and analytics SDKs.\n4. Re-align and sign with custom release key."
-  );
-  const [testingRequirements, setTestingRequirements] = useState(
-    "• Test on ARM64 and armeabi-v7a\n• Test on Android 12, 13, 14, 15\n• Verify zero crashes on cold launch"
-  );
+  const [priority, setPriority] = useState<RadarPriority>(app.current_cycle?.priority || "High");
+  const [assignedModder, setAssignedModder] = useState(app.current_cycle?.assigned_modder || "Aadith C V");
+  const [remarks, setRemarks] = useState("");
+  const [internalInstructions, setInternalInstructions] = useState("");
+  const [testingRequirements, setTestingRequirements] = useState("");
   const [loading, setLoading] = useState(false);
 
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!remarks.trim()) {
-      toast.error("Please provide initial modding remarks or instructions");
-      return;
-    }
+    const finalRemarks = remarks.trim() || `Modding initiated for ${app.app_name} (${app.current_play_store_version})`;
 
     setLoading(true);
     try {
@@ -63,10 +54,10 @@ export function StartModdingModal({ app, isOpen, onClose, onSuccess }: ModalProp
           action: "start_modding",
           appId: app.id,
           priority,
-          assignedModder,
-          remarks: remarks.trim(),
-          internalInstructions: internalInstructions.trim(),
-          testingRequirements: testingRequirements.trim(),
+          assignedModder: assignedModder.trim() || "Aadith C V",
+          remarks: finalRemarks,
+          internalInstructions: internalInstructions.trim() || undefined,
+          testingRequirements: testingRequirements.trim() || undefined,
           adminName: "Aadith C V",
         }),
       });
@@ -143,7 +134,7 @@ export function StartModdingModal({ app, isOpen, onClose, onSuccess }: ModalProp
 
           <div>
             <label className="text-xs font-semibold text-neutral-300 block mb-1">
-              Internal Modding Remarks <span className="text-destructive">*</span>
+              Internal Modding Remarks (Optional)
             </label>
             <p className="text-[11px] text-muted-foreground mb-1.5">
               Private notes preserved in Supabase. Never displayed publicly. Supports multiline notes.
@@ -153,31 +144,33 @@ export function StartModdingModal({ app, isOpen, onClose, onSuccess }: ModalProp
               value={remarks}
               onChange={(e) => setRemarks(e.target.value)}
               className="w-full rounded-xl border-border bg-background text-xs font-mono text-white focus:border-amber-500"
-              placeholder="Enter remarks, login requirements, premium patch notes..."
+              placeholder="Enter remarks, login requirements, premium patch notes, or leave blank..."
             />
           </div>
 
           <div>
             <label className="text-xs font-semibold text-neutral-300 block mb-1">
-              Internal Instructions &amp; Required Modifications
+              Internal Instructions &amp; Required Modifications (Optional)
             </label>
             <Textarea
               rows={3}
               value={internalInstructions}
               onChange={(e) => setInternalInstructions(e.target.value)}
               className="w-full rounded-xl border-border bg-background text-xs font-mono text-white focus:border-amber-500"
+              placeholder="e.g. 1. Decompile with apktool. 2. Remove ads..."
             />
           </div>
 
           <div>
             <label className="text-xs font-semibold text-neutral-300 block mb-1">
-              Testing &amp; Verification Requirements
+              Testing &amp; Verification Requirements (Optional)
             </label>
             <Textarea
               rows={2}
               value={testingRequirements}
               onChange={(e) => setTestingRequirements(e.target.value)}
               className="w-full rounded-xl border-border bg-background text-xs font-mono text-white focus:border-amber-500"
+              placeholder="e.g. Test on ARM64, verify zero crashes on cold launch..."
             />
           </div>
 
@@ -211,9 +204,7 @@ export function StartModdingModal({ app, isOpen, onClose, onSuccess }: ModalProp
  * 2. Mark Modded Completed Modal
  */
 export function MarkCompletedModal({ app, isOpen, onClose, onSuccess }: ModalProps) {
-  const [completionRemarks, setCompletionRemarks] = useState(
-    "All premium features unlocked successfully. Passed signature verification and test installation."
-  );
+  const [completionRemarks, setCompletionRemarks] = useState("");
   const [loading, setLoading] = useState(false);
 
   if (!isOpen) return null;
@@ -228,7 +219,7 @@ export function MarkCompletedModal({ app, isOpen, onClose, onSuccess }: ModalPro
         body: JSON.stringify({
           action: "mark_completed",
           appId: app.id,
-          completionRemarks: completionRemarks.trim(),
+          completionRemarks: completionRemarks.trim() || "Mod build compiled and tested successfully.",
           adminName: "Aadith C V",
         }),
       });
@@ -276,12 +267,13 @@ export function MarkCompletedModal({ app, isOpen, onClose, onSuccess }: ModalPro
 
           <div>
             <label className="text-xs font-semibold text-neutral-300 block mb-1">
-              Completion Remarks &amp; Validation Notes
+              Completion Remarks &amp; Validation Notes (Optional)
             </label>
             <Textarea
               rows={3}
               value={completionRemarks}
               onChange={(e) => setCompletionRemarks(e.target.value)}
+              placeholder="e.g. All premium features unlocked. Passed signature verification and test installation..."
               className="w-full rounded-xl border-border bg-background text-xs font-mono text-white focus:border-emerald-400"
             />
           </div>
@@ -305,12 +297,10 @@ export function MarkCompletedModal({ app, isOpen, onClose, onSuccess }: ModalPro
  * 3. Ready to Publish Modal
  */
 export function ReadyToPublishModal({ app, isOpen, onClose, onSuccess }: ModalProps) {
-  const targetVer = app.current_play_store_version || "v1.0.0";
-  const [finalModVersion, setFinalModVersion] = useState(`${targetVer} (Premium Unlocked)`);
+  const cleanVer = app.current_play_store_version?.replace(/^v+/i, "") || "1.0.0";
+  const [finalModVersion, setFinalModVersion] = useState(`v${cleanVer} (Premium Unlocked)`);
   const [downloadUrl, setDownloadUrl] = useState(`https://www.awtmods.in/apps/${app.package_name}.html`);
-  const [releaseNotes, setReleaseNotes] = useState(
-    "• Clean VIP ad-free interface\n• Premium subscription unlocked\n• Safe anti-ban bypass verified"
-  );
+  const [releaseNotes, setReleaseNotes] = useState("");
   const [loading, setLoading] = useState(false);
 
   if (!isOpen) return null;
@@ -332,7 +322,7 @@ export function ReadyToPublishModal({ app, isOpen, onClose, onSuccess }: ModalPr
           appId: app.id,
           finalModVersion: finalModVersion.trim(),
           downloadUrl: downloadUrl.trim(),
-          releaseNotes: releaseNotes.trim(),
+          releaseNotes: releaseNotes.trim() || undefined,
           adminName: "Aadith C V",
         }),
       });
@@ -397,12 +387,13 @@ export function ReadyToPublishModal({ app, isOpen, onClose, onSuccess }: ModalPr
 
           <div>
             <label className="text-xs font-semibold text-neutral-300 block mb-1">
-              Release Notes / Changelog
+              Release Notes / Changelog (Optional)
             </label>
             <Textarea
               rows={3}
               value={releaseNotes}
               onChange={(e) => setReleaseNotes(e.target.value)}
+              placeholder="e.g. • Clean VIP ad-free interface&#10;• Premium subscription unlocked&#10;• Safe anti-ban bypass verified"
               className="border-border bg-background text-xs font-mono text-white focus:border-amber-500"
             />
           </div>
@@ -426,15 +417,14 @@ export function ReadyToPublishModal({ app, isOpen, onClose, onSuccess }: ModalPr
  * 4. Mark Mod Released Modal (MANDATORY AUTOMATIC RADAR REMOVAL)
  */
 export function MarkReleasedModal({ app, isOpen, onClose, onSuccess }: ModalProps) {
-  const targetVer = app.current_cycle?.mod_version || `${app.current_play_store_version} VIP Mod`;
+  const cleanVer = app.current_play_store_version?.replace(/^v+/i, "") || "1.0.0";
+  const targetVer = app.current_cycle?.mod_version || `v${cleanVer} VIP Mod`;
   const [releasedModVersion, setReleasedModVersion] = useState(targetVer);
   const [downloadUrl, setDownloadUrl] = useState(
     app.current_cycle?.download_url || `https://www.awtmods.in/download/${app.package_name}`
   );
-  const [changelog, setChangelog] = useState(
-    app.current_cycle?.changelog || "• Full VIP Mod package\n• Zero ads & direct high-speed download\n• Fully verified on Android 15"
-  );
-  const [releaseRemarks, setReleaseRemarks] = useState("Released to live catalog & Telegram @awtmods channel.");
+  const [changelog, setChangelog] = useState("");
+  const [releaseRemarks, setReleaseRemarks] = useState("");
   const [loading, setLoading] = useState(false);
 
   if (!isOpen) return null;
@@ -456,8 +446,8 @@ export function MarkReleasedModal({ app, isOpen, onClose, onSuccess }: ModalProp
           appId: app.id,
           releasedModVersion: releasedModVersion.trim(),
           downloadUrl: downloadUrl.trim(),
-          changelog: changelog.trim(),
-          releaseRemarks: releaseRemarks.trim(),
+          changelog: changelog.trim() || undefined,
+          releaseRemarks: releaseRemarks.trim() || undefined,
           adminName: "Aadith C V",
         }),
       });
@@ -535,12 +525,13 @@ export function MarkReleasedModal({ app, isOpen, onClose, onSuccess }: ModalProp
 
           <div>
             <label className="text-xs font-semibold text-neutral-300 block mb-1">
-              Release Changelog
+              Release Changelog (Optional)
             </label>
             <Textarea
               rows={2}
               value={changelog}
               onChange={(e) => setChangelog(e.target.value)}
+              placeholder="e.g. • Full VIP package • Zero ads & direct download..."
               className="border-border bg-background text-xs font-mono text-white focus:border-amber-500"
             />
           </div>
@@ -552,6 +543,7 @@ export function MarkReleasedModal({ app, isOpen, onClose, onSuccess }: ModalProp
             <Input
               value={releaseRemarks}
               onChange={(e) => setReleaseRemarks(e.target.value)}
+              placeholder="e.g. Released to live catalog & Telegram @awtmods channel."
               className="border-border bg-background text-xs text-white focus:border-amber-500"
             />
           </div>

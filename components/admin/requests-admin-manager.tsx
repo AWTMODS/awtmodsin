@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ModRequest, ModRequestStatus } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { ThumbsUp, CheckCircle2, Clock, Trash2, ExternalLink, Loader2, Sparkles } from "lucide-react";
+import { ThumbsUp, CheckCircle2, Clock, Trash2, ExternalLink, Loader2, Sparkles, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { formatDate } from "@/lib/utils";
 
@@ -16,6 +16,43 @@ export function RequestsAdminManager({
 }) {
   const [requests, setRequests] = useState<ModRequest[]>(initialRequests);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const fetchLiveRequests = async () => {
+    setIsRefreshing(true);
+    try {
+      const res = await fetch("/api/admin/requests", { cache: "no-store" });
+      const data = await res.json();
+      if (Array.isArray(data.requests)) {
+        setRequests(data.requests);
+      }
+    } catch {
+      // Fallback
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchLiveRequests();
+  }, []);
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this mod request?")) return;
+    try {
+      const res = await fetch("/api/admin/requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, action: "delete" }),
+      });
+      if (res.ok) {
+        setRequests((prev) => prev.filter((r) => r.id !== id));
+        toast.success("Request deleted!");
+      }
+    } catch {
+      toast.error("Failed to delete request");
+    }
+  };
 
   const handleStatusChange = async (
     id: string,
@@ -63,9 +100,21 @@ export function RequestsAdminManager({
           <Sparkles className="h-4 w-4 text-emerald-500" />
           <span>Active Community Submissions ({requests.length})</span>
         </h3>
-        <span className="text-xs text-muted-foreground">
-          Sorted by community upvote priority
-        </span>
+        <div className="flex items-center gap-3">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={fetchLiveRequests}
+            disabled={isRefreshing}
+            className="rounded-xl text-xs gap-1.5 h-8 border-border"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
+            <span>Refresh</span>
+          </Button>
+          <span className="text-xs text-muted-foreground hidden sm:inline">
+            Sorted by community upvote priority
+          </span>
+        </div>
       </div>
 
       {requests.length === 0 ? (
@@ -100,7 +149,7 @@ export function RequestsAdminManager({
                   </div>
                 </div>
 
-                {/* Status Switcher */}
+                {/* Status Switcher & Delete */}
                 <div className="flex items-center gap-2">
                   <select
                     value={req.status}
@@ -115,6 +164,16 @@ export function RequestsAdminManager({
                     <option value="completed">Completed &amp; Released</option>
                     <option value="dismissed">Dismissed</option>
                   </select>
+
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => handleDelete(req.id)}
+                    className="h-9 w-9 p-0 rounded-xl text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
+                    title="Delete Request"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
 

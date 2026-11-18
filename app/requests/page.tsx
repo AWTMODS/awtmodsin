@@ -9,7 +9,9 @@ export const metadata: Metadata = {
     "Request new modded Android apps, games, and PC software. Upvote community requests to prioritize the next releases.",
 };
 
-export const revalidate = 60;
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
 
 export default async function RequestsPage() {
   const requests = await getModRequests();

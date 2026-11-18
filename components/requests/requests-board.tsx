@@ -42,7 +42,7 @@ export function RequestsBoard({ initialRequests }: RequestsBoardProps) {
   const [featuresRequested, setFeaturesRequested] = useState("");
   const [requesterName, setRequesterName] = useState("");
 
-  // Load upvoted from localStorage
+  // Load upvoted from localStorage & sync live requests
   useEffect(() => {
     try {
       const stored = localStorage.getItem("awtmods_upvoted_requests");
@@ -52,6 +52,15 @@ export function RequestsBoard({ initialRequests }: RequestsBoardProps) {
     } catch {
       // Ignore
     }
+
+    fetch("/api/requests", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data.requests) && data.requests.length > 0) {
+          setRequests(data.requests);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const handleUpvote = async (id: string) => {

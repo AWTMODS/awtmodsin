@@ -1178,6 +1178,8 @@ export async function getApplicationReviews(
 // ==========================================
 // COMMUNITY MOD REQUESTS ENGINE
 // ==========================================
+// MOD REQUESTS MANAGEMENT
+// ==========================================
 
 export async function getModRequests(): Promise<import("./types").ModRequest[]> {
   const supabase = getDbClient();
@@ -1187,7 +1189,7 @@ export async function getModRequests(): Promise<import("./types").ModRequest[]> 
         .from("site_settings")
         .select("setting_value")
         .eq("setting_key", "community_mod_requests")
-        .single();
+        .maybeSingle();
 
       if (!error && data?.setting_value && Array.isArray(data.setting_value)) {
         return data.setting_value as import("./types").ModRequest[];
@@ -1224,13 +1226,19 @@ export async function createModRequest(newReq: {
       await supabase
         .from("site_settings")
         .upsert(
-          { setting_key: "community_mod_requests", setting_value: updatedList },
+          { setting_key: "community_mod_requests", setting_value: updatedList, updated_at: new Date().toISOString() },
           { onConflict: "setting_key" }
         );
     } catch (err) {
       console.error("createModRequest error:", err);
     }
   }
+
+  try {
+    const { revalidatePath } = await import("next/cache");
+    revalidatePath("/requests");
+    revalidatePath("/admin/requests");
+  } catch {}
 
   return created;
 }
@@ -1252,13 +1260,19 @@ export async function upvoteModRequest(id: string): Promise<number> {
       await supabase
         .from("site_settings")
         .upsert(
-          { setting_key: "community_mod_requests", setting_value: updatedList },
+          { setting_key: "community_mod_requests", setting_value: updatedList, updated_at: new Date().toISOString() },
           { onConflict: "setting_key" }
         );
     } catch (err) {
       console.error("upvoteModRequest error:", err);
     }
   }
+
+  try {
+    const { revalidatePath } = await import("next/cache");
+    revalidatePath("/requests");
+    revalidatePath("/admin/requests");
+  } catch {}
 
   return newUpvotes;
 }
@@ -1286,12 +1300,48 @@ export async function updateModRequestStatus(
       const { error } = await supabase
         .from("site_settings")
         .upsert(
-          { setting_key: "community_mod_requests", setting_value: updatedList },
+          { setting_key: "community_mod_requests", setting_value: updatedList, updated_at: new Date().toISOString() },
           { onConflict: "setting_key" }
         );
+
+      try {
+        const { revalidatePath } = await import("next/cache");
+        revalidatePath("/requests");
+        revalidatePath("/admin/requests");
+      } catch {}
+
       return !error;
     } catch (err) {
       console.error("updateModRequestStatus error:", err);
+    }
+  }
+
+  return false;
+}
+
+export async function deleteModRequest(id: string): Promise<boolean> {
+  const allRequests = await getModRequests();
+  const updatedList = allRequests.filter((r) => r.id !== id);
+
+  const supabase = getDbClient();
+  if (supabase) {
+    try {
+      const { error } = await supabase
+        .from("site_settings")
+        .upsert(
+          { setting_key: "community_mod_requests", setting_value: updatedList, updated_at: new Date().toISOString() },
+          { onConflict: "setting_key" }
+        );
+
+      try {
+        const { revalidatePath } = await import("next/cache");
+        revalidatePath("/requests");
+        revalidatePath("/admin/requests");
+      } catch {}
+
+      return !error;
+    } catch (err) {
+      console.error("deleteModRequest error:", err);
     }
   }
 

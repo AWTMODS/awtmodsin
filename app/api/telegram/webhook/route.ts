@@ -1731,15 +1731,20 @@ export async function POST(req: Request) {
 
       // User Action: Submit MOD Request from Bot
       if (data.startsWith("req_app:") || data.startsWith("req_app_")) {
-        const requestedName = decodeURIComponent(data.includes(":") ? data.slice(8) : data.slice(8));
-        const supabase = getDbClient();
-        if (supabase && requestedName) {
-          await supabase.from("mod_requests").insert({
+        const requestedName = decodeURIComponent(data.includes(":") ? data.slice(8) : data.slice(8)).trim();
+        if (requestedName) {
+          const { createModRequest } = await import("@/lib/db");
+          const requester = cq.from?.username
+            ? `@${cq.from.username}`
+            : cq.from?.first_name
+            ? `${cq.from.first_name} (Telegram)`
+            : `Telegram User #${fromId}`;
+
+          await createModRequest({
             app_name: requestedName,
-            status: "pending",
-            requested_by: cq.from?.username || String(fromId) || "Telegram User",
-            votes: 1,
-          });
+            features_requested: "Requested via Telegram Bot (@awtmods_bot)",
+            requester_name: requester,
+          }).catch((err) => console.error("Failed to save bot mod request:", err));
         }
         await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
           method: "POST",

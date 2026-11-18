@@ -977,6 +977,51 @@ export async function POST(req: Request) {
           }
         }
 
+        // Action: Publish All Drafts in 1 Tap
+        if (action === "wiz_puball") {
+          const supabase = getDbClient();
+          if (supabase) {
+            await supabase
+              .from("applications")
+              .update({ status: "published" })
+              .eq("status", "draft");
+            await supabase
+              .from("application_versions")
+              .update({ status: "published" })
+              .eq("status", "draft");
+            purgeAppCaches();
+          }
+
+          await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              callback_query_id: cq.id,
+              text: "✅ All drafts published to website!",
+            }),
+          }).catch(() => {});
+
+          if (cq.message?.message_id) {
+            await fetch(`https://api.telegram.org/bot${token}/editMessageReplyMarkup`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: adminChatId,
+                message_id: cq.message.message_id,
+                reply_markup: {
+                  inline_keyboard: [
+                    [
+                      { text: "🌐 View Live Catalog", url: "https://www.awtmods.in/apps" },
+                      { text: "📱 Admin Panel", url: "https://www.awtmods.in/admin/apps" },
+                    ],
+                  ],
+                },
+              }),
+            }).catch(() => {});
+          }
+          return NextResponse.json({ ok: true, allDraftsPublished: true });
+        }
+
         // Action: Publish on Website Only (Edit buttons in-place, no duplicate messages)
         if (action === "wiz_pubsite") {
           const appId = rest[0];
@@ -2210,6 +2255,11 @@ export async function POST(req: Request) {
 
         const buildProgressText = (isComplete: boolean = false) => {
           const completedCount = items.filter((i) => i.status !== "pending").length;
+          const draftedCount = items.filter((i) => i.status === "drafted").length;
+          const liveCount = items.filter((i) => i.status === "live").length;
+          const failedCount = items.filter((i) => i.status === "failed").length;
+          const pendingCount = items.filter((i) => i.status === "pending").length;
+
           const percent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
           const filled = Math.min(10, Math.round((percent / 100) * 10));
           const empty = 10 - filled;
@@ -2219,15 +2269,36 @@ export async function POST(req: Request) {
             ? `🎉 <b>Bulk Mod & App Import Complete!</b>\n`
             : `📦 <b>Bulk Mod & App Import: ${totalCount} links detected!</b>\n`;
 
-          msg += `📊 <b>Progress:</b> [${progressBar}] <b>${percent}%</b> (${completedCount}/${totalCount} completed)\n\n`;
+          msg += `📊 <b>Progress:</b> [${progressBar}] <b>${percent}%</b> (${completedCount}/${totalCount} completed)\n`;
+          msg += `✨ <b>Drafted:</b> ${draftedCount} | 🌐 <b>Live:</b> ${liveCount} | ⏳ <b>Pending:</b> ${pendingCount}\n\n`;
 
-          // Show status of each link
-          for (const item of items) {
+          // If total items <= 20, display all items.
+          // If total items > 20, display a sliding window of max 15 items so message NEVER exceeds Telegram's 4096 character limit!
+          let displayedItems = items;
+          if (items.length > 20) {
+            const activeIdx = items.findIndex((i) => i.status === "pending");
+            if (activeIdx === -1) {
+              // All completed: show last 15 items
+              const startIdx = Math.max(0, items.length - 15);
+              msg += `<i>... (${startIdx} earlier apps processed) ...</i>\n`;
+              displayedItems = items.slice(startIdx);
+            } else {
+              // Still running: show 4 before active and up to 11 ahead
+              const startIdx = Math.max(0, activeIdx - 4);
+              const endIdx = Math.min(items.length, startIdx + 15);
+              if (startIdx > 0) {
+                msg += `<i>... (${startIdx} earlier apps processed) ...</i>\n`;
+              }
+              displayedItems = items.slice(startIdx, endIdx);
+            }
+          }
+
+          for (const item of displayedItems) {
             const defaultLabel =
               item.target.match(/id=([a-zA-Z0-9._]+)/i)?.[1] ||
-              item.target.replace(/^https?:\/\//i, "").slice(0, 28);
+              item.target.replace(/^https?:\/\//i, "").slice(0, 26);
             const safeAppName = escapeTgHtml(
-              item.appName ? item.appName.replace(/MOD APK.*$/i, "").trim() : defaultLabel
+              item.appName ? item.appName.replace(/MOD APK.*$/i, "").trim().slice(0, 32) : defaultLabel
             );
 
             if (item.status === "drafted") {
@@ -2235,20 +2306,24 @@ export async function POST(req: Request) {
             } else if (item.status === "live") {
               msg += `${item.index}. 🌐 <b>Live (Updated):</b> ${safeAppName}\n`;
             } else if (item.status === "failed") {
-              msg += `${item.index}. ❌ <b>Failed:</b> <code>${escapeTgHtml(defaultLabel)}</code> (${escapeTgHtml(item.error || "Failed")})\n`;
+              msg += `${item.index}. ❌ <b>Failed:</b> <code>${escapeTgHtml(defaultLabel.slice(0, 22))}</code>\n`;
             } else {
               msg += `${item.index}. ⏳ <i>Processing...</i>\n`;
             }
           }
 
-          if (isComplete) {
-            const draftedCount = items.filter((i) => i.status === "drafted").length;
-            const liveCount = items.filter((i) => i.status === "live").length;
-            const failedCount = items.filter((i) => i.status === "failed").length;
+          if (items.length > 20 && displayedItems.length < items.length) {
+            const lastShownIndex = displayedItems[displayedItems.length - 1]?.index || items.length;
+            const remainingBelow = items.length - lastShownIndex;
+            if (remainingBelow > 0) {
+              msg += `<i>... (${remainingBelow} more in queue) ...</i>\n`;
+            }
+          }
 
+          if (isComplete) {
             msg += `\n👤 <b>Developer:</b> Aadith C V\n`;
             if (draftedCount > 0) {
-              msg += `✨ <b>New Drafts Ready:</b> ${draftedCount} (Interactive cards sent below)\n`;
+              msg += `✨ <b>New Drafts Ready:</b> ${draftedCount}\n`;
             }
             if (liveCount > 0) {
               msg += `🌐 <b>Already Live / Refreshed:</b> ${liveCount}\n`;
@@ -2257,6 +2332,11 @@ export async function POST(req: Request) {
               msg += `⚠️ <b>Failed Links:</b> ${failedCount}\n`;
             }
             msg += `👉 <a href="https://www.awtmods.in/admin/apps">Manage Apps in Admin Panel</a>`;
+          }
+
+          // Strict Telegram 4096 character safety cutoff
+          if (msg.length > 3900) {
+            msg = msg.slice(0, 3900) + "\n\n<i>[Message truncated to comply with Telegram limits]</i>";
           }
 
           return msg;
@@ -2284,16 +2364,32 @@ export async function POST(req: Request) {
         const updateTelegramProgress = async (isComplete: boolean = false) => {
           if (!progressMsgId) return;
           try {
+            const bodyPayload: any = {
+              chat_id: chatId,
+              message_id: progressMsgId,
+              text: buildProgressText(isComplete),
+              parse_mode: "HTML",
+              disable_web_page_preview: true,
+            };
+
+            if (isComplete) {
+              const inlineButtons: any[] = [];
+              if (newDrafts.length > 0) {
+                inlineButtons.push([
+                  { text: `🚀 Publish All ${newDrafts.length} New Drafts Now`, callback_data: `wiz_puball` },
+                ]);
+              }
+              inlineButtons.push([
+                { text: `📱 Admin Panel`, url: `https://www.awtmods.in/admin/apps` },
+                { text: `🌐 View Website`, url: `https://www.awtmods.in/apps` },
+              ]);
+              bodyPayload.reply_markup = { inline_keyboard: inlineButtons };
+            }
+
             await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                chat_id: chatId,
-                message_id: progressMsgId,
-                text: buildProgressText(isComplete),
-                parse_mode: "HTML",
-                disable_web_page_preview: true,
-              }),
+              body: JSON.stringify(bodyPayload),
             });
           } catch {}
         };
@@ -2303,9 +2399,22 @@ export async function POST(req: Request) {
         const newDrafts: any[] = [];
         const failedApps: { target: string; error: string }[] = [];
 
-        // Process in parallel chunks of 4 to stay fast and well within serverless timeouts
-        const CHUNK_SIZE = 4;
+        // Concurrency chunk size of 8 for high throughput, with a 46s execution time limit
+        const CHUNK_SIZE = 8;
+        const startTime = Date.now();
+        const MAX_RUNTIME_MS = 46000;
+
         for (let i = 0; i < uniqueTargets.length; i += CHUNK_SIZE) {
+          // Check if we are approaching Vercel function timeout
+          if (Date.now() - startTime > MAX_RUNTIME_MS) {
+            for (let k = i; k < uniqueTargets.length; k++) {
+              items[k].status = "failed";
+              items[k].error = "Time limit (paste in next batch)";
+              failedApps.push({ target: uniqueTargets[k], error: "Time limit reached" });
+            }
+            break;
+          }
+
           const chunk = uniqueTargets.slice(i, i + CHUNK_SIZE);
           await Promise.all(
             chunk.map(async (target, chunkIdx) => {
@@ -2313,7 +2422,7 @@ export async function POST(req: Request) {
               const item = items[globalIdx];
               try {
                 const timeoutPromise = new Promise<{ success: false; error: string }>((resolve) =>
-                  setTimeout(() => resolve({ success: false, error: "Scrape timed out (7s)" }), 7000)
+                  setTimeout(() => resolve({ success: false, error: "Scrape timed out (4.5s)" }), 4500)
                 );
                 const result = await Promise.race([processLink(target), timeoutPromise]);
                 if (result.success && result.app) {
@@ -2350,11 +2459,13 @@ export async function POST(req: Request) {
         // Final completion update for the progress card (100%)
         await updateTelegramProgress(true);
 
-        // Send interactive draft preview cards ONLY for NEW drafts (NEVER for apps already live!)
-        for (let j = 0; j < newDrafts.length; j++) {
+        // Send individual interactive draft preview cards for up to 3 drafts
+        // (prevents flooding chat with 80+ photos and timing out Vercel)
+        const previewLimit = Math.min(newDrafts.length, 3);
+        for (let j = 0; j < previewLimit; j++) {
           const draftApp = newDrafts[j];
           await sendDraftPreviewToAdmin(draftApp, adminChatId).catch(() => {});
-          if (j < newDrafts.length - 1) {
+          if (j < previewLimit - 1) {
             await new Promise((resolve) => setTimeout(resolve, 350));
           }
         }

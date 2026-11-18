@@ -6,6 +6,7 @@ import { Footer } from "@/components/layout/footer";
 import { Toaster } from "sonner";
 import { TelegramJoinPopup } from "@/components/telegram-join-popup";
 import { getSiteSettings } from "@/lib/db";
+import { Analytics } from '@vercel/analytics/next';
 
 const siteUrl =
   process.env.NEXT_PUBLIC_SITE_URL || "https://awtmodsin.vercel.app";
@@ -132,6 +133,7 @@ export default async function RootLayout({
             }
           />
         </ThemeProvider>
+        <Analytics />
       </body>
     </html>
   );

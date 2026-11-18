@@ -430,6 +430,17 @@ export async function executeAutoApkRelease(params: {
     }
   }
 
+  // Clear from Play Store Version Radar pending updates since app was updated to latest version
+  try {
+    const { getRadarState, saveRadarState } = await import("@/lib/playstore-radar");
+    const radar = await getRadarState();
+    if (radar.updates && radar.updates[params.appId]) {
+      delete radar.updates[params.appId];
+      radar.updatesCount = Object.keys(radar.updates).length;
+      await saveRadarState(radar);
+    }
+  } catch {}
+
   return { success: true, app: updatedApp || undefined };
 }
 

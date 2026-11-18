@@ -211,11 +211,13 @@ export async function checkPlayStoreUpdates(options?: {
       slug,
       package_name,
       icon_url,
-      latest_version:application_versions(
+      versions:application_versions(
         id,
         version_name,
         version_code,
-        file_size
+        file_size,
+        is_latest,
+        created_at
       )
     `)
     .not("package_name", "is", null);
@@ -243,8 +245,8 @@ export async function checkPlayStoreUpdates(options?: {
 
   const detectedUpdates: RadarAppUpdate[] = [];
 
-  // 2. Iterate in gentle batches of 8 for optimal speed & low latency
-  const batchSize = 8;
+  // 2. Iterate in fast parallel batches of 12 for high speed & low latency
+  const batchSize = 12;
   for (let i = 0; i < targetApps.length; i += batchSize) {
     const batch = targetApps.slice(i, i + batchSize);
 
@@ -255,7 +257,24 @@ export async function checkPlayStoreUpdates(options?: {
           if (!detail || !detail.version || detail.version === "VARY") return;
 
           const playStoreVer = String(detail.version).trim();
-          const verObj = Array.isArray(app.latest_version) ? app.latest_version[0] : app.latest_version;
+          const verList = Array.isArray(app.versions)
+            ? app.versions
+            : Array.isArray(app.latest_version)
+            ? app.latest_version
+            : app.latest_version
+            ? [app.latest_version]
+            : [];
+
+          // Identify true latest version on website (is_latest, highest versionCode, or newest)
+          const verObj =
+            verList.find((v: any) => v.is_latest) ||
+            [...verList].sort((a: any, b: any) => {
+              if (b.version_code && a.version_code && b.version_code !== a.version_code) {
+                return b.version_code - a.version_code;
+              }
+              return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+            })[0];
+
           const currentModVer = verObj?.version_name || "v1.0.0";
 
           if (isNewerVersion(playStoreVer, currentModVer)) {

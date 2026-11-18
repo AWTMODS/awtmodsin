@@ -4,6 +4,7 @@ import { checkPlayStoreUpdates, getRadarState } from "@/lib/playstore-radar";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const fetchCache = "force-no-store";
+export const maxDuration = 60;
 
 export async function GET(req: Request) {
   try {
@@ -11,11 +12,11 @@ export async function GET(req: Request) {
     const forceScan = searchParams.get("scan") === "true";
     const state = await getRadarState();
 
-    // Auto-check: If scan is forced OR radar state is older than 20 minutes, perform auto-scan!
     const lastScanMs = state.lastScanAt ? new Date(state.lastScanAt).getTime() : 0;
-    const isStale = !lastScanMs || Date.now() - lastScanMs > 20 * 60 * 1000;
+    const isStale = !lastScanMs || Date.now() - lastScanMs > 15 * 60 * 1000;
 
-    if (forceScan || isStale) {
+    // Only run blocking scan if explicitly requested via ?scan=true
+    if (forceScan) {
       try {
         const scanRes = await checkPlayStoreUpdates({ limit: 100, notifyTelegram: true });
         const freshState = await getRadarState();
@@ -35,13 +36,12 @@ export async function GET(req: Request) {
           }
         );
       } catch (scanErr) {
-        console.warn("Background auto-scan warning:", scanErr);
-        // Fallback to existing state if scraping throttled
+        console.warn("Manual radar scan warning:", scanErr);
       }
     }
 
     return NextResponse.json(
-      { success: true, radar: state },
+      { success: true, radar: state, isStale },
       {
         headers: {
           "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",

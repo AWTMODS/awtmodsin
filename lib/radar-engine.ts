@@ -196,7 +196,6 @@ async function loadState(): Promise<RadarInMemoryState> {
       if (parsed && Array.isArray(parsed.apps)) {
         inMemoryState = parsed;
         hasInitialized = true;
-        return inMemoryState;
       }
     }
   } catch (err) {
@@ -206,6 +205,34 @@ async function loadState(): Promise<RadarInMemoryState> {
   // Auto-seed initial tracked applications from existing catalog if empty
   if (!hasInitialized || inMemoryState.apps.length === 0) {
     await autoSeedFromCatalog();
+  }
+
+  // CRITICAL SANITIZATION: Clean up any previously assigned random/mock statuses.
+  // Only actual admin actions (verified by audit activities/remarks) advance workflow status.
+  let needsSanitization = false;
+  inMemoryState.apps.forEach((app) => {
+    const hasRealRemarks = (inMemoryState.remarks || []).some((r) => r.radar_app_id === app.id);
+    const hasRealActivities = (inMemoryState.activities || []).some((a) => a.radar_app_id === app.id);
+    if (app.workflow_status !== "UPDATE_DETECTED" && !hasRealRemarks && !hasRealActivities) {
+      app.workflow_status = "UPDATE_DETECTED";
+      needsSanitization = true;
+    }
+  });
+
+  if (needsSanitization) {
+    (inMemoryState.cycles || []).forEach((c) => {
+      const hasRealRemarks = (inMemoryState.remarks || []).some((r) => r.radar_app_id === c.radar_app_id);
+      const hasRealActivities = (inMemoryState.activities || []).some((a) => a.radar_app_id === c.radar_app_id);
+      if (c.workflow_status !== "UPDATE_DETECTED" && !hasRealRemarks && !hasRealActivities) {
+        c.workflow_status = "UPDATE_DETECTED";
+        c.priority = "Medium";
+        c.modding_started_at = undefined;
+        c.modded_completed_at = undefined;
+        c.ready_to_publish_at = undefined;
+        c.released_at = undefined;
+      }
+    });
+    await persistState(inMemoryState);
   }
 
   return inMemoryState;
@@ -258,6 +285,18 @@ async function autoSeedFromCatalog() {
       .not("package_name", "is", null)
       .limit(30);
 
+    // Check if playstore_radar_state has real detected version updates
+    let realRadarUpdates: Record<string, any> = {};
+    const { data: radarSetting } = await supabase
+      .from("site_settings")
+      .select("setting_value")
+      .eq("setting_key", "playstore_radar_state")
+      .maybeSingle();
+
+    if (radarSetting?.setting_value?.updates) {
+      realRadarUpdates = radarSetting.setting_value.updates;
+    }
+
     if (catalogApps && catalogApps.length > 0) {
       const now = new Date().toISOString();
       const initialApps: RadarTrackedApp[] = [];
@@ -269,12 +308,18 @@ async function autoSeedFromCatalog() {
         const cycleId = `cycle-${Date.now()}-${index}`;
         const ver = c.versions?.[0]?.version_name || "v1.0.0";
 
-        // Assign realistic distributed workflow statuses for rich out-of-the-box demo
-        let status: RadarWorkflowStatus = "UPDATE_DETECTED";
-        if (index % 5 === 1) status = "MODDING_STARTED";
-        if (index % 5 === 2) status = "MODDED_COMPLETED";
-        if (index % 5 === 3) status = "READY_TO_PUBLISH";
-        if (index % 5 === 4) status = "MOD_RELEASED";
+        // Match real Play Store updates if already detected by the background radar
+        const realUpdate =
+          realRadarUpdates[c.id] ||
+          Object.values(realRadarUpdates).find(
+            (u: any) => u.packageName === c.package_name.trim()
+          );
+
+        const playStoreVer = realUpdate?.playStoreVersion || ver;
+        const currentModVer = realUpdate?.currentModVersion || ver;
+
+        // Every tracked application strictly begins at UPDATE_DETECTED
+        const status: RadarWorkflowStatus = "UPDATE_DETECTED";
 
         initialApps.push({
           id: appId,
@@ -284,12 +329,12 @@ async function autoSeedFromCatalog() {
           icon_url: c.icon_url,
           developer: c.developer || "Aadith C V",
           category: c.category?.name || "Tools",
-          current_play_store_version: ver,
-          last_detected_version: ver,
+          current_play_store_version: playStoreVer,
+          last_detected_version: currentModVer,
           is_active_tracking: true,
           workflow_status: status,
-          last_scanned_at: now,
-          last_detected_at: now,
+          last_scanned_at: realUpdate?.detectedAt || now,
+          last_detected_at: realUpdate?.detectedAt || now,
           created_at: now,
           updated_at: now,
         });
@@ -298,16 +343,13 @@ async function autoSeedFromCatalog() {
           id: cycleId,
           radar_app_id: appId,
           cycle_number: 1,
-          target_play_store_version: ver,
-          mod_version: `${ver} VIP Mod`,
+          target_play_store_version: playStoreVer,
+          mod_version: `${currentModVer} VIP Mod`,
           workflow_status: status,
-          priority: index % 4 === 0 ? "Critical" : index % 3 === 0 ? "High" : "Medium",
+          priority: "Medium",
           assigned_modder: "Aadith C V",
-          modding_started_at: status !== "UPDATE_DETECTED" ? now : undefined,
-          modded_completed_at: status === "MODDED_COMPLETED" || status === "READY_TO_PUBLISH" || status === "MOD_RELEASED" ? now : undefined,
-          ready_to_publish_at: status === "READY_TO_PUBLISH" || status === "MOD_RELEASED" ? now : undefined,
-          released_at: status === "MOD_RELEASED" ? now : undefined,
           download_url: `https://www.awtmods.in/apps/${c.slug}.html`,
+          changelog: realUpdate?.changelog,
           created_at: now,
           updated_at: now,
         });

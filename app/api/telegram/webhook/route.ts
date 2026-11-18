@@ -978,38 +978,54 @@ export async function POST(req: Request) {
         }
 
         // Action: Publish All Drafts in 1 Tap
-        if (action === "wiz_puball") {
+        if (
+          data === "wiz_puball" ||
+          data.startsWith("wiz_puball") ||
+          action === "wiz_puball" ||
+          (action === "wiz" && rest[0] === "puball")
+        ) {
           const supabase = getDbClient();
+          let publishedCount = 0;
           if (supabase) {
-            await supabase
+            const { data: updatedApps } = await supabase
               .from("applications")
               .update({ status: "published" })
-              .eq("status", "draft");
+              .eq("status", "draft")
+              .select("id");
             await supabase
               .from("application_versions")
               .update({ status: "published" })
               .eq("status", "draft");
+            publishedCount = updatedApps?.length || 0;
             purgeAppCaches();
           }
 
+          const targetChatId = cq.message?.chat?.id || adminChatId;
+
+          // 1. Popup alert on user's device
           await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               callback_query_id: cq.id,
-              text: "✅ All drafts published to website!",
+              text: `🎉 Successfully published ${publishedCount > 0 ? publishedCount : "all"} drafts live!`,
+              show_alert: true,
             }),
           }).catch(() => {});
 
+          // 2. Update reply markup in-place to show confirmed published status
           if (cq.message?.message_id) {
             await fetch(`https://api.telegram.org/bot${token}/editMessageReplyMarkup`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                chat_id: adminChatId,
+                chat_id: targetChatId,
                 message_id: cq.message.message_id,
                 reply_markup: {
                   inline_keyboard: [
+                    [
+                      { text: "✅ Published Live on Website", callback_data: "none" },
+                    ],
                     [
                       { text: "🌐 View Live Catalog", url: "https://www.awtmods.in/apps" },
                       { text: "📱 Admin Panel", url: "https://www.awtmods.in/admin/apps" },
@@ -1019,7 +1035,7 @@ export async function POST(req: Request) {
               }),
             }).catch(() => {});
           }
-          return NextResponse.json({ ok: true, allDraftsPublished: true });
+          return NextResponse.json({ ok: true, allDraftsPublished: true, publishedCount });
         }
 
         // Action: Publish on Website Only (Edit buttons in-place, no duplicate messages)
@@ -2376,7 +2392,7 @@ export async function POST(req: Request) {
               const inlineButtons: any[] = [];
               if (newDrafts.length > 0) {
                 inlineButtons.push([
-                  { text: `🚀 Publish All ${newDrafts.length} New Drafts Now`, callback_data: `wiz_puball` },
+                  { text: `🚀 Publish All ${newDrafts.length} New Drafts Now`, callback_data: `wiz_puball:all` },
                 ]);
               }
               inlineButtons.push([

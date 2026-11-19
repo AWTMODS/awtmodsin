@@ -149,7 +149,8 @@ async function getGPlay() {
 }
 
 /**
- * Ensures state is loaded from Supabase tables or JSON setting document
+ * Ensures state is loaded from Supabase tables or JSON setting document,
+ * and automatically synchronizes all detected Play Store updates.
  */
 async function loadState(): Promise<RadarInMemoryState> {
   const supabase = getDbClient();
@@ -164,10 +165,11 @@ async function loadState(): Promise<RadarInMemoryState> {
       .maybeSingle();
 
     if (docData?.setting_value) {
-      const parsed = typeof docData.setting_value === "string"
-        ? JSON.parse(docData.setting_value)
-        : docData.setting_value;
-      if (parsed && Array.isArray(parsed.apps) && parsed.apps.length > 0) {
+      const parsed =
+        typeof docData.setting_value === "string"
+          ? JSON.parse(docData.setting_value)
+          : docData.setting_value;
+      if (parsed && Array.isArray(parsed.apps)) {
         inMemoryState = {
           apps: parsed.apps || [],
           cycles: parsed.cycles || [],
@@ -177,38 +179,38 @@ async function loadState(): Promise<RadarInMemoryState> {
           scannerLogs: parsed.scannerLogs || [],
         };
         hasInitialized = true;
-        return inMemoryState;
       }
     }
 
     // 2. Fallback: Try reading from dedicated Supabase tables if JSON document is empty
-    const { data: appsData, error: appsErr } = await supabase
-      .from("radar_tracked_apps")
-      .select("*")
-      .order("created_at", { ascending: false });
+    if (!hasInitialized || inMemoryState.apps.length === 0) {
+      const { data: appsData, error: appsErr } = await supabase
+        .from("radar_tracked_apps")
+        .select("*")
+        .order("created_at", { ascending: false });
 
-    if (!appsErr && appsData && appsData.length > 0) {
-      const [cyclesRes, remarksRes, actsRes, relRes, logsRes] = await Promise.all([
-        supabase.from("radar_modding_cycles").select("*").order("created_at", { ascending: false }),
-        supabase.from("radar_remarks").select("*").order("created_at", { ascending: false }),
-        supabase.from("radar_activity_logs").select("*").order("created_at", { ascending: false }).limit(100),
-        supabase.from("radar_releases").select("*").order("released_at", { ascending: false }),
-        supabase.from("radar_scanner_logs").select("*").order("executed_at", { ascending: false }).limit(50),
-      ]);
+      if (!appsErr && appsData && appsData.length > 0) {
+        const [cyclesRes, remarksRes, actsRes, relRes, logsRes] = await Promise.all([
+          supabase.from("radar_modding_cycles").select("*").order("created_at", { ascending: false }),
+          supabase.from("radar_remarks").select("*").order("created_at", { ascending: false }),
+          supabase.from("radar_activity_logs").select("*").order("created_at", { ascending: false }).limit(100),
+          supabase.from("radar_releases").select("*").order("released_at", { ascending: false }),
+          supabase.from("radar_scanner_logs").select("*").order("executed_at", { ascending: false }).limit(50),
+        ]);
 
-      inMemoryState = {
-        apps: appsData,
-        cycles: cyclesRes.data || [],
-        remarks: remarksRes.data || [],
-        activities: actsRes.data || [],
-        releases: relRes.data || [],
-        scannerLogs: logsRes.data || [],
-      };
-      hasInitialized = true;
-      return inMemoryState;
+        inMemoryState = {
+          apps: appsData,
+          cycles: cyclesRes.data || [],
+          remarks: remarksRes.data || [],
+          activities: actsRes.data || [],
+          releases: relRes.data || [],
+          scannerLogs: logsRes.data || [],
+        };
+        hasInitialized = true;
+      }
     }
   } catch (err) {
-    console.warn("loadState error:", err);
+    console.warn("loadState read error:", err);
   }
 
   // Auto-seed initial tracked applications from existing catalog if empty
@@ -216,79 +218,133 @@ async function loadState(): Promise<RadarInMemoryState> {
     await autoSeedFromCatalog();
   }
 
-  // CRITICAL SANITIZATION: Clean up any previously assigned random/mock statuses.
-  // Only actual admin actions (verified by audit activities/remarks) advance workflow status.
-  let needsSanitization = false;
-  inMemoryState.apps.forEach((app) => {
-    const hasRealRemarks = (inMemoryState.remarks || []).some((r) => r.radar_app_id === app.id);
-    const hasRealActivities = (inMemoryState.activities || []).some((a) => a.radar_app_id === app.id);
-    if (app.workflow_status !== "UPDATE_DETECTED" && !hasRealRemarks && !hasRealActivities) {
-      app.workflow_status = "UPDATE_DETECTED";
-      needsSanitization = true;
-    }
-  });
-
-  if (needsSanitization) {
-    (inMemoryState.cycles || []).forEach((c) => {
-      const hasRealRemarks = (inMemoryState.remarks || []).some((r) => r.radar_app_id === c.radar_app_id);
-      const hasRealActivities = (inMemoryState.activities || []).some((a) => a.radar_app_id === c.radar_app_id);
-      if (c.workflow_status !== "UPDATE_DETECTED" && !hasRealRemarks && !hasRealActivities) {
-        c.workflow_status = "UPDATE_DETECTED";
-        c.priority = "Medium";
-        c.modding_started_at = undefined;
-        c.modded_completed_at = undefined;
-        c.ready_to_publish_at = undefined;
-        c.released_at = undefined;
-      }
-    });
-    await persistState(inMemoryState);
-  }
-
-  // Sync real detected Play Store versions and changelogs from playstore_radar_state
+  // 3. Synchronize all detected updates from playstore_radar_state into radar tracking
   try {
-    const supabase = getDbClient();
-    if (supabase) {
-      const { data: radarSetting } = await supabase
-        .from("site_settings")
-        .select("setting_value")
-        .eq("setting_key", "playstore_radar_state")
-        .maybeSingle();
+    const { data: radarSetting } = await supabase
+      .from("site_settings")
+      .select("setting_value")
+      .eq("setting_key", "playstore_radar_state")
+      .maybeSingle();
 
-      if (radarSetting?.setting_value?.updates) {
-        const updatesMap = radarSetting.setting_value.updates;
-        let didSync = false;
+    if (radarSetting?.setting_value?.updates) {
+      const updatesMap: Record<string, any> = radarSetting.setting_value.updates;
+      let didChange = false;
+      const now = new Date().toISOString();
 
-        inMemoryState.apps.forEach((app) => {
-          const rawId = app.id.replace(/^radar-/, "");
-          const update =
-            updatesMap[rawId] ||
-            updatesMap[app.id] ||
-            Object.values(updatesMap).find(
-              (u: any) => u.packageName === app.package_name
-            );
+      for (const [appId, update] of Object.entries(updatesMap)) {
+        if (!update || !update.packageName) continue;
+        const rawId = appId.replace(/^radar-/, "");
+        const playVer = (update.playStoreVersion || "1.0.0").replace(/^v+/i, "");
+        const siteVer = (update.currentModVersion || "").replace(/^v+/i, "");
 
-          if (update && update.playStoreVersion) {
-            const playVer = update.playStoreVersion.replace(/^v+/i, "");
-            const siteVer = (update.currentModVersion || "").replace(/^v+/i, "");
-
-            if (app.current_play_store_version !== playVer) {
-              app.current_play_store_version = playVer;
-              if (siteVer) app.last_detected_version = siteVer;
-              didSync = true;
-            }
-          }
+        // Find existing app in inMemoryState
+        let existingApp = inMemoryState.apps.find((a) => {
+          const aId = (a.id || "").toLowerCase();
+          const aRawId = aId.replace(/^radar-/, "");
+          const pkg = (a.package_name || "").toLowerCase();
+          const slug = (a.slug || "").toLowerCase();
+          return (
+            aId === appId.toLowerCase() ||
+            aId === `radar-${rawId.toLowerCase()}` ||
+            aRawId === rawId.toLowerCase() ||
+            pkg === update.packageName.toLowerCase() ||
+            (update.slug && slug === update.slug.toLowerCase())
+          );
         });
 
-        if (didSync) {
-          inMemoryState.cycles.forEach((c) => {
-            const parentApp = inMemoryState.apps.find((a) => a.id === c.radar_app_id);
-            if (parentApp) {
-              c.target_play_store_version = parentApp.current_play_store_version;
-              c.mod_version = `${parentApp.current_play_store_version} VIP Mod`;
+        if (existingApp) {
+          if (
+            existingApp.current_play_store_version !== playVer ||
+            (siteVer && existingApp.last_detected_version !== siteVer)
+          ) {
+            existingApp.current_play_store_version = playVer;
+            if (siteVer) existingApp.last_detected_version = siteVer;
+            didChange = true;
+          }
+          const matchingCycle = inMemoryState.cycles.find(
+            (c) => c.radar_app_id === existingApp?.id
+          );
+          if (matchingCycle) {
+            if (matchingCycle.target_play_store_version !== playVer) {
+              matchingCycle.target_play_store_version = playVer;
+              matchingCycle.mod_version = `${playVer} VIP Mod`;
+              didChange = true;
             }
-          });
-          await persistState(inMemoryState);
+            if (update.changelog && matchingCycle.changelog !== update.changelog) {
+              matchingCycle.changelog = update.changelog;
+              didChange = true;
+            }
+          }
+        } else {
+          // Add this detected app into active tracking so it resolves everywhere
+          const newAppId = `radar-${rawId}`;
+          const newCycleId = `cycle-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+          const newApp: RadarTrackedApp = {
+            id: newAppId,
+            package_name: update.packageName.trim(),
+            app_name: update.appName || "Application",
+            slug: update.slug,
+            play_store_url: `https://play.google.com/store/apps/details?id=${update.packageName.trim()}`,
+            icon_url: update.icon_url,
+            developer: update.developer || "Aadith C V",
+            category: "Tools",
+            current_play_store_version: playVer,
+            last_detected_version: siteVer || playVer,
+            is_active_tracking: true,
+            workflow_status: "UPDATE_DETECTED",
+            last_scanned_at: update.detectedAt || now,
+            last_detected_at: update.detectedAt || now,
+            created_at: now,
+            updated_at: now,
+          };
+
+          const newCycle: RadarModdingCycle = {
+            id: newCycleId,
+            radar_app_id: newAppId,
+            cycle_number: 1,
+            target_play_store_version: playVer,
+            mod_version: `${playVer} VIP Mod`,
+            workflow_status: "UPDATE_DETECTED",
+            priority: "Medium",
+            assigned_modder: "Aadith C V",
+            changelog: update.changelog,
+            created_at: now,
+            updated_at: now,
+          };
+
+          inMemoryState.apps.unshift(newApp);
+          inMemoryState.cycles.unshift(newCycle);
+          didChange = true;
         }
+      }
+
+      // CRITICAL SANITIZATION: Clean up any previously assigned random/mock statuses.
+      // Only actual admin actions (verified by audit activities/remarks) advance workflow status.
+      inMemoryState.apps.forEach((app) => {
+        const hasRealRemarks = (inMemoryState.remarks || []).some((r) => r.radar_app_id === app.id);
+        const hasRealActivities = (inMemoryState.activities || []).some((a) => a.radar_app_id === app.id);
+        if (app.workflow_status !== "UPDATE_DETECTED" && !hasRealRemarks && !hasRealActivities) {
+          app.workflow_status = "UPDATE_DETECTED";
+          didChange = true;
+        }
+      });
+
+      (inMemoryState.cycles || []).forEach((c) => {
+        const hasRealRemarks = (inMemoryState.remarks || []).some((r) => r.radar_app_id === c.radar_app_id);
+        const hasRealActivities = (inMemoryState.activities || []).some((a) => a.radar_app_id === c.radar_app_id);
+        if (c.workflow_status !== "UPDATE_DETECTED" && !hasRealRemarks && !hasRealActivities) {
+          c.workflow_status = "UPDATE_DETECTED";
+          c.priority = "Medium";
+          c.modding_started_at = undefined;
+          c.modded_completed_at = undefined;
+          c.ready_to_publish_at = undefined;
+          c.released_at = undefined;
+          didChange = true;
+        }
+      });
+
+      if (didChange) {
+        await persistState(inMemoryState);
       }
     }
   } catch (err) {
@@ -316,7 +372,7 @@ async function persistState(state: RadarInMemoryState) {
       },
       { onConflict: "setting_key" }
     );
-  } catch {}
+  } catch { }
 
   try {
     revalidatePath("/admin");
@@ -324,7 +380,7 @@ async function persistState(state: RadarInMemoryState) {
     revalidatePath("/admin/radar/apps");
     revalidatePath("/admin/radar/queue");
     revalidatePath("/admin/radar/releases");
-  } catch {}
+  } catch { }
 }
 
 /**
@@ -616,6 +672,7 @@ export async function findRadarApp(
             id: newAppId,
             package_name: dbApp.package_name.trim(),
             app_name: dbApp.name,
+            slug: dbApp.slug,
             play_store_url: `https://play.google.com/store/apps/details?id=${dbApp.package_name.trim()}`,
             icon_url: dbApp.icon_url,
             developer: dbApp.developer || "Aadith C V",
@@ -647,6 +704,69 @@ export async function findRadarApp(
           state.apps.unshift(app);
           state.cycles.unshift(newCycle);
           await persistState(state);
+        } else {
+          // If not in catalog table, check playstore_radar_state directly
+          const { data: radarSetting } = await supabase
+            .from("site_settings")
+            .select("setting_value")
+            .eq("setting_key", "playstore_radar_state")
+            .maybeSingle();
+
+          if (radarSetting?.setting_value?.updates) {
+            const updates = radarSetting.setting_value.updates;
+            const update =
+              updates[rawId] ||
+              updates[cleanId] ||
+              Object.values(updates).find(
+                (u: any) =>
+                  (u.packageName && u.packageName.toLowerCase() === rawId.toLowerCase()) ||
+                  (u.slug && u.slug.toLowerCase() === rawId.toLowerCase())
+              );
+
+            if (update && update.packageName) {
+              const now = new Date().toISOString();
+              const playVer = (update.playStoreVersion || "1.0.0").replace(/^v+/i, "");
+              const siteVer = (update.currentModVersion || playVer).replace(/^v+/i, "");
+              const newAppId = `radar-${update.appId || rawId}`;
+
+              app = {
+                id: newAppId,
+                package_name: update.packageName.trim(),
+                app_name: update.appName || "Application",
+                slug: update.slug,
+                play_store_url: `https://play.google.com/store/apps/details?id=${update.packageName.trim()}`,
+                icon_url: update.icon_url,
+                developer: update.developer || "Aadith C V",
+                category: "Tools",
+                current_play_store_version: playVer,
+                last_detected_version: siteVer,
+                is_active_tracking: true,
+                workflow_status: "UPDATE_DETECTED",
+                last_scanned_at: update.detectedAt || now,
+                last_detected_at: update.detectedAt || now,
+                created_at: now,
+                updated_at: now,
+              };
+
+              const newCycle: RadarModdingCycle = {
+                id: `cycle-${Date.now()}`,
+                radar_app_id: newAppId,
+                cycle_number: 1,
+                target_play_store_version: playVer,
+                mod_version: `${playVer} VIP Mod`,
+                workflow_status: "UPDATE_DETECTED",
+                priority: "Medium",
+                assigned_modder: "Aadith C V",
+                changelog: update.changelog,
+                created_at: now,
+                updated_at: now,
+              };
+
+              state.apps.unshift(app);
+              state.cycles.unshift(newCycle);
+              await persistState(state);
+            }
+          }
         }
       } catch (err) {
         console.error("Error auto-resolving app in findRadarApp:", err);
@@ -693,7 +813,7 @@ export async function findRadarApp(
             }
           }
         }
-      } catch {}
+      } catch { }
     }
   }
 

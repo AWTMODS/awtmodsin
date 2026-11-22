@@ -101,6 +101,25 @@ export async function POST(req: Request) {
       }
     }
 
+    // 5.5 Notify Community Telegram Subscribers (Feature 5)
+    try {
+      const fullApp = await getApplicationById(ver.application_id);
+      if (fullApp) {
+        const { notifySubscribersOfAppUpdate } = await import("@/lib/telegram-broadcast");
+        await notifySubscribersOfAppUpdate(
+          fullApp,
+          {
+            version_name: ver.version_name,
+            version_code: ver.version_code,
+            release_notes: releaseNotes || fullApp.latest_version?.release_notes || "New version release",
+          },
+          updateUrl
+        );
+      }
+    } catch (notifErr) {
+      console.warn("Subscriber notification error (non-fatal):", notifErr);
+    }
+
     // 6. Auto-resolve & archive from Active Play Store Radar if tracked
     try {
       const { data: appData } = await supabase

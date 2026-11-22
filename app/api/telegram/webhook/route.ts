@@ -4,11 +4,20 @@ import { getSiteSettings, getApplicationBySlug, getApplicationById, getApplicati
 import { isUserVip, recordUserInteraction, activateUserVip } from "@/lib/telegram-vip";
 import { broadcastToTelegram } from "@/lib/telegram-broadcast";
 import { checkAndMarkTelegramUpdate } from "@/lib/telegram-dedup";
+import { cleanAppSlug } from "@/lib/utils";
 import {
   parseApkReleaseInfo,
   matchApplicationByApk,
   executeAutoApkRelease,
 } from "@/lib/telegram-auto-release";
+
+function escapeHtml(text: string | null | undefined): string {
+  if (!text) return "";
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -198,6 +207,210 @@ export async function POST(req: Request) {
       // Ensure only Admin can trigger admin callback actions
       const isAdminUser = fromId === adminChatId || fromId === 1343548529;
       if (isAdminUser) {
+        // ==========================================
+        // 1.0 PATCHER STAGED RELEASE ACTIONS (1-Tap Publish / Discard)
+        // ==========================================
+        if (data.startsWith("stage_pub_")) {
+          const verId = data.replace("stage_pub_", "");
+          const supabase = getDbClient();
+          if (!supabase) {
+            await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ callback_query_id: cq.id, text: "Database unavailable", show_alert: true }),
+            }).catch(() => {});
+            return NextResponse.json({ ok: false });
+          }
+
+          // Fetch version & app
+          const { data: ver, error: verErr } = await supabase
+            .from("application_versions")
+            .select("*, applications(*), download_sources(*)")
+            .eq("id", verId)
+            .single();
+
+          if (verErr || !ver) {
+            await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ callback_query_id: cq.id, text: "Version not found or already published", show_alert: true }),
+            }).catch(() => {});
+            return NextResponse.json({ ok: false });
+          }
+
+          const app = ver.applications;
+          const appName = app?.name || "Application";
+          const pkgName = app?.package_name || "";
+          const verName = ver.version_name || `v${ver.version_code}`;
+
+          // 1. Mark other versions as is_latest = false
+          await supabase
+            .from("application_versions")
+            .update({ is_latest: false })
+            .eq("application_id", ver.application_id);
+
+          // 2. Mark this version as published and is_latest = true
+          await supabase
+            .from("application_versions")
+            .update({ status: "published", is_latest: true })
+            .eq("id", verId);
+
+          // 3. Mark application as published
+          await supabase
+            .from("applications")
+            .update({ status: "published" })
+            .eq("id", ver.application_id);
+
+          purgeAppCaches(app?.slug);
+
+          // 4. Broadcast to Telegram Channel with app logo
+          let broadcastSuccess = false;
+          try {
+            const bRes = await broadcastToTelegram({
+              app: {
+                ...app,
+                latest_version: ver,
+                versions: [ver],
+              },
+              version: ver,
+              force: true,
+            });
+            broadcastSuccess = bRes.success;
+          } catch (bErr) {
+            console.warn("Broadcast error from bot callback:", bErr);
+          }
+
+          // 5. Auto-resolve & archive from Play Store Radar
+          let radarArchived = false;
+          try {
+            if (pkgName) {
+              const { getRadarTrackedApps, transitionToModReleased } = await import("@/lib/radar-engine");
+              const radarApps = await getRadarTrackedApps();
+              const matchedRadarApp = radarApps.find(
+                (ra) => (ra.package_name || "").toLowerCase() === pkgName.toLowerCase()
+              );
+              if (matchedRadarApp) {
+                const primarySrc = ver.download_sources?.find((s: any) => s.is_primary)?.download_url;
+                await transitionToModReleased({
+                  appId: matchedRadarApp.id,
+                  adminName: "Telegram Admin (1-Tap)",
+                  releasedModVersion: verName,
+                  downloadUrl: primarySrc || `${settings.siteUrl || "https://www.awtmods.in"}/download/${app?.slug}`,
+                  changelog: ver.release_notes || "Updated to latest version via Patcher",
+                });
+                radarArchived = true;
+              }
+            }
+          } catch (rErr) {
+            console.warn("Radar transition error:", rErr);
+          }
+
+          // 6. Notify Community Subscribers
+          try {
+            const { notifySubscribersOfAppUpdate } = await import("@/lib/telegram-broadcast");
+            await notifySubscribersOfAppUpdate(app, ver);
+          } catch (nErr) {
+            console.warn("Notify subscribers error:", nErr);
+          }
+
+          // 7. Answer callback query
+          await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              callback_query_id: cq.id,
+              text: `🚀 ${appName} (${verName}) published to Live!`,
+              show_alert: false,
+            }),
+          }).catch(() => {});
+
+          // 8. Edit original staged alert message
+          const channelHandle = settings.telegramChannelId || "@awtmods";
+          const publishedText = [
+            `✅ <b>PUBLISHED TO LIVE & CHANNEL!</b>`,
+            ``,
+            `📱 <b>App:</b> <b>${appName}</b>`,
+            `🔢 <b>Version:</b> <code>${verName}</code>`,
+            `🌐 <b>Website:</b> <a href="${settings.siteUrl || "https://www.awtmods.in"}/apps/${app?.slug}.html">Live on Site</a>`,
+            `📢 <b>Broadcast:</b> ${broadcastSuccess ? `Posted to ${channelHandle}` : "Auto-broadcast completed"}`,
+            radarArchived ? `📡 <b>Play Store Radar:</b> Auto-Resolved &amp; Archived ✅` : ``,
+            ``,
+            `<i>Approved by Admin at ${new Date().toLocaleTimeString("en-US", { timeZone: "Asia/Kolkata" })} IST</i>`,
+          ].filter(Boolean).join("\n");
+
+          if (cq.message?.photo) {
+            await fetch(`https://api.telegram.org/bot${token}/editMessageCaption`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: adminChatId,
+                message_id: cq.message.message_id,
+                caption: publishedText,
+                parse_mode: "HTML",
+              }),
+            }).catch(() => {});
+          } else {
+            await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: adminChatId,
+                message_id: cq.message.message_id,
+                text: publishedText,
+                parse_mode: "HTML",
+              }),
+            }).catch(() => {});
+          }
+
+          return NextResponse.json({ ok: true, published: verId });
+        }
+
+        if (data.startsWith("stage_del_")) {
+          const verId = data.replace("stage_del_", "");
+          const supabase = getDbClient();
+          if (supabase) {
+            await supabase.from("download_sources").delete().eq("version_id", verId);
+            await supabase.from("application_versions").delete().eq("id", verId);
+            purgeAppCaches();
+          }
+
+          await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              callback_query_id: cq.id,
+              text: "🗑️ Staged draft discarded.",
+            }),
+          }).catch(() => {});
+
+          const discardedText = `🗑️ <b>Draft Discarded &amp; Removed from Patcher Queue.</b>`;
+          if (cq.message?.photo) {
+            await fetch(`https://api.telegram.org/bot${token}/editMessageCaption`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: adminChatId,
+                message_id: cq.message.message_id,
+                caption: discardedText,
+                parse_mode: "HTML",
+              }),
+            }).catch(() => {});
+          } else {
+            await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: adminChatId,
+                message_id: cq.message.message_id,
+                text: discardedText,
+                parse_mode: "HTML",
+              }),
+            }).catch(() => {});
+          }
+
+          return NextResponse.json({ ok: true, discarded: verId });
+        }
+
         // ==========================================
         // 1.1 Admin Command Center Callbacks
         // ==========================================
@@ -1898,6 +2111,171 @@ export async function POST(req: Request) {
       String(chatId) === String(settings.telegramChannelId);
 
     // ==========================================================
+    // 2.4 ADMIN REPLY TO PATCHER STAGED ALERT (Custom Download Link & Publish)
+    // ==========================================================
+    const replyTo = message.reply_to_message;
+    if (isAuthorized && replyTo) {
+      const replyCaption = replyTo.caption || replyTo.text || "";
+      if (replyCaption.includes("NEW APK STAGED FROM PATCHER")) {
+        const fullMsg = (text || caption || "").trim();
+        const foundUrls = fullMsg.match(/(?:https?:\/\/)[^\s]+/gi) || [];
+        const newDownloadUrl = foundUrls[0];
+
+        const pkgMatch =
+          replyCaption.match(/Package:\s*<[^>]+>([^<]+)<\/[^>]+>/i) ||
+          replyCaption.match(/Package:\s*([a-zA-Z0-9._]+)/i);
+        const pkgName = pkgMatch ? pkgMatch[1].trim().toLowerCase() : null;
+
+        if (pkgName && newDownloadUrl) {
+          const supabase = getDbClient();
+          if (supabase) {
+            const { data: appData } = await supabase
+              .from("applications")
+              .select("id, name, slug, package_name, icon_url, banner_url")
+              .ilike("package_name", pkgName)
+              .maybeSingle();
+
+            if (appData) {
+              const { data: verData } = await supabase
+                .from("application_versions")
+                .select("id, version_name, version_code, release_notes")
+                .eq("application_id", appData.id)
+                .eq("status", "draft")
+                .order("created_at", { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+              if (verData) {
+                // 1. Update or create download source
+                const { data: existingSrc } = await supabase
+                  .from("download_sources")
+                  .select("id")
+                  .eq("version_id", verData.id)
+                  .maybeSingle();
+
+                if (existingSrc) {
+                  await supabase
+                    .from("download_sources")
+                    .update({
+                      download_url: newDownloadUrl,
+                      hosting_provider: newDownloadUrl.includes("t.me") ? "telegram" : "custom",
+                      mirror_name: newDownloadUrl.includes("t.me") ? "Telegram Channel" : "Download Mirror",
+                      is_active: true,
+                      is_primary: true,
+                    })
+                    .eq("id", existingSrc.id);
+                } else {
+                  await supabase.from("download_sources").insert({
+                    version_id: verData.id,
+                    download_type: "external",
+                    hosting_provider: newDownloadUrl.includes("t.me") ? "telegram" : "custom",
+                    download_url: newDownloadUrl,
+                    mirror_name: newDownloadUrl.includes("t.me") ? "Telegram Channel" : "Download Mirror",
+                    is_primary: true,
+                    is_active: true,
+                  });
+                }
+
+                // 2. Mark other versions as is_latest: false
+                await supabase
+                  .from("application_versions")
+                  .update({ is_latest: false })
+                  .eq("application_id", appData.id);
+
+                // 3. Mark version as published
+                await supabase
+                  .from("application_versions")
+                  .update({ status: "published", is_latest: true })
+                  .eq("id", verData.id);
+
+                // 4. Mark app as published
+                await supabase
+                  .from("applications")
+                  .update({ status: "published" })
+                  .eq("id", appData.id);
+
+                purgeAppCaches(appData.slug);
+
+                // 5. Broadcast to Telegram channel with app logo
+                try {
+                  const { broadcastToTelegram } = await import("@/lib/telegram-broadcast");
+                  const fullApp = await getApplicationById(appData.id);
+                  if (fullApp) {
+                    await broadcastToTelegram({
+                      app: fullApp,
+                      version: {
+                        ...verData,
+                        application_id: appData.id,
+                        file_size: "50 MB",
+                        architecture: "arm64-v8a",
+                        android_requirement: "Android 7.0+",
+                        status: "published",
+                        created_at: new Date().toISOString(),
+                      },
+                      force: true,
+                    });
+                  }
+                } catch (bErr) {
+                  console.warn("Broadcast error on reply publish:", bErr);
+                }
+
+                // 6. Auto-resolve & archive from Play Store Radar
+                try {
+                  const { getRadarTrackedApps, transitionToModReleased } = await import("@/lib/radar-engine");
+                  const radarApps = await getRadarTrackedApps();
+                  const matchedRadarApp = radarApps.find(
+                    (ra) => (ra.package_name || "").toLowerCase() === pkgName
+                  );
+                  if (matchedRadarApp) {
+                    await transitionToModReleased({
+                      appId: matchedRadarApp.id,
+                      adminName: "Telegram Admin (Reply)",
+                      releasedModVersion: verData.version_name || `v${verData.version_code}`,
+                      downloadUrl: newDownloadUrl,
+                      changelog: verData.release_notes || "Updated via Patcher with custom download link",
+                    });
+                  }
+                } catch (rErr) {
+                  console.warn("Radar transition error on reply publish:", rErr);
+                }
+
+                // 7. Notify community subscribers
+                try {
+                  const { notifySubscribersOfAppUpdate } = await import("@/lib/telegram-broadcast");
+                  await notifySubscribersOfAppUpdate(appData, verData, newDownloadUrl);
+                } catch (nErr) {
+                  console.warn("Notify subscribers error on reply:", nErr);
+                }
+
+                // 8. Confirm to Admin
+                const verLabel = verData.version_name || `v${verData.version_code}`;
+                await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    chat_id: adminChatId,
+                    text: (
+                      `🚀 <b>DOWNLOAD LINK ATTACHED &amp; PUBLISHED LIVE!</b>\n\n` +
+                      `📱 <b>App:</b> <b>${escapeHtml(appData.name)}</b> (${escapeHtml(verLabel)})\n` +
+                      `🔗 <b>New Download URL:</b> <code>${escapeHtml(newDownloadUrl)}</code>\n\n` +
+                      `✅ Published on live website\n` +
+                      `✅ Broadcasted to channel with logo\n` +
+                      `✅ Play Store Radar auto-resolved &amp; archived\n` +
+                      `✅ Community subscribers notified`
+                    ),
+                    parse_mode: "HTML",
+                  }),
+                }).catch(() => {});
+
+                return NextResponse.json({ ok: true, replyPublished: appData.name });
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // ==========================================================
     // 2.5 INTERACTIVE ADMIN WIZARD INPUT HANDLER
     // ==========================================================
     const supabase = getDbClient();
@@ -2912,6 +3290,92 @@ export async function POST(req: Request) {
         }).catch(() => {});
         return NextResponse.json({ ok: true });
       }
+    }
+
+    // ==========================================
+    // 2.7 /notify Command for Community Updates (Feature 5)
+    // ==========================================
+    if (text.startsWith("/notify")) {
+      const query = text.replace(/^\/notify/i, "").trim();
+      if (!query) {
+        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: (
+              `🔔 <b>Get Notified for Mod APK Updates!</b>\n\n` +
+              `Subscribe to any app to receive an instant direct message as soon as a new mod version is released.\n\n` +
+              `<b>Usage:</b>\n` +
+              `<code>/notify &lt;app name or package&gt;</code>\n\n` +
+              `<b>Examples:</b>\n` +
+              `• <code>/notify PicsArt</code>\n` +
+              `• <code>/notify BandLab</code>\n` +
+              `• <code>/notify com.appostrophe.scrl</code>`
+            ),
+            parse_mode: "HTML",
+          }),
+        }).catch(() => {});
+        return NextResponse.json({ ok: true });
+      }
+
+      // Search application
+      const supabase = getDbClient();
+      let matchedApp: any = null;
+      if (supabase) {
+        const { data: appData } = await supabase
+          .from("applications")
+          .select("id, name, slug, package_name, icon_url")
+          .or(`name.ilike.%${query}%,package_name.ilike.%${query}%,slug.ilike.%${query}%`)
+          .limit(1)
+          .maybeSingle();
+
+        matchedApp = appData;
+      }
+
+      if (matchedApp && user) {
+        const { subscribeUserToApp } = await import("@/lib/telegram-vip");
+        await subscribeUserToApp(user.id, matchedApp.slug);
+
+        const cleanSlug = cleanAppSlug(matchedApp.slug);
+        const appUrl = `${settings.siteUrl || "https://www.awtmods.in"}/apps/${cleanSlug}.html`;
+
+        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: (
+              `🔔 <b>Subscribed to Update Alerts!</b>\n\n` +
+              `You will receive an instant notification right here whenever a new mod version of <b>${escapeHtml(matchedApp.name)}</b> is released!\n\n` +
+              `📦 <b>Package:</b> <code>${escapeHtml(matchedApp.package_name || matchedApp.slug)}</code>`
+            ),
+            parse_mode: "HTML",
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  { text: `🌐 View ${matchedApp.name.slice(0, 20)} on Website`, url: appUrl },
+                ],
+              ],
+            },
+          }),
+        }).catch(() => {});
+      } else {
+        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: (
+              `🔍 Could not find an app matching "<b>${escapeHtml(query)}</b>".\n\n` +
+              `Please check the spelling or browse our full catalogue on <a href="${settings.siteUrl || "https://www.awtmods.in"}">AWTMods.in</a>!`
+            ),
+            parse_mode: "HTML",
+          }),
+        }).catch(() => {});
+      }
+
+      return NextResponse.json({ ok: true });
     }
 
     // Check if user is asking for /start

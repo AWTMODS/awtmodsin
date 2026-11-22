@@ -29,14 +29,21 @@ export async function POST(req: Request) {
 
     // 1. Find or create the Application
     let appId: string | null = null;
+    let appIconUrl = "https://www.awtmods.in/icon.png";
+    let appBannerUrl: string | null = null;
+    let appSlug = "";
+
     const { data: existingApp } = await supabase
       .from("applications")
-      .select("id, name, package_name")
+      .select("id, name, package_name, slug, icon_url, banner_url")
       .ilike("package_name", packageName)
       .maybeSingle();
 
     if (existingApp) {
       appId = existingApp.id;
+      if (existingApp.icon_url) appIconUrl = existingApp.icon_url;
+      if (existingApp.banner_url) appBannerUrl = existingApp.banner_url;
+      if (existingApp.slug) appSlug = existingApp.slug;
     } else {
       // Find default category
       const { data: cat } = await supabase
@@ -53,12 +60,12 @@ export async function POST(req: Request) {
         );
       }
 
-      const slug = packageName.replace(/[^a-z0-9]/gi, "-").toLowerCase();
+      appSlug = `${packageName.replace(/[^a-z0-9]/gi, "-").toLowerCase()}-${Date.now().toString(36)}`;
       const { data: newApp, error: newAppErr } = await supabase
         .from("applications")
         .insert({
           name: appName,
-          slug: `${slug}-${Date.now().toString(36)}`,
+          slug: appSlug,
           package_name: packageName,
           developer: "AWTMods",
           category_id: catId,
@@ -68,7 +75,7 @@ export async function POST(req: Request) {
           android_requirement: "Android 7.0+",
           status: "published",
         })
-        .select("id")
+        .select("id, icon_url, banner_url, slug")
         .single();
 
       if (newAppErr || !newApp) {
@@ -79,6 +86,9 @@ export async function POST(req: Request) {
         );
       }
       appId = newApp.id;
+      if (newApp.icon_url) appIconUrl = newApp.icon_url;
+      if (newApp.banner_url) appBannerUrl = newApp.banner_url;
+      if (newApp.slug) appSlug = newApp.slug;
     }
 
     // 2. Find or create the version as DRAFT (staged)
@@ -158,6 +168,44 @@ export async function POST(req: Request) {
     }
 
     invalidateDbCache();
+
+    // 4. Feature 4: Play Store Radar Matcher
+    let radarMatchText = "📡 <b>Radar:</b> No pending Play Store alert.";
+    try {
+      const { getRadarTrackedApps } = await import("@/lib/radar-engine");
+      const radarApps = await getRadarTrackedApps();
+      const matchedRadar = radarApps.find(
+        (ra) => (ra.package_name || "").toLowerCase() === packageName && ra.workflow_status !== "MOD_RELEASED"
+      );
+      if (matchedRadar) {
+        radarMatchText = `📡 <b>Radar Match:</b> Play Store detected <code>v${matchedRadar.current_play_store_version || "New"}</code> (Active) ➔ <i>Will auto-archive on publish!</i>`;
+      }
+    } catch (rErr) {
+      console.warn("Radar check note (non-fatal):", rErr);
+    }
+
+    // 5. Feature 1: Instant Telegram DM Alert with App Logo to Admin
+    try {
+      const { sendPatcherStagedAlertToAdmin } = await import("@/lib/telegram-broadcast");
+      await sendPatcherStagedAlertToAdmin({
+        app: {
+          id: appId,
+          name: existingApp?.name || appName,
+          package_name: packageName,
+          icon_url: appIconUrl,
+          banner_url: appBannerUrl,
+          slug: appSlug,
+        },
+        versionId: verId,
+        versionCode: versionCode,
+        versionName: `v${versionCode}`,
+        releaseNotes: releaseNotes,
+        downloadUrl: updateUrl,
+        radarMatchText,
+      });
+    } catch (tgErr) {
+      console.warn("Telegram alert error (non-fatal):", tgErr);
+    }
 
     return NextResponse.json({
       success: true,

@@ -139,6 +139,9 @@ export async function broadcastToTelegram(
       settings.telegramPostTemplate.trim() &&
       settings.telegramPostTemplate.includes("{app_name}");
 
+    const cleanAppTag = app.name.replace(/[^a-zA-Z0-9]/g, "");
+    const tags = `#${cleanAppTag} #AWTMods #ModAPK`;
+
     if (hasValidTemplate) {
       caption = settings.telegramPostTemplate!
         .replace(/{app_name}/g, escapeHtml(app.name))
@@ -154,6 +157,10 @@ export async function broadcastToTelegram(
         .replace(/{download_url}/g, downloadPageUrl)
         .replace(/{clean_slug}/g, escapeHtml(cleanSlug))
         .replace(/{vip_link}/g, vipDeepLink);
+
+      if (!caption.includes("#AWTMods")) {
+        caption += `\n\n${tags}`;
+      }
     } else {
       caption = [
         `<tg-emoji emoji-id="4956420911310832630">👑</tg-emoji> <b>${escapeHtml(app.name)}</b> <tg-emoji emoji-id="4956739572114392015">💎</tg-emoji> <b>[VIP]</b>`,
@@ -166,6 +173,8 @@ export async function broadcastToTelegram(
         `<tg-emoji emoji-id="4958534696645428119">‼️</tg-emoji> <i>Clean &amp; 100% Virus-Free APK (Verified &amp; Safe to Install)</i>`,
         ``,
         `<tg-emoji emoji-id="4958714479681471536">⭐️</tg-emoji> <b>Join Channel ➔</b> ${channelHandle}`,
+        ``,
+        tags,
       ].join("\n");
     }
 
@@ -194,6 +203,15 @@ export async function broadcastToTelegram(
         },
       ],
     ];
+
+    if (devUploadsMirror?.download_url) {
+      inlineKeyboard.push([
+        {
+          text: `📥 Direct Mirror (${devUploadsMirror.mirror_name || "Download"})`,
+          url: devUploadsMirror.download_url,
+        },
+      ]);
+    }
 
     const replyMarkup = { inline_keyboard: inlineKeyboard };
 
@@ -279,6 +297,12 @@ export async function broadcastToTelegram(
       try {
         const photoData = await sendWithFallback(true);
         if (photoData.ok) {
+          notifySubscribersOfAppUpdate(app, {
+            version_name: versionName,
+            version_code: version?.version_code,
+            release_notes: version?.release_notes || undefined,
+          }, downloadPageUrl).catch(() => {});
+
           return {
             success: true,
             message: `Successfully posted ${app.name} to ${channelId}`,
@@ -300,36 +324,11 @@ export async function broadcastToTelegram(
       };
     }
 
-    // Notify update subscribers in background
-    try {
-      const { getSubscribersForApp } = await import("./telegram-vip");
-      const subIds = await getSubscribersForApp(app.slug);
-      const botUser = settings.telegramBotUsername || "awtmods_bot";
-      for (const subId of subIds) {
-        fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chat_id: subId,
-            text: (
-              `⚡ <b>New Update Released for ${escapeHtml(app.name)}!</b>\n\n` +
-              `🏷️ <b>Version:</b> <code>${escapeHtml(versionName)}</code>\n` +
-              `📦 <b>Size:</b> ${escapeHtml(fileSize)}\n\n` +
-              `<i>Tap below to download the latest update now:</i>`
-            ),
-            parse_mode: "HTML",
-            reply_markup: {
-              inline_keyboard: [
-                [
-                  { text: "⚡ Direct Download", url: `https://t.me/${botUser}?start=dl_${cleanSlug.slice(0, 50)}` },
-                  { text: "🌐 View on Website", url: appUrl },
-                ],
-              ],
-            },
-          }),
-        }).catch(() => {});
-      }
-    } catch {}
+    notifySubscribersOfAppUpdate(app, {
+      version_name: versionName,
+      version_code: version?.version_code,
+      release_notes: version?.release_notes || undefined,
+    }, downloadPageUrl).catch(() => {});
 
     return {
       success: true,
@@ -676,5 +675,197 @@ export async function broadcastViaUserbot(
       success: false,
       error: err.message || "Failed to broadcast via Telegram Userbot",
     };
+  }
+}
+
+/**
+ * Sends a notification directly to users who subscribed to this app via /notify
+ */
+export async function notifySubscribersOfAppUpdate(
+  app: { name: string; slug: string; icon_url?: string | null },
+  version: { version_name?: string | null; version_code?: number | null; release_notes?: string | null },
+  downloadUrl?: string
+): Promise<{ notifiedCount: number }> {
+  try {
+    const settings = await getSiteSettings();
+    const token = settings.telegramBotToken || process.env.TELEGRAM_BOT_TOKEN;
+    const botUser = settings.telegramBotUsername || "awtmods_bot";
+    const siteUrl = settings.siteUrl || "https://www.awtmods.in";
+    if (!token) return { notifiedCount: 0 };
+
+    const { getSubscribersForApp } = await import("./telegram-vip");
+    const subIds = await getSubscribersForApp(app.slug);
+    if (!subIds || subIds.length === 0) return { notifiedCount: 0 };
+
+    const cleanSlug = cleanAppSlug(app.slug);
+    const appUrl = `${siteUrl}/apps/${cleanSlug}.html`;
+    const vipDeepLink = `https://t.me/${botUser}?start=dl_${cleanSlug.slice(0, 50)}`;
+    const displayVersion = version.version_name || (version.version_code ? `v${version.version_code}` : "Latest");
+
+    const text = [
+      `🔔 <b>NEW MOD UPDATE AVAILABLE: ${escapeHtml(app.name)}!</b>`,
+      ``,
+      `🏷️ <b>Version:</b> <code>${escapeHtml(displayVersion)}</code>`,
+      version.release_notes ? `📝 <b>Changelog:</b>\n<i>${escapeHtml(version.release_notes.slice(0, 200))}</i>\n` : ``,
+      `⚡ Direct VIP and website downloads are available now!`,
+    ].filter(Boolean).join("\n");
+
+    const reply_markup = {
+      inline_keyboard: [
+        [
+          { text: "⚡ Direct VIP Download", url: vipDeepLink },
+          { text: "🌐 View on Website", url: appUrl },
+        ],
+      ],
+    };
+
+    let sent = 0;
+    for (const subId of subIds) {
+      try {
+        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: subId,
+            text,
+            parse_mode: "HTML",
+            reply_markup,
+          }),
+        });
+        sent++;
+      } catch {}
+    }
+
+    return { notifiedCount: sent };
+  } catch (err) {
+    console.warn("notifySubscribersOfAppUpdate error:", err);
+    return { notifiedCount: 0 };
+  }
+}
+
+export interface PatcherStagedAlertOptions {
+  app: {
+    id?: string | null;
+    name: string;
+    package_name?: string | null;
+    icon_url?: string | null;
+    banner_url?: string | null;
+    slug?: string;
+  };
+  versionId: string;
+  versionCode: number;
+  versionName?: string;
+  releaseNotes?: string;
+  downloadUrl?: string;
+  radarMatchText?: string;
+}
+
+/**
+ * Sends an instant staged release alert to Admin DM on Telegram with the app logo and 1-tap Publish button
+ */
+export async function sendPatcherStagedAlertToAdmin(
+  options: PatcherStagedAlertOptions
+): Promise<TelegramBroadcastResult> {
+  try {
+    const settings = await getSiteSettings();
+    const token = settings.telegramBotToken || process.env.TELEGRAM_BOT_TOKEN;
+    const adminChatId = settings.telegramAdminChatId || "1343548529";
+    const siteUrl = settings.siteUrl || "https://www.awtmods.in";
+
+    if (!token || !adminChatId) {
+      return { success: false, error: "Telegram bot token or adminChatId not configured" };
+    }
+
+    const { app, versionId, versionCode, versionName, releaseNotes, downloadUrl, radarMatchText } = options;
+
+    const displayVersion = versionName || `v${versionCode}`;
+    const cleanNotes = (releaseNotes || "Base Update\nNew Features\nBug Fixes").trim();
+
+    // Prepare photo URL
+    let photoUrl = app.icon_url || app.banner_url || "https://www.awtmods.in/icon.png";
+    if (photoUrl && photoUrl.startsWith("/")) {
+      photoUrl = `${siteUrl}${photoUrl}`;
+    }
+
+    const caption = [
+      `🚀 <b>NEW APK STAGED FROM PATCHER</b>`,
+      ``,
+      `📱 <b>App:</b> <b>${escapeHtml(app.name)}</b>`,
+      `📦 <b>Package:</b> <code>${escapeHtml(app.package_name || "unknown")}</code>`,
+      `🔢 <b>Version Code:</b> <code>v${versionCode}</code> (<i>${escapeHtml(displayVersion)}</i>)`,
+      radarMatchText ? `${radarMatchText}` : ``,
+      ``,
+      `📝 <b>Changelog:</b>`,
+      `<code>${escapeHtml(cleanNotes.slice(0, 300))}</code>`,
+      ``,
+      `🔗 <b>Download Link:</b>`,
+      `<code>${escapeHtml(downloadUrl || "https://telegram.me/ARTWEBTECHOFFICIAL")}</code>`,
+      ``,
+      `💡 <i>Tap <b>Publish Live</b> below to approve immediately, or reply to this message with a new download link (e.g. from Telegram channel or DevUploads).</i>`,
+    ].filter(Boolean).join("\n");
+
+    const replyMarkup = {
+      inline_keyboard: [
+        [
+          {
+            text: "🚀 1-Tap Publish Live",
+            callback_data: `stage_pub_${versionId}`,
+          },
+          {
+            text: "🗑️ Discard Draft",
+            callback_data: `stage_del_${versionId}`,
+          },
+        ],
+        [
+          {
+            text: "🌐 Open Admin Patcher Dashboard",
+            url: `${siteUrl}/admin/patcher`,
+          },
+        ],
+      ],
+    };
+
+    const isHttpUrl = photoUrl && (photoUrl.startsWith("http://") || photoUrl.startsWith("https://"));
+
+    if (isHttpUrl) {
+      const res = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: adminChatId,
+          photo: photoUrl,
+          caption,
+          parse_mode: "HTML",
+          reply_markup: replyMarkup,
+        }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        return { success: true, messageId: data.result?.message_id };
+      }
+      console.warn("sendPatcherStagedAlertToAdmin sendPhoto failed, fallback to sendMessage:", data.description);
+    }
+
+    // Fallback: sendMessage
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: adminChatId,
+        text: caption,
+        parse_mode: "HTML",
+        disable_web_page_preview: false,
+        reply_markup: replyMarkup,
+      }),
+    });
+    const data = await res.json();
+    return {
+      success: !!data.ok,
+      messageId: data.result?.message_id,
+      error: data.description,
+    };
+  } catch (err: any) {
+    console.error("sendPatcherStagedAlertToAdmin error:", err);
+    return { success: false, error: err.message };
   }
 }

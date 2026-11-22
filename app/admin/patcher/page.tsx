@@ -12,7 +12,8 @@ import {
   RefreshCw,
   Globe,
   Radio,
-  FileText
+  FileText,
+  Code
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -48,6 +49,7 @@ export default function PatcherAdminPage() {
   const [editUrls, setEditUrls] = useState<Record<string, string>>({});
   const [editNotes, setEditNotes] = useState<Record<string, string>>({});
   const [broadcastTg, setBroadcastTg] = useState<Record<string, boolean>>({});
+  const [showJson, setShowJson] = useState<Record<string, boolean>>({});
 
   const loadData = async () => {
     setLoading(true);
@@ -235,6 +237,50 @@ export default function PatcherAdminPage() {
                       placeholder="Base Update\nNew Features\nFixed Bugs"
                     />
                   </div>
+                </div>
+
+                {/* Live JSON Payload Preview */}
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowJson({ ...showJson, [item.id]: !showJson[item.id] })}
+                    className="inline-flex items-center gap-1.5 text-xs text-amber-400 hover:text-amber-300 transition font-mono font-semibold"
+                  >
+                    <Code className="w-3.5 h-3.5" />
+                    {showJson[item.id] ? "Hide Live JSON Payload ▲" : "Preview Injected Dalvik JSON Payload ▼"}
+                  </button>
+
+                  {showJson[item.id] && (
+                    <div className="mt-2.5 p-3 rounded-lg bg-black/90 border border-neutral-800 font-mono text-xs text-emerald-400 overflow-x-auto space-y-1">
+                      <div className="text-[11px] text-muted-foreground pb-1 border-b border-neutral-800">
+                        GET https://www.awtmods.in/api/update?package={item.application?.package_name}
+                      </div>
+                      <pre className="text-xs leading-relaxed text-emerald-300">
+                        {JSON.stringify(
+                          [
+                            {
+                              Header: item.application?.name || "AWTMods App",
+                              package_name: item.application?.package_name || "",
+                              version_code: item.version_code,
+                              force_update: true,
+                              title: "Update version ",
+                              description_type: 2,
+                              html_formatted: false,
+                              description: editNotes[item.id] || item.release_notes || "Base Update\nNew Features\nFixed Bugs",
+                              update_button_text: "Update Now",
+                              Update_dismiss_button_text: "Dismiss",
+                              update_url: editUrls[item.id] || "https://telegram.me/ARTWEBTECHOFFICIAL",
+                              auto_redirect_enabled: false,
+                              auto_redirect_delay: 6,
+                              show_only_update_button: true,
+                            },
+                          ],
+                          null,
+                          2
+                        )}
+                      </pre>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-border">

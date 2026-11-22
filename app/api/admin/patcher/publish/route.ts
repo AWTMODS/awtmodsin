@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDbClient, getApplicationById, invalidateDbCache } from "@/lib/db";
 import { broadcastToTelegram } from "@/lib/telegram-broadcast";
+import { getRadarTrackedApps, transitionToModReleased } from "@/lib/radar-engine";
 
 // Called when Admin approves and publishes a staged release
 export async function POST(req: Request) {
@@ -98,6 +99,34 @@ export async function POST(req: Request) {
       } catch (tgErr) {
         console.warn("Telegram broadcast error (non-fatal):", tgErr);
       }
+    }
+
+    // 6. Auto-resolve & archive from Active Play Store Radar if tracked
+    try {
+      const { data: appData } = await supabase
+        .from("applications")
+        .select("name, package_name")
+        .eq("id", ver.application_id)
+        .single();
+
+      if (appData?.package_name) {
+        const radarApps = await getRadarTrackedApps();
+        const matchedRadarApp = radarApps.find(
+          (ra) => ra.package_name.toLowerCase() === appData.package_name.toLowerCase()
+        );
+
+        if (matchedRadarApp) {
+          await transitionToModReleased({
+            appId: matchedRadarApp.id,
+            adminName: "Patcher Admin",
+            releasedModVersion: `v${ver.version_code}`,
+            downloadUrl: updateUrl || "https://www.awtmods.in",
+            changelog: releaseNotes || "Updated to latest version via Patcher",
+          });
+        }
+      }
+    } catch (radarErr) {
+      console.warn("Radar auto-resolve note (non-fatal):", radarErr);
     }
 
     return NextResponse.json({

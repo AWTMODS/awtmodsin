@@ -61,3 +61,31 @@ export async function GET() {
     return NextResponse.json({ error: error?.message || "Internal server error" }, { status: 500 });
   }
 }
+
+export async function DELETE(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get("id");
+    if (!id) {
+      return NextResponse.json({ error: "Version ID is required" }, { status: 400 });
+    }
+
+    const supabase = getDbClient();
+    if (!supabase) {
+      return NextResponse.json({ error: "Database client unavailable" }, { status: 500 });
+    }
+
+    // Delete download sources first
+    await supabase.from("download_sources").delete().eq("version_id", id);
+    // Delete version draft
+    const { error } = await supabase.from("application_versions").delete().eq("id", id).eq("status", "draft");
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true, message: "Draft discarded successfully" });
+  } catch (error: any) {
+    return NextResponse.json({ error: error?.message || "Internal server error" }, { status: 500 });
+  }
+}

@@ -122,6 +122,22 @@ export default function PatcherAdminPage() {
     }
   };
 
+  const handleDiscard = async (item: PatcherReleaseItem) => {
+    if (!confirm(`Discard staged release for ${item.application?.name || "app"} (v${item.version_code})?`)) return;
+    try {
+      const res = await fetch(`/api/admin/patcher/releases?id=${item.id}`, { method: "DELETE" });
+      const out = await res.json();
+      if (res.ok && out.success) {
+        toast.success(`Discarded ${item.application?.name || "app"} (v${item.version_code})`);
+        loadData();
+      } else {
+        toast.error(out.error || "Failed to discard draft");
+      }
+    } catch (e: any) {
+      toast.error("Discard failed: " + e.message);
+    }
+  };
+
   const copyEndpoint = (pkg: string) => {
     const origin = typeof window !== "undefined" ? window.location.origin : "https://www.awtmods.in";
     const fullUrl = `${origin}/api/update?package=${pkg}`;
@@ -301,6 +317,16 @@ export default function PatcherAdminPage() {
                   </label>
 
                   <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleDiscard(item)}
+                      className="inline-flex items-center gap-1 px-3 py-2 text-xs font-semibold text-muted-foreground hover:text-red-400 hover:bg-red-500/10 rounded-lg transition border border-transparent hover:border-red-500/20"
+                      title="Discard this draft"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Discard
+                    </button>
+
                     <button
                       onClick={() => handlePublish(item)}
                       disabled={publishingId === item.id}

@@ -12,6 +12,13 @@ export async function middleware(request: NextRequest) {
   const isAdminApi = pathname.startsWith("/api/admin") && !pathname.startsWith("/api/admin/auth");
 
   if (isAdminPage || isAdminApi) {
+    // Allow automated requests from Android Patcher with valid Admin Secret Key
+    const adminKey = request.headers.get("x-admin-key") || request.headers.get("authorization")?.replace("Bearer ", "");
+    const validSecret = process.env.ADMIN_SECRET || "awtmods2026";
+    if (isAdminApi && adminKey && adminKey.trim() === validSecret) {
+      return NextResponse.next();
+    }
+
     const adminSessionToken = request.cookies.get("awtmods_admin_session")?.value;
 
     const session = await verifyAdminSessionTokenEdge(adminSessionToken);

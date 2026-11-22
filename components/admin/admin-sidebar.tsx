@@ -24,12 +24,14 @@ import {
   Gamepad2,
   Monitor,
   Terminal,
+  Zap,
 } from "lucide-react";
 import { Logo } from "@/components/layout/logo";
 import { cn } from "@/lib/utils";
 
 const adminNavItems = [
   { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
+  { name: "⚡ Patcher Releases", href: "/admin/patcher", icon: Zap },
   { name: "Applications", href: "/admin/apps", icon: Layers },
   { name: "📱 Android Apps", href: "/admin/apps?type=apps", icon: Smartphone, isSub: true },
   { name: "🎮 Android Games", href: "/admin/apps?type=games", icon: Gamepad2, isSub: true },

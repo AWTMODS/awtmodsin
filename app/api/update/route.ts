@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { getApplicationByPackage, getDbClient } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 // Public endpoint queried by Dalvik Update DEX in modded APKs
 // Example: https://www.awtmods.in/api/update?package=com.appostrophe.scrl
 export async function GET(req: Request) {

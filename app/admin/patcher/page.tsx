@@ -54,7 +54,13 @@ export default function PatcherAdminPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/patcher/releases");
+      const res = await fetch(`/api/admin/patcher/releases?_t=${Date.now()}`, {
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-cache",
+          "Pragma": "no-cache",
+        },
+      });
       const data = await res.json();
       if (data.success) {
         setStaged(data.staged || []);

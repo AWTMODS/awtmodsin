@@ -1,4 +1,4 @@
-import { getSiteSettings } from "./db";
+import { getSiteSettings, getDbClient } from "./db";
 import { Application, ApplicationVersion } from "./types";
 import { cleanAppSlug } from "./utils";
 
@@ -204,16 +204,40 @@ export async function broadcastToTelegram(
       ],
     ];
 
-    if (devUploadsMirror?.download_url) {
-      inlineKeyboard.push([
-        {
-          text: `📥 Direct Mirror (${devUploadsMirror.mirror_name || "Download"})`,
-          url: devUploadsMirror.download_url,
-        },
-      ]);
+    const replyMarkup = { inline_keyboard: inlineKeyboard };
+
+    // Resolve app photo banner: prefer app.icon_url or app.banner_url
+    let photoUrl = app.icon_url || app.banner_url;
+    if (photoUrl && photoUrl.startsWith("/")) {
+      photoUrl = `${siteUrl}${photoUrl}`;
     }
 
-    const replyMarkup = { inline_keyboard: inlineKeyboard };
+    // Auto-fetch real icon from Google Play if missing or placeholder
+    if (!photoUrl || photoUrl.includes("icon.png") || photoUrl.includes("default-app.png")) {
+      if (app.package_name && app.package_name.includes(".") && !app.package_name.startsWith("com.awt")) {
+        try {
+          const mod = await import("google-play-scraper");
+          const gplay = (mod as any).default || mod;
+          const playData = await gplay.app({ appId: app.package_name });
+          if (playData?.icon) {
+            photoUrl = playData.icon;
+            // Asynchronously persist to database so future visits have it
+            const supabase = getDbClient();
+            if (supabase && app.id) {
+              supabase.from("applications").update({ icon_url: photoUrl, banner_url: playData.headerImage || null }).eq("id", app.id).then(() => {});
+            }
+          }
+        } catch (gpErr) {
+          console.warn("Could not scrape Google Play icon for broadcast:", gpErr);
+        }
+      }
+    }
+
+    if (!photoUrl || photoUrl.includes("icon.png") || photoUrl.includes("default-app.png")) {
+      photoUrl = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500&auto=format&fit=crop&q=60";
+    }
+
+    const isHttpUrl = Boolean(photoUrl && (photoUrl.startsWith("http://") || photoUrl.startsWith("https://")));
 
     // Helper to send photo or message with auto-fallback for custom emojis
     const sendWithFallback = async (usePhoto: boolean) => {
@@ -227,7 +251,7 @@ export async function broadcastToTelegram(
 
       if (usePhoto) {
         payload.photo = photoUrl;
-        payload.caption = currentCaption;
+        payload.caption = currentCaption.length > 1024 ? currentCaption.slice(0, 1020) + "..." : currentCaption;
       } else {
         payload.text = currentCaption;
         payload.disable_web_page_preview = false;
@@ -245,7 +269,7 @@ export async function broadcastToTelegram(
       if (!data.ok && (data.description?.includes("ENTITY") || data.description?.includes("custom_emoji"))) {
         const plainCaption = currentCaption.replace(/<tg-emoji[^>]*>(.*?)<\/tg-emoji>/gi, "$1");
         if (usePhoto) {
-          payload.caption = plainCaption;
+          payload.caption = plainCaption.length > 1024 ? plainCaption.slice(0, 1020) + "..." : plainCaption;
         } else {
           payload.text = plainCaption;
         }
@@ -260,14 +284,6 @@ export async function broadcastToTelegram(
 
       return data;
     };
-
-    // Try sending with photo first if icon is valid absolute URL
-    let photoUrl = app.icon_url;
-    if (photoUrl && photoUrl.startsWith("/")) {
-      photoUrl = `${siteUrl}${photoUrl}`;
-    }
-
-    const isHttpUrl = photoUrl && (photoUrl.startsWith("http://") || photoUrl.startsWith("https://"));
 
     // Mode 3: Telegram Premium Userbot (MTProto)
     if (
@@ -755,6 +771,7 @@ export interface PatcherStagedAlertOptions {
   versionId: string;
   versionCode: number;
   versionName?: string;
+  fileSize?: string;
   releaseNotes?: string;
   downloadUrl?: string;
   radarMatchText?: string;
@@ -776,15 +793,29 @@ export async function sendPatcherStagedAlertToAdmin(
       return { success: false, error: "Telegram bot token or adminChatId not configured" };
     }
 
-    const { app, versionId, versionCode, versionName, releaseNotes, downloadUrl, radarMatchText } = options;
+    const { app, versionId, versionCode, versionName, fileSize, releaseNotes, downloadUrl, radarMatchText } = options;
 
     const displayVersion = versionName || `v${versionCode}`;
     const cleanNotes = (releaseNotes || "Base Update\nNew Features\nBug Fixes").trim();
 
     // Prepare photo URL
-    let photoUrl = app.icon_url || app.banner_url || "https://www.awtmods.in/icon.png";
+    let photoUrl = app.icon_url || app.banner_url;
     if (photoUrl && photoUrl.startsWith("/")) {
       photoUrl = `${siteUrl}${photoUrl}`;
+    }
+
+    if (!photoUrl || photoUrl.includes("icon.png") || photoUrl.includes("default-app.png")) {
+      if (app.package_name && app.package_name.includes(".") && !app.package_name.startsWith("com.awt")) {
+        try {
+          const mod = await import("google-play-scraper");
+          const gplay = (mod as any).default || mod;
+          const playData = await gplay.app({ appId: app.package_name });
+          if (playData?.icon) photoUrl = playData.icon;
+        } catch {}
+      }
+    }
+    if (!photoUrl || photoUrl.includes("icon.png") || photoUrl.includes("default-app.png")) {
+      photoUrl = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500&auto=format&fit=crop&q=60";
     }
 
     const caption = [
@@ -793,6 +824,7 @@ export async function sendPatcherStagedAlertToAdmin(
       `📱 <b>App:</b> <b>${escapeHtml(app.name)}</b>`,
       `📦 <b>Package:</b> <code>${escapeHtml(app.package_name || "unknown")}</code>`,
       `🔢 <b>Version Code:</b> <code>v${versionCode}</code> (<i>${escapeHtml(displayVersion)}</i>)`,
+      fileSize ? `💾 <b>File Size:</b> <code>${escapeHtml(fileSize)}</code>` : ``,
       radarMatchText ? `${radarMatchText}` : ``,
       ``,
       `📝 <b>Changelog:</b>`,
@@ -834,7 +866,7 @@ export async function sendPatcherStagedAlertToAdmin(
         body: JSON.stringify({
           chat_id: adminChatId,
           photo: photoUrl,
-          caption,
+          caption: caption.length > 1024 ? caption.slice(0, 1020) + "..." : caption,
           parse_mode: "HTML",
           reply_markup: replyMarkup,
         }),

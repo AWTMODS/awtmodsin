@@ -9,6 +9,8 @@ export async function POST(req: Request) {
     const packageName = (body.package_name || body.packageName || "").trim().toLowerCase();
     const appName = (body.app_name || body.Header || packageName).trim();
     const versionCode = parseInt(body.version_code || body.versionCode, 10);
+    const versionName = (body.version_name || body.versionName || (body.clean_ver ? `v${body.clean_ver}` : `v${versionCode}`)).trim();
+    const fileSize = (body.file_size || body.fileSize || "50 MB").trim();
     const updateUrl = body.update_url || "https://telegram.me/ARTWEBTECHOFFICIAL";
     const releaseNotes = body.description || "Base Update\nNew Features\nFixed Bugs";
 
@@ -27,10 +29,33 @@ export async function POST(req: Request) {
       );
     }
 
-    // 1. Find or create the Application
+    // 1. Resolve application icon & metadata
+    const reqIconUrl = (body.icon_url || body.image || body.thumbnail || body.icon || "").trim();
+    let resolvedIcon = reqIconUrl;
+    let resolvedBanner: string | null = null;
+    let resolvedTitle: string | null = null;
+
+    if (!resolvedIcon && packageName && packageName.includes(".") && !packageName.startsWith("com.awt")) {
+      try {
+        const mod = await import("google-play-scraper");
+        const gplay = (mod as any).default || mod;
+        const playData = await gplay.app({ appId: packageName });
+        if (playData?.icon) resolvedIcon = playData.icon;
+        if (playData?.headerImage) resolvedBanner = playData.headerImage;
+        if (playData?.title) resolvedTitle = playData.title;
+      } catch (e) {
+        // non-fatal Play Store scraper lookup
+      }
+    }
+
+    if (!resolvedIcon || resolvedIcon.includes("icon.png") || resolvedIcon.includes("default-app.png")) {
+      resolvedIcon = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500&auto=format&fit=crop&q=60";
+    }
+
+    // 2. Find or create the Application
     let appId: string | null = null;
-    let appIconUrl = "https://www.awtmods.in/icon.png";
-    let appBannerUrl: string | null = null;
+    let appIconUrl = resolvedIcon;
+    let appBannerUrl: string | null = resolvedBanner;
     let appSlug = "";
 
     const { data: existingApp } = await supabase
@@ -41,9 +66,21 @@ export async function POST(req: Request) {
 
     if (existingApp) {
       appId = existingApp.id;
-      if (existingApp.icon_url) appIconUrl = existingApp.icon_url;
-      if (existingApp.banner_url) appBannerUrl = existingApp.banner_url;
-      if (existingApp.slug) appSlug = existingApp.slug;
+      appIconUrl = existingApp.icon_url || resolvedIcon;
+      appBannerUrl = existingApp.banner_url || resolvedBanner;
+      appSlug = existingApp.slug;
+
+      // If existing app is missing an icon or has the old placeholder icon.png, update it now
+      if (!existingApp.icon_url || existingApp.icon_url.includes("icon.png") || existingApp.icon_url.includes("default-app.png")) {
+        appIconUrl = resolvedIcon;
+        await supabase
+          .from("applications")
+          .update({
+            icon_url: resolvedIcon,
+            banner_url: appBannerUrl || resolvedBanner,
+          })
+          .eq("id", appId);
+      }
     } else {
       // Find default category
       const { data: cat } = await supabase
@@ -60,18 +97,20 @@ export async function POST(req: Request) {
         );
       }
 
+      const finalAppName = resolvedTitle || appName;
       appSlug = `${packageName.replace(/[^a-z0-9]/gi, "-").toLowerCase()}-${Date.now().toString(36)}`;
       const { data: newApp, error: newAppErr } = await supabase
         .from("applications")
         .insert({
-          name: appName,
+          name: finalAppName,
           slug: appSlug,
           package_name: packageName,
           developer: "AWTMods",
           category_id: catId,
-          short_description: `${appName} modded APK with unlocked premium features.`,
-          description: `${appName} modded APK by AWTMods. Latest clean release.`,
-          icon_url: "https://www.awtmods.in/icon.png",
+          short_description: `${finalAppName} modded APK with unlocked premium features.`,
+          description: `${finalAppName} modded APK by AWTMods. Latest clean release.`,
+          icon_url: resolvedIcon,
+          banner_url: resolvedBanner,
           android_requirement: "Android 7.0+",
           status: "published",
         })
@@ -91,7 +130,16 @@ export async function POST(req: Request) {
       if (newApp.slug) appSlug = newApp.slug;
     }
 
-    // 2. Find or create the version as DRAFT (staged)
+    // 2. Clean up any stale unapproved draft versions for this same application
+    // so the staging queue only holds the latest patched build for this app
+    await supabase
+      .from("application_versions")
+      .delete()
+      .eq("application_id", appId)
+      .eq("status", "draft")
+      .neq("version_code", versionCode);
+
+    // Find or create the version as DRAFT (staged)
     const { data: existingVer } = await supabase
       .from("application_versions")
       .select("id, status")
@@ -106,6 +154,8 @@ export async function POST(req: Request) {
       await supabase
         .from("application_versions")
         .update({
+          version_name: versionName,
+          file_size: fileSize,
           release_notes: releaseNotes,
           status: "draft", // Ensure held in staged draft queue
         })
@@ -115,9 +165,9 @@ export async function POST(req: Request) {
         .from("application_versions")
         .insert({
           application_id: appId,
-          version_name: `v${versionCode}`,
+          version_name: versionName,
           version_code: versionCode,
-          file_size: "50 MB",
+          file_size: fileSize,
           architecture: "arm64-v8a",
           android_requirement: "Android 7.0+",
           release_notes: releaseNotes,
@@ -198,7 +248,8 @@ export async function POST(req: Request) {
         },
         versionId: verId,
         versionCode: versionCode,
-        versionName: `v${versionCode}`,
+        versionName: versionName,
+        fileSize: fileSize,
         releaseNotes: releaseNotes,
         downloadUrl: updateUrl,
         radarMatchText,

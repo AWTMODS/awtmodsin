@@ -19,6 +19,26 @@ export async function GET(req: Request) {
   }
 
   try {
+    const supabase = getDbClient();
+
+    // 0. Check if Admin saved a custom JSON payload override for this package
+    if (supabase) {
+      const { data: customRow } = await supabase
+        .from("site_settings")
+        .select("setting_value")
+        .eq("setting_key", `update_json_${cleanPackage}`)
+        .maybeSingle();
+
+      if (customRow && customRow.setting_value) {
+        return NextResponse.json(customRow.setting_value, {
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+          },
+        });
+      }
+    }
+
     const app = await getApplicationByPackage(cleanPackage);
 
     if (!app) {

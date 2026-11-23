@@ -13,7 +13,12 @@ import {
   Globe,
   Radio,
   FileText,
-  Code
+  Code,
+  X,
+  AlertCircle,
+  Save,
+  RotateCcw,
+  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -50,6 +55,134 @@ export default function PatcherAdminPage() {
   const [editNotes, setEditNotes] = useState<Record<string, string>>({});
   const [broadcastTg, setBroadcastTg] = useState<Record<string, boolean>>({});
   const [showJson, setShowJson] = useState<Record<string, boolean>>({});
+
+  // Interactive Live JSON Editor Modal states
+  const [jsonModalOpen, setJsonModalOpen] = useState(false);
+  const [activeJsonItem, setActiveJsonItem] = useState<PatcherReleaseItem | null>(null);
+  const [jsonCode, setJsonCode] = useState<string>("");
+  const [jsonLoading, setJsonLoading] = useState<boolean>(false);
+  const [jsonSaving, setJsonSaving] = useState<boolean>(false);
+  const [isCustomJson, setIsCustomJson] = useState<boolean>(false);
+  const [jsonError, setJsonError] = useState<string | null>(null);
+
+  const openJsonEditor = async (item: PatcherReleaseItem) => {
+    const pkg = item.application?.package_name || "";
+    if (!pkg) {
+      toast.error("Application has no package name configured");
+      return;
+    }
+    setActiveJsonItem(item);
+    setJsonModalOpen(true);
+    setJsonLoading(true);
+    setJsonError(null);
+    try {
+      const res = await fetch(`/api/admin/patcher/json?package=${encodeURIComponent(pkg)}&_t=${Date.now()}`);
+      const data = await res.json();
+      if (data.success) {
+        setJsonCode(JSON.stringify(data.payload, null, 2));
+        setIsCustomJson(Boolean(data.isCustom));
+      } else {
+        toast.error(data.error || "Failed to load JSON payload");
+      }
+    } catch (e: any) {
+      toast.error("Network error: " + e.message);
+    } finally {
+      setJsonLoading(false);
+    }
+  };
+
+  const handleJsonChange = (val: string) => {
+    setJsonCode(val);
+    try {
+      JSON.parse(val);
+      setJsonError(null);
+    } catch (err: any) {
+      setJsonError(err.message);
+    }
+  };
+
+  const formatJson = () => {
+    try {
+      const parsed = JSON.parse(jsonCode);
+      setJsonCode(JSON.stringify(parsed, null, 2));
+      setJsonError(null);
+      toast.success("JSON formatted cleanly!");
+    } catch (err: any) {
+      setJsonError(err.message);
+      toast.error("Cannot format invalid JSON: " + err.message);
+    }
+  };
+
+  const saveCustomJson = async () => {
+    if (!activeJsonItem?.application?.package_name) return;
+    let parsed: any;
+    try {
+      parsed = JSON.parse(jsonCode);
+    } catch (err: any) {
+      setJsonError(err.message);
+      toast.error("Please fix JSON syntax errors before saving!");
+      return;
+    }
+
+    setJsonSaving(true);
+    try {
+      const res = await fetch("/api/admin/patcher/json", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          package_name: activeJsonItem.application.package_name,
+          payload: parsed,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        toast.success(`🚀 Custom update JSON for ${activeJsonItem.application.name} saved live!`);
+        setIsCustomJson(true);
+        loadData();
+      } else {
+        toast.error(data.error || "Failed to save JSON");
+      }
+    } catch (e: any) {
+      toast.error("Save failed: " + e.message);
+    } finally {
+      setJsonSaving(false);
+    }
+  };
+
+  const resetJsonToDefault = async () => {
+    if (!activeJsonItem?.application?.package_name) return;
+    if (!confirm(`Reset JSON payload for ${activeJsonItem.application.name} back to default auto-generated format?`)) return;
+
+    setJsonSaving(true);
+    try {
+      const res = await fetch("/api/admin/patcher/json", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          package_name: activeJsonItem.application.package_name,
+          resetToDefault: true,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        toast.success("Reset to auto-generated default successfully!");
+        setIsCustomJson(false);
+        const refRes = await fetch(`/api/admin/patcher/json?package=${encodeURIComponent(activeJsonItem.application.package_name)}&_t=${Date.now()}`);
+        const refData = await refRes.json();
+        if (refData.success) {
+          setJsonCode(JSON.stringify(refData.payload, null, 2));
+          setJsonError(null);
+        }
+        loadData();
+      } else {
+        toast.error(data.error || "Failed to reset JSON");
+      }
+    } catch (e: any) {
+      toast.error("Reset failed: " + e.message);
+    } finally {
+      setJsonSaving(false);
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -426,10 +559,19 @@ export default function PatcherAdminPage() {
                       target="_blank"
                       rel="noopener noreferrer"
                       className="p-1.5 rounded-lg border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition"
-                      title="Test JSON"
+                      title="Test Live JSON Endpoint"
                     >
                       <ExternalLink className="w-3.5 h-3.5" />
                     </a>
+                    <button
+                      type="button"
+                      onClick={() => openJsonEditor(item)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 text-xs font-bold transition shadow-xs"
+                      title="Edit JSON Code for this App"
+                    >
+                      <Code className="w-3.5 h-3.5" />
+                      <span>Edit JSON</span>
+                    </button>
                   </div>
                 </div>
               );
@@ -437,6 +579,231 @@ export default function PatcherAdminPage() {
           </div>
         )}
       </div>
+
+      {/* MODAL: INTERACTIVE DALVIK UPDATE JSON EDITOR */}
+      {jsonModalOpen && activeJsonItem && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-150">
+          <div className="bg-card border border-border rounded-2xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+            {/* Modal Header */}
+            <div className="p-4 sm:p-5 border-b border-border/70 flex items-start justify-between gap-4 bg-muted/20">
+              <div className="flex items-center gap-3 min-w-0">
+                {activeJsonItem.application?.icon_url ? (
+                  <img
+                    src={activeJsonItem.application.icon_url}
+                    alt=""
+                    className="w-11 h-11 rounded-xl object-cover bg-muted border border-border shrink-0 shadow-xs"
+                  />
+                ) : (
+                  <div className="w-11 h-11 rounded-xl bg-amber-500/10 text-amber-500 border border-amber-500/20 flex items-center justify-center font-bold shrink-0">
+                    <Code className="w-6 h-6" />
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-base font-extrabold text-foreground truncate">
+                      Edit Update JSON — {activeJsonItem.application?.name}
+                    </h3>
+                    {isCustomJson ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-500 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-full">
+                        <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                        Custom Live Override Active
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                        <CheckCircle className="w-3 h-3" />
+                        Auto-Generated Default
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs text-muted-foreground font-mono mt-0.5 flex items-center gap-2 flex-wrap">
+                    <span>Package: <b>{activeJsonItem.application?.package_name}</b></span>
+                    <span>•</span>
+                    <span>Active Version: <b>v{activeJsonItem.version_code}</b></span>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setJsonModalOpen(false)}
+                className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1">
+              {/* Endpoint Information Bar */}
+              <div className="p-3 rounded-xl bg-background/80 border border-border/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                <div className="min-w-0">
+                  <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block">
+                    Modded APK Query Endpoint (Permanent URL):
+                  </span>
+                  <code className="text-xs font-mono text-foreground font-semibold break-all">
+                    {typeof window !== "undefined" ? window.location.origin : "https://www.awtmods.in"}
+                    /api/update?package={activeJsonItem.application?.package_name}
+                  </code>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => copyEndpoint(activeJsonItem.application?.package_name || "")}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-border hover:bg-muted text-muted-foreground hover:text-foreground text-xs font-medium transition"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>Copy URL</span>
+                  </button>
+                  <a
+                    href={`/api/update?package=${activeJsonItem.application?.package_name}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-border hover:bg-muted text-muted-foreground hover:text-foreground text-xs font-medium transition"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Test In Browser</span>
+                  </a>
+                </div>
+              </div>
+
+              {/* Toolbar Controls */}
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                    <Code className="w-3.5 h-3.5 text-amber-500" />
+                    JSON Payload Source:
+                  </span>
+                  {jsonError ? (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-red-400 bg-red-500/10 border border-red-500/25 px-2 py-0.5 rounded-md">
+                      <AlertCircle className="w-3 h-3" />
+                      JSON Syntax Error
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md">
+                      <CheckCircle className="w-3 h-3" />
+                      Valid JSON
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={formatJson}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-border hover:bg-muted text-xs font-semibold text-foreground transition"
+                    title="Prettify and format JSON"
+                  >
+                    <Sparkles className="w-3 h-3 text-amber-500" />
+                    <span>Format JSON</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(jsonCode);
+                      toast.success("JSON copied to clipboard!");
+                    }}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-border hover:bg-muted text-xs font-semibold text-foreground transition"
+                  >
+                    <Copy className="w-3 h-3" />
+                    <span>Copy</span>
+                  </button>
+                  {isCustomJson && (
+                    <button
+                      type="button"
+                      onClick={resetJsonToDefault}
+                      disabled={jsonSaving}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-border hover:bg-red-500/10 text-xs font-semibold text-muted-foreground hover:text-red-400 transition"
+                      title="Delete custom override and restore auto-generated payload"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      <span>Reset to Default</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Error Callout */}
+              {jsonError && (
+                <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/25 text-xs text-red-400 flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <div className="font-mono text-[11px] leading-relaxed break-all">
+                    <b>Syntax Error:</b> {jsonError}
+                  </div>
+                </div>
+              )}
+
+              {/* Code Editor Textarea */}
+              <div className="relative">
+                {jsonLoading ? (
+                  <div className="h-80 rounded-xl bg-background border border-border flex items-center justify-center gap-2 text-muted-foreground text-xs">
+                    <RefreshCw className="w-4 h-4 animate-spin text-amber-500" />
+                    <span>Loading current JSON payload...</span>
+                  </div>
+                ) : (
+                  <textarea
+                    value={jsonCode}
+                    onChange={(e) => handleJsonChange(e.target.value)}
+                    spellCheck={false}
+                    className="w-full h-80 font-mono text-xs p-4 bg-background border border-border rounded-xl text-emerald-400 focus:outline-none focus:ring-1 focus:ring-amber-500/60 focus:border-amber-500/60 leading-relaxed resize-y selection:bg-amber-500/30"
+                    placeholder="Enter JSON payload array or object..."
+                  />
+                )}
+              </div>
+
+              {/* Dalvik Injector Field Reference Guide */}
+              <div className="p-3.5 rounded-xl bg-muted/20 border border-border/60 text-[11px] text-muted-foreground space-y-1.5">
+                <span className="font-bold text-foreground block">
+                  💡 Injected Dalvik Payload Field Reference:
+                </span>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1">
+                  <div>• <code>Header</code>: Name displayed in update dialog banner</div>
+                  <div>• <code>version_code</code>: Target update version code (triggers update if &gt; installed)</div>
+                  <div>• <code>force_update</code>: <code>true</code> = mandatory, <code>false</code> = dismissible</div>
+                  <div>• <code>description</code>: Changelog / update notes shown to users</div>
+                  <div>• <code>update_url</code>: Direct download mirror opened on click</div>
+                  <div>• <code>update_button_text</code>: Text on update button (e.g. &quot;Update Now&quot;)</div>
+                  <div>• <code>auto_redirect_enabled</code>: <code>true</code> to redirect automatically after timer</div>
+                  <div>• <code>show_only_update_button</code>: <code>true</code> to hide dismiss button</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 sm:p-5 border-t border-border/70 flex items-center justify-between gap-3 bg-muted/20">
+              <span className="text-xs text-muted-foreground hidden sm:inline">
+                Changes take effect instantly on live modded APKs querying this endpoint.
+              </span>
+              <div className="flex items-center gap-2.5 ml-auto">
+                <button
+                  type="button"
+                  onClick={() => setJsonModalOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-border text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={saveCustomJson}
+                  disabled={jsonSaving || !!jsonError || jsonLoading}
+                  className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs transition shadow-md shadow-amber-500/20 disabled:opacity-50"
+                >
+                  {jsonSaving ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Saving to Live API...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-3.5 h-3.5" />
+                      <span>Save &amp; Deploy JSON</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

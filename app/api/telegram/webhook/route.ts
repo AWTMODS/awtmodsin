@@ -3509,9 +3509,43 @@ export async function POST(req: Request) {
         }
 
         const version = app.latest_version || app.versions?.[0];
-        const tgSource = version?.download_sources?.find(
-          (s) => s.hosting_provider === "telegram" || s.download_url?.includes("t.me")
+        let tgSource = version?.download_sources?.find(
+          (s: any) => (s.hosting_provider === "telegram" || s.download_url?.includes("t.me")) && (s.storage_key || s.download_url)
         );
+
+        // Fallback 1: Look through all versions of this app for an active telegram file source
+        if (!tgSource) {
+          for (const v of app.versions || []) {
+            const found = v.download_sources?.find(
+              (s: any) => (s.hosting_provider === "telegram" || s.download_url?.includes("t.me")) && (s.storage_key || s.download_url)
+            );
+            if (found) {
+              tgSource = found;
+              break;
+            }
+          }
+        }
+
+        // Fallback 2: Query Supabase download_sources directly across all versions of this app
+        if (!tgSource) {
+          try {
+            const supabase = getDbClient();
+            if (supabase) {
+              const allVerIds = (app.versions || []).map((v: any) => v.id).filter(Boolean);
+              if (allVerIds.length > 0) {
+                const { data: dbSources } = await supabase
+                  .from("download_sources")
+                  .select("*")
+                  .in("version_id", allVerIds)
+                  .eq("hosting_provider", "telegram")
+                  .order("created_at", { ascending: false });
+                if (dbSources && dbSources.length > 0) {
+                  tgSource = dbSources.find((s: any) => s.storage_key || s.download_url) || dbSources[0];
+                }
+              }
+            }
+          } catch {}
+        }
 
         let fileSent = false;
 
@@ -3585,6 +3619,54 @@ export async function POST(req: Request) {
               fileSent = copyJson.ok;
             } catch (err) {
               console.warn("copyMessage err:", err);
+            }
+          }
+        }
+
+        // 3. Fallback: Known Storage Mapping for APKs in private storage channel
+        if (!fileSent) {
+          const knownAppStorageMap: Record<string, { fileId: string; msgId: number }> = {
+            "vpnify": { fileId: "BQACAgUAAyEFAAMBCTIPQQADHmsD4I1j8O6CwzXnzs2ikGVN1ootAAKzIgAC9aIhVN2ZeqHf_BsPPQQ", msgId: 30 },
+            "vpnify-vpn-proxy": { fileId: "BQACAgUAAyEFAAMBCTIPQQADHmsD4I1j8O6CwzXnzs2ikGVN1ootAAKzIgAC9aIhVN2ZeqHf_BsPPQQ", msgId: 30 },
+            "apple-music": { fileId: "BQACAgUAAyEFAAMBCTIPQQADGWsD4I0yDecksVWBEs2xWKIOVNufAAKuIgAC9aIhVAhNmRYrZQw2PQQ", msgId: 25 },
+            "bandlab": { fileId: "BQACAgUAAyEFAAMBCTIPQQADGmsD4I1xp1uPhIrZbKuNmDqgaaU7AAKvIgAC9aIhVGQTuljspAmtPQQ", msgId: 26 },
+            "bandlab-mod": { fileId: "BQACAgUAAyEFAAMBCTIPQQADGmsD4I1xp1uPhIrZbKuNmDqgaaU7AAKvIgAC9aIhVGQTuljspAmtPQQ", msgId: 26 },
+            "instants": { fileId: "BQACAgUAAyEFAAMBCTIPQQADG2sD4I302KU5J3lUQE5S9x08RyzGAAKwIgAC9aIhVJKdtqW3g3ILPQQ", msgId: 27 },
+            "adobe-lightroom": { fileId: "BQACAgUAAyEFAAMBCTIPQQADHGsD4I2UGFI1VBh0O0amLUzvl1mcAAKxIgAC9aIhVAcPQW-1QCQmPQQ", msgId: 28 },
+            "lightroom": { fileId: "BQACAgUAAyEFAAMBCTIPQQADHGsD4I2UGFI1VBh0O0amLUzvl1mcAAKxIgAC9aIhVAcPQW-1QCQmPQQ", msgId: 28 },
+            "xplayer": { fileId: "BQACAgUAAyEFAAMBCTIPQQADHWsD4I3vEW6arSAgZjF14ATSo1WaAAKyIgAC9aIhVDhxrX97_wspPQQ", msgId: 29 },
+            "xplayer-video-player": { fileId: "BQACAgUAAyEFAAMBCTIPQQADHWsD4I3vEW6arSAgZjF14ATSo1WaAAKyIgAC9aIhVDhxrX97_wspPQQ", msgId: 29 },
+            "xodo": { fileId: "BQACAgUAAyEFAAMBCTIPQQADH2sD4I0U8u-MHlZFsI-EeHmdyD3vAAK0IgAC9aIhVLFQ-OwmBdRXPQQ", msgId: 31 },
+            "xodo-pdf": { fileId: "BQACAgUAAyEFAAMBCTIPQQADH2sD4I0U8u-MHlZFsI-EeHmdyD3vAAK0IgAC9aIhVLFQ-OwmBdRXPQQ", msgId: 31 },
+            "voice-changer": { fileId: "BQACAgUAAyEFAAMBCTIPQQADIGsD4I0PTaaBuNe1sFSLw3Foq6OhAAK1IgAC9aIhVI2Uf3G8aPOkPQQ", msgId: 32 },
+            "vn-video-editor": { fileId: "BQACAgUAAyEFAAMBCTIPQQADIWsD4I2q-hqYvVg8yUIamUwlMEUUAAK2IgAC9aIhVMDNIt70kl0vPQQ", msgId: 33 },
+            "terabox": { fileId: "BQACAgUAAyEFAAMBCTIPQQADImsD4I0s0ZtudUHoDHc4KF3mM3-JAAK3IgAC9aIhVH2VSdJDEVUaPQQ", msgId: 34 },
+            "terabox-premium": { fileId: "BQACAgUAAyEFAAMBCTIPQQADImsD4I0s0ZtudUHoDHc4KF3mM3-JAAK3IgAC9aIhVH2VSdJDEVUaPQQ", msgId: 34 },
+          };
+          const cleanKey = cleanAppSlug(app.slug);
+          const matched = knownAppStorageMap[cleanKey] || (targetApp ? knownAppStorageMap[cleanAppSlug(targetApp)] : null);
+          if (matched?.fileId) {
+            try {
+              const docRes = await fetch(`https://api.telegram.org/bot${token}/sendDocument`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: chatId,
+                  document: matched.fileId,
+                  caption: (
+                    `⚡ <b>VIP Direct Download Delivered!</b>\n\n` +
+                    `📦 <b>App:</b> ${app.name}\n` +
+                    `🏷️ <b>Version:</b> ${version?.version_name || "Latest"}\n` +
+                    `📊 <b>Size:</b> ${version?.file_size || "APK"}\n\n` +
+                    `👑 <i>Thank you for being an AWTMods VIP Member! Tap above to install directly to your device.</i>`
+                  ),
+                  parse_mode: "HTML",
+                }),
+              });
+              const docJson = await docRes.json();
+              fileSent = docJson.ok;
+            } catch (err) {
+              console.warn("sendDocument fallback err:", err);
             }
           }
         }
@@ -3881,9 +3963,21 @@ export async function POST(req: Request) {
 
           if (vipStatus.isVip) {
             // VIP USER: Direct APK delivery
-            const tgSource = version?.download_sources?.find(
-              (s) => s.hosting_provider === "telegram" || s.download_url?.includes("t.me")
+            let tgSource = version?.download_sources?.find(
+              (s: any) => (s.hosting_provider === "telegram" || s.download_url?.includes("t.me")) && (s.storage_key || s.download_url)
             );
+
+            if (!tgSource) {
+              for (const v of targetApp.versions || []) {
+                const found = v.download_sources?.find(
+                  (s: any) => (s.hosting_provider === "telegram" || s.download_url?.includes("t.me")) && (s.storage_key || s.download_url)
+                );
+                if (found) {
+                  tgSource = found;
+                  break;
+                }
+              }
+            }
 
             let sentDirect = false;
             if (tgSource?.storage_key) {
@@ -3907,6 +4001,51 @@ export async function POST(req: Request) {
                 const docJson = await docRes.json();
                 sentDirect = docJson.ok;
               } catch {}
+            }
+
+            if (!sentDirect && tgSource?.download_url) {
+              const cMatch = tgSource.download_url.match(/t\.me\/c\/([0-9]+)\/([0-9]+)/);
+              const pubMatch = tgSource.download_url.match(/t\.me\/([a-zA-Z0-9_]+)\/([0-9]+)/);
+              const privateChannel = settings.telegramPrivateChannelId || "-1004449242945";
+
+              let fromChatId: string | number = privateChannel;
+              let messageId: number | null = null;
+
+              if (cMatch) {
+                fromChatId = `-100${cMatch[1]}`;
+                messageId = parseInt(cMatch[2], 10);
+              } else if (pubMatch && !["c", "joinchat", "addstickers", "awtmods"].includes(pubMatch[1].toLowerCase())) {
+                fromChatId = `@${pubMatch[1]}`;
+                messageId = parseInt(pubMatch[2], 10);
+              } else {
+                const lastNumMatch = tgSource.download_url.match(/\/([0-9]+)$/);
+                if (lastNumMatch) {
+                  messageId = parseInt(lastNumMatch[1], 10);
+                }
+              }
+
+              if (messageId && fromChatId) {
+                try {
+                  const copyRes = await fetch(`https://api.telegram.org/bot${token}/copyMessage`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      chat_id: chatId,
+                      from_chat_id: fromChatId,
+                      message_id: messageId,
+                      caption: (
+                        `⚡ <b>VIP Direct Download Delivered!</b>\n\n` +
+                        `📦 <b>App:</b> ${targetApp.name}\n` +
+                        `🏷️ <b>Version:</b> ${version?.version_name || "Latest"}\n\n` +
+                        `👑 <i>VIP Pass Active. Tap above to install directly!</i>`
+                      ),
+                      parse_mode: "HTML",
+                    }),
+                  });
+                  const copyJson = await copyRes.json();
+                  sentDirect = copyJson.ok;
+                } catch {}
+              }
             }
 
             if (!sentDirect) {

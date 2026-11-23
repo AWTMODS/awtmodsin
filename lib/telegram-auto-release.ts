@@ -123,6 +123,12 @@ export function parseApkReleaseInfo(
   if (codeMatch) {
     versionCode = parseInt(codeMatch[1], 10);
   }
+  if (!versionCode) {
+    const fnCodeMatch = fileName.match(/_([0-9]{3,10})\.apk$/i) || fileName.match(/_v?[0-9.]+_([0-9]+)\.apk$/i);
+    if (fnCodeMatch) {
+      versionCode = parseInt(fnCodeMatch[1], 10);
+    }
+  }
 
   // 6. Changelog / Release Notes
   let releaseNotes = "Version update release with performance optimizations and unlocked features.";
@@ -312,6 +318,59 @@ export async function executeAutoApkRelease(params: {
     currentApp.latest_version ||
     currentApp.versions?.find((v) => v.is_latest) ||
     currentApp.versions?.[0];
+
+  // Check if a version matching this version code or version name already exists
+  const existingVersion = currentApp.versions?.find(
+    (v) =>
+      (params.versionCode > 0 && v.version_code === params.versionCode) ||
+      (params.versionName && v.version_name?.toLowerCase() === params.versionName.toLowerCase())
+  );
+
+  if (existingVersion && (params.telegramMessageLink || params.fileId)) {
+    const tgUrl = params.telegramMessageLink || "https://t.me/awtmods";
+    const { data: existingSources } = await supabase
+      .from("download_sources")
+      .select("id")
+      .eq("version_id", existingVersion.id)
+      .eq("hosting_provider", "telegram");
+
+    if (existingSources && existingSources.length > 0) {
+      await supabase
+        .from("download_sources")
+        .update({
+          download_url: tgUrl,
+          storage_key: params.fileId || null,
+          mirror_name: "Telegram VIP Direct File",
+          is_active: true,
+        })
+        .eq("id", existingSources[0].id);
+    } else {
+      await supabase
+        .from("download_sources")
+        .insert({
+          version_id: existingVersion.id,
+          download_type: "external",
+          hosting_provider: "telegram",
+          download_url: tgUrl,
+          storage_key: params.fileId || null,
+          mirror_name: "Telegram VIP Direct File",
+          is_primary: false,
+          is_active: true,
+        });
+    }
+
+    // Also update version_name if current one looks like raw code (e.g. v2300002 -> v2.3.0)
+    if (params.versionName && existingVersion.version_name?.startsWith("v" + existingVersion.version_code)) {
+      await supabase
+        .from("application_versions")
+        .update({ version_name: params.versionName })
+        .eq("id", existingVersion.id);
+    }
+
+    invalidateDbCache();
+    const updatedApp = await getApplicationById(params.appId);
+    return { success: true, app: updatedApp || currentApp };
+  }
 
   const prevCode = currentLatestVersion?.version_code || 0;
   let finalVersionCode = params.versionCode;

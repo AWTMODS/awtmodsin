@@ -1,11 +1,66 @@
 import { revalidatePath } from "next/cache";
 import { getDbClient, getSiteSettings, getApplicationById } from "@/lib/db";
-import { isNewerVersion } from "./version-comparator";
+import { isNewerVersion, compareVersions } from "./version-comparator";
 
 // Dynamic import helper for google-play-scraper
 async function getGPlay() {
   const mod = await import("google-play-scraper");
   return (mod as any).default || mod;
+}
+
+/**
+ * Resolves the real version string when Google Play returns 'VARY' (Varies with device)
+ */
+async function resolvePlayStoreVersion(
+  gplay: any,
+  appId: string,
+  detail: any
+): Promise<string | null> {
+  const rawVer = detail?.version ? String(detail.version).trim() : "";
+  if (rawVer && rawVer !== "VARY" && rawVer !== "Varies with device") {
+    return rawVer;
+  }
+
+  // 1. Try finding version numbers in recentChanges (e.g. "v14.43.8", "Version 14.43.8")
+  if (detail?.recentChanges) {
+    const match = String(detail.recentChanges).match(/v?(\d+\.\d+(?:\.\d+)+)/i);
+    if (match && match[1]) {
+      return match[1];
+    }
+  }
+
+  // 2. Fetch latest user reviews from Play Store where actual installed versions are recorded
+  try {
+    const revs = await Promise.race([
+      gplay.reviews({ appId, num: 15 }),
+      new Promise<any>((resolve) => setTimeout(() => resolve({ data: [] }), 2500)),
+    ]);
+    if (revs?.data && Array.isArray(revs.data)) {
+      const reviewVersions = revs.data
+        .map((r: any) => (r.version ? String(r.version).trim() : ""))
+        .filter((v: string) => v && !v.includes("VARY") && /\d+\.\d+/.test(v));
+
+      if (reviewVersions.length > 0) {
+        reviewVersions.sort((a: string, b: string) => compareVersions(b, a));
+        return reviewVersions[0];
+      }
+    }
+  } catch {
+    // fallback
+  }
+
+  // 3. Fallback to updated date YYYY.MM.DD
+  if (detail?.updated) {
+    const updateDate = new Date(detail.updated);
+    if (!isNaN(updateDate.getTime())) {
+      const yyyy = updateDate.getFullYear();
+      const mm = String(updateDate.getMonth() + 1).padStart(2, "0");
+      const dd = String(updateDate.getDate()).padStart(2, "0");
+      return `${yyyy}.${mm}.${dd}`;
+    }
+  }
+
+  return null;
 }
 
 export interface RadarAppUpdate {
@@ -321,9 +376,10 @@ export async function checkPlayStoreUpdates(options?: {
             gplay.app({ appId: app.package_name }),
             new Promise<null>((resolve) => setTimeout(() => resolve(null), 3500)),
           ]).catch(() => null);
-          if (!detail || !detail.version || detail.version === "VARY") return;
+          if (!detail) return;
 
-          const playStoreVer = String(detail.version).trim();
+          const playStoreVer = await resolvePlayStoreVersion(gplay, app.package_name, detail);
+          if (!playStoreVer) return;
           const verList = Array.isArray(app.versions)
             ? app.versions
             : Array.isArray(app.latest_version)

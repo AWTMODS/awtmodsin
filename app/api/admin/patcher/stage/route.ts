@@ -11,7 +11,7 @@ export async function POST(req: Request) {
     const versionCode = parseInt(body.version_code || body.versionCode, 10);
     const versionName = (body.version_name || body.versionName || (body.clean_ver ? `v${body.clean_ver}` : `v${versionCode}`)).trim();
     const fileSize = (body.file_size || body.fileSize || "50 MB").trim();
-    const updateUrl = body.update_url || "https://telegram.me/ARTWEBTECHOFFICIAL";
+    const updateUrl = (body.update_url || body.download_url || "").trim() || "https://telegram.me/ARTWEBTECHOFFICIAL";
     const releaseNotes = body.description || "Base Update\nNew Features\nFixed Bugs";
 
     if (!packageName || isNaN(versionCode)) {
@@ -194,13 +194,22 @@ export async function POST(req: Request) {
       .eq("version_id", verId)
       .maybeSingle();
 
+    const isDevUploads = updateUrl.includes("devuploads.com");
+    const isTelegram = updateUrl.includes("t.me") || updateUrl.includes("telegram.me");
+    const hostingProvider = isTelegram ? "telegram" : "custom";
+    const mirrorName = isDevUploads
+      ? "DevUploads Fast Mirror"
+      : isTelegram
+      ? "Telegram Channel"
+      : "Download Mirror";
+
     if (existingSource) {
       await supabase
         .from("download_sources")
         .update({
           download_url: updateUrl,
-          hosting_provider: updateUrl.includes("t.me") ? "telegram" : "custom",
-          mirror_name: updateUrl.includes("t.me") ? "Telegram Channel" : "Download Mirror",
+          hosting_provider: hostingProvider,
+          mirror_name: mirrorName,
           is_active: true,
           is_primary: true,
         })
@@ -209,9 +218,9 @@ export async function POST(req: Request) {
       await supabase.from("download_sources").insert({
         version_id: verId,
         download_type: "external",
-        hosting_provider: updateUrl.includes("t.me") ? "telegram" : "custom",
+        hosting_provider: hostingProvider,
         download_url: updateUrl,
-        mirror_name: updateUrl.includes("t.me") ? "Telegram Channel" : "Download Mirror",
+        mirror_name: mirrorName,
         is_primary: true,
         is_active: true,
       });

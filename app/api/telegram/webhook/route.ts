@@ -3959,7 +3959,7 @@ export async function POST(req: Request) {
           const siteUrl = settings.siteUrl || "https://www.awtmods.in";
           const cleanSlug = targetApp.slug.replace(/\.html$/, "");
           const appUrl = `${siteUrl}/apps/${cleanSlug}.html`;
-          const downloadUrl = `${siteUrl}/download/${cleanSlug}`;
+          const downloadUrl = `${siteUrl}/apps/${cleanSlug}.html`;
 
           if (vipStatus.isVip) {
             // VIP USER: Direct APK delivery

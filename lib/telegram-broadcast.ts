@@ -130,7 +130,7 @@ export async function broadcastToTelegram(
 
     const channelHandle = settings.telegramChannelId || "@awtmods";
 
-    const downloadPageUrl = `${siteUrl}/download/${cleanSlug}`;
+    const downloadPageUrl = `${siteUrl}/apps/${cleanSlug}.html`;
 
     // Prepare interactive HTML caption with animated emoji support & per-app mod features
     let caption: string;
@@ -452,7 +452,7 @@ export async function sendDraftPreviewToAdmin(
     const channelId = settings.telegramChannelId || "@awtmods";
     const botUsername = settings.telegramBotUsername || "awtmods_bot";
     const vipDeepLink = `https://t.me/${botUsername}?start=dl_${cleanSlug.slice(0, 50)}`;
-    const downloadPageUrl = `${siteUrl}/download/${cleanSlug}`;
+    const downloadPageUrl = `${siteUrl}/apps/${cleanSlug}.html`;
 
     const versionName = version?.version_name || "Latest";
     const versionCode = version?.version_code || 1;

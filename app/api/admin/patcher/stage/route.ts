@@ -58,11 +58,13 @@ export async function POST(req: Request) {
     let appBannerUrl: string | null = resolvedBanner;
     let appSlug = "";
 
-    const { data: existingApp } = await supabase
+    const { data: existingApps } = await supabase
       .from("applications")
       .select("id, name, package_name, slug, icon_url, banner_url")
       .ilike("package_name", packageName)
-      .maybeSingle();
+      .order("created_at", { ascending: true });
+
+    const existingApp = existingApps && existingApps.length > 0 ? existingApps[0] : null;
 
     if (existingApp) {
       appId = existingApp.id;
@@ -130,7 +132,58 @@ export async function POST(req: Request) {
       if (newApp.slug) appSlug = newApp.slug;
     }
 
-    // 2. Only allow the latest version: clean up older drafts or reject if newer already exists
+    // 2. Check if a published live version already exists with this or higher version code
+    const { data: publishedVersions } = await supabase
+      .from("application_versions")
+      .select("id, version_code, version_name, status, is_latest")
+      .eq("application_id", appId)
+      .eq("status", "published");
+
+    const alreadyLive = (publishedVersions as any[])?.find((v: any) => (v.version_code || 0) >= versionCode);
+    if (alreadyLive) {
+      // If already live, synchronize download mirror directly without re-staging as a duplicate draft
+      if (alreadyLive.version_code === versionCode && updateUrl) {
+        const isDevUploads = updateUrl.includes("devuploads.com") || updateUrl.includes("devupload.com");
+        const hostingProvider = isDevUploads ? "custom" : (updateUrl.includes("t.me") ? "telegram" : "custom");
+        const mirrorName = isDevUploads ? "DevUploads Fast Mirror" : (updateUrl.includes("t.me") ? "Telegram VIP Direct File" : "Direct Mirror");
+
+        const { data: existingSrc } = await supabase
+          .from("download_sources")
+          .select("id")
+          .eq("version_id", alreadyLive.id)
+          .eq("hosting_provider", hostingProvider);
+
+        if (existingSrc && existingSrc.length > 0) {
+          await supabase
+            .from("download_sources")
+            .update({ download_url: updateUrl, mirror_name: mirrorName, is_active: true })
+            .eq("id", existingSrc[0].id);
+        } else {
+          await supabase
+            .from("download_sources")
+            .insert({
+              version_id: alreadyLive.id,
+              download_type: "external",
+              hosting_provider: hostingProvider,
+              download_url: updateUrl,
+              mirror_name: mirrorName,
+              is_primary: isDevUploads,
+              is_active: true,
+            });
+        }
+      }
+
+      invalidateDbCache();
+      return NextResponse.json({
+        success: true,
+        already_published: true,
+        message: `Version ${alreadyLive.version_name || alreadyLive.version_code} is already live on AWTMods! Download mirror synced.`,
+        package_name: packageName,
+        version_code: versionCode,
+      });
+    }
+
+    // 3. Only allow the latest version: clean up older drafts or reject if newer already exists
     const { data: existingDrafts } = await supabase
       .from("application_versions")
       .select("id, version_code")

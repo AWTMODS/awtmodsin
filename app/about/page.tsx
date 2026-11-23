@@ -1,8 +1,13 @@
 import { ShieldCheck, Zap, Layers, Lock } from "lucide-react";
+import { SITE_URL, SITE_NAME } from "@/lib/seo";
+import type { Metadata } from "next";
 
-export const metadata = {
-  title: "About Us",
-  description: "Learn more about AWTMods, our mission, standards, and publishing integrity.",
+export const metadata: Metadata = {
+  title: `About Us | ${SITE_NAME}`,
+  description: "Learn more about AWTMods, our mission, security standards, and application publishing integrity.",
+  alternates: {
+    canonical: `${SITE_URL}/about`,
+  },
 };
 
 export default function AboutPage() {

@@ -3,29 +3,47 @@ import { getApplications } from "@/lib/db";
 import { AppCard } from "@/components/applications/app-card";
 import { Monitor, ShieldCheck, Zap, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SITE_URL, SITE_NAME } from "@/lib/seo";
 import type { Metadata } from "next";
 
 export const revalidate = 60;
 
-const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://awtmodsin.vercel.app";
+const baseUrl = SITE_URL;
 
 export const metadata: Metadata = {
-  title: "PC Software & Windows Tools - Verified Downloads | AWTMods",
+  title: `PC Software & Windows Tools – Verified Downloads | ${SITE_NAME}`,
   description:
-    "Download verified PC software, Windows tools, utilities, creative suites, and desktop applications with clean standalone installers.",
+    "Download verified PC software, Windows tools, utilities, creative suites, and desktop applications with clean standalone installers at AWTMods.",
+  keywords: [
+    "PC Software",
+    "Windows Applications",
+    "PC Tools",
+    "Desktop Utilities",
+    "AWTMods PC",
+  ],
   alternates: {
     canonical: `${baseUrl}/pc-software`,
   },
   openGraph: {
-    title: "PC Software & Windows Tools | AWTMods",
+    title: `PC Software & Windows Tools | ${SITE_NAME}`,
     description: "Download verified PC software, Windows tools, utilities, and desktop applications.",
     url: `${baseUrl}/pc-software`,
     type: "website",
+    siteName: SITE_NAME,
+    images: [
+      {
+        url: `${baseUrl}/icon.png`,
+        width: 512,
+        height: 512,
+        alt: "AWTMods PC Software",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "PC Software & Windows Tools | AWTMods",
+    title: `PC Software & Windows Tools | ${SITE_NAME}`,
     description: "Download verified PC software, Windows tools, utilities, and desktop applications.",
+    creator: "@awtmods",
   },
 };
 

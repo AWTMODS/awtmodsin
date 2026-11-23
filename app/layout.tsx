@@ -6,41 +6,34 @@ import { Footer } from "@/components/layout/footer";
 import { Toaster } from "sonner";
 import { TelegramJoinPopup } from "@/components/telegram-join-popup";
 import { getSiteSettings } from "@/lib/db";
+import { SITE_URL, SITE_NAME, DEFAULT_SEO } from "@/lib/seo";
 
-const siteUrl =
-  process.env.NEXT_PUBLIC_SITE_URL || "https://awtmodsin.vercel.app";
+const siteUrl = SITE_URL;
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  referrer: "no-referrer",
   title: {
-    default: "AWTMods — Download Modded Apps, Games & PC Software",
-    template: "%s | AWTMods",
+    default: DEFAULT_SEO.title,
+    template: `%s | ${SITE_NAME}`,
   },
-  description:
-    "Discover and download verified Android modded applications, premium APKs, modded games, and PC software. 100% clean, high-speed, and free mirrors.",
-  keywords: [
-    "AWTMods",
-    "Modded APK",
-    "Android Apps",
-    "Premium APK",
-    "Free Android Mods",
-    "PC Software",
-    "Windows Repacks",
-    "Spotify Mod APK",
-    "Minecraft Mod APK",
-    "Verified APK",
-  ],
+  description: DEFAULT_SEO.description,
+  keywords: DEFAULT_SEO.keywords,
   authors: [{ name: "AWTMods Team" }],
-  creator: "AWTMods",
-  publisher: "AWTMods",
+  creator: SITE_NAME,
+  publisher: SITE_NAME,
   formatDetection: {
     email: false,
     address: false,
     telephone: false,
   },
   alternates: {
-    canonical: "./",
+    canonical: siteUrl,
+  },
+  verification: {
+    google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION || undefined,
+    other: process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION
+      ? { "msvalidate.01": process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION }
+      : undefined,
   },
   icons: {
     icon: [
@@ -51,14 +44,13 @@ export const metadata: Metadata = {
     ],
   },
   openGraph: {
-    title: "AWTMods — Download Modded Apps, Games & PC Software",
-    description:
-      "Your trusted directory for Android modded applications, premium APKs, and verified PC software.",
+    title: DEFAULT_SEO.title,
+    description: DEFAULT_SEO.description,
     url: siteUrl,
-    siteName: "AWTMods",
+    siteName: SITE_NAME,
     images: [
       {
-        url: "/icon.svg",
+        url: "/icon.png",
         width: 512,
         height: 512,
         alt: "AWTMods Platform",
@@ -68,12 +60,11 @@ export const metadata: Metadata = {
     type: "website",
   },
   twitter: {
-    card: "summary",
-    title: "AWTMods — Download Modded Apps, Games & PC Software",
-    description:
-      "Discover and download verified Android modded applications, premium APKs, and PC software.",
+    card: "summary_large_image",
+    title: DEFAULT_SEO.title,
+    description: DEFAULT_SEO.description,
     creator: "@awtmods",
-    images: ["/icon.svg"],
+    images: ["/icon.png"],
   },
   robots: {
     index: true,

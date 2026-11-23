@@ -1,6 +1,12 @@
-export const metadata = {
-  title: "Disclaimer",
-  description: "Legal disclaimer regarding third-party Android packages and intellectual property.",
+import { SITE_URL, SITE_NAME } from "@/lib/seo";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: `Disclaimer | ${SITE_NAME}`,
+  description: "Legal disclaimer regarding third-party Android packages and intellectual property rights.",
+  alternates: {
+    canonical: `${SITE_URL}/disclaimer`,
+  },
 };
 
 export default function DisclaimerPage() {

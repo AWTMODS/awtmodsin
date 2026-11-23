@@ -5,10 +5,36 @@ import { Download, RefreshCw, Calendar, Inbox } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AppIcon } from "@/components/applications/app-icon";
+import { SITE_URL, SITE_NAME } from "@/lib/seo";
+import type { Metadata } from "next";
 
-export const metadata = {
-  title: "Latest Application Updates & Changelogs",
-  description: "Recent updates, changelogs and new versions for Android modded applications.",
+export const metadata: Metadata = {
+  title: `Latest Application Updates & Changelogs | ${SITE_NAME}`,
+  description:
+    "Track newly published Android application updates, version releases, security patches, and changelogs on AWTMods.",
+  keywords: [
+    "App Updates",
+    "Latest APK Updates",
+    "Android App Changelogs",
+    "Newly Released APKs",
+    "AWTMods Updates",
+  ],
+  alternates: {
+    canonical: `${SITE_URL}/updates`,
+  },
+  openGraph: {
+    title: `Latest Application Updates & Changelogs | ${SITE_NAME}`,
+    description: "Recent updates, changelogs, and new releases for Android applications.",
+    url: `${SITE_URL}/updates`,
+    type: "website",
+    siteName: SITE_NAME,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: `Latest Application Updates & Changelogs | ${SITE_NAME}`,
+    description: "Recent updates, changelogs, and new releases for Android applications.",
+    creator: "@awtmods",
+  },
 };
 
 export default async function UpdatesPage() {

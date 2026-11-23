@@ -1,25 +1,44 @@
 import { getCategories } from "@/lib/db";
 import { CategoryCard } from "@/components/categories/category-card";
+import { SITE_URL, SITE_NAME } from "@/lib/seo";
 import type { Metadata } from "next";
 
-const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://awtmodsin.vercel.app";
+const baseUrl = SITE_URL;
 
 export const metadata: Metadata = {
-  title: "Application Categories - Browse Apps & Games | AWTMods",
-  description: "Browse modded Android applications, games, and PC software organized by category.",
+  title: `Browse App Categories – Android Apps & Games | ${SITE_NAME}`,
+  description:
+    "Browse Android applications, games, and PC software organized by category: Tools, Music, Photography, Productivity, and Gaming.",
+  keywords: [
+    "App Categories",
+    "Android Categories",
+    "Android Tools",
+    "Android Games",
+    "AWTMods Categories",
+  ],
   alternates: {
     canonical: `${baseUrl}/categories`,
   },
   openGraph: {
-    title: "Application Categories | AWTMods",
-    description: "Browse modded Android applications, games, and PC software organized by category.",
+    title: `Application Categories | ${SITE_NAME}`,
+    description: "Browse Android applications, games, and PC software organized by category.",
     url: `${baseUrl}/categories`,
     type: "website",
+    siteName: SITE_NAME,
+    images: [
+      {
+        url: `${baseUrl}/icon.png`,
+        width: 512,
+        height: 512,
+        alt: "AWTMods Categories",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Application Categories | AWTMods",
-    description: "Browse modded Android applications, games, and PC software organized by category.",
+    title: `Application Categories | ${SITE_NAME}`,
+    description: "Browse Android applications, games, and PC software organized by category.",
+    creator: "@awtmods",
   },
 };
 

@@ -4,6 +4,7 @@ import { getApplications, getCategories } from "@/lib/db";
 import { AppCard } from "@/components/applications/app-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AppsFilterBar } from "@/components/applications/apps-filter-bar";
+import { SITE_URL, SITE_NAME } from "@/lib/seo";
 
 import type { Metadata } from "next";
 
@@ -20,25 +21,43 @@ interface AppsPageProps {
   };
 }
 
-const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://awtmodsin.vercel.app";
+const baseUrl = SITE_URL;
 
 export const metadata: Metadata = {
-  title: "All Modded Applications & APKs - Safe & Verified Downloads",
+  title: `All Android Applications & APK Downloads | ${SITE_NAME}`,
   description:
-    "Browse our complete catalog of modded Android applications, games, utilities, and PC software with direct high-speed downloads.",
+    "Browse our complete catalog of Android applications, utilities, tools, and software. Detailed app version info, changelogs, and direct high-speed download mirrors.",
+  keywords: [
+    "Android Applications",
+    "APK Downloads",
+    "Android Utilities",
+    "Android Tools",
+    "Latest APKs",
+    "AWTMods Apps",
+  ],
   alternates: {
     canonical: `${baseUrl}/apps`,
   },
   openGraph: {
-    title: "All Modded Applications & APKs | AWTMods",
-    description: "Browse our complete catalog of modded Android applications, games, utilities, and PC software.",
+    title: `All Android Applications & APK Downloads | ${SITE_NAME}`,
+    description: "Browse our complete catalog of Android applications, utilities, and software.",
     url: `${baseUrl}/apps`,
     type: "website",
+    siteName: SITE_NAME,
+    images: [
+      {
+        url: `${baseUrl}/icon.png`,
+        width: 512,
+        height: 512,
+        alt: "AWTMods All Applications",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "All Modded Applications & APKs | AWTMods",
-    description: "Browse our complete catalog of modded Android applications, games, utilities, and PC software.",
+    title: `All Android Applications & APK Downloads | ${SITE_NAME}`,
+    description: "Browse our complete catalog of Android applications, utilities, and software.",
+    creator: "@awtmods",
   },
 };
 

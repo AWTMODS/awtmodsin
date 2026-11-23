@@ -7,6 +7,7 @@ import { ShieldCheck, HardDrive, Cpu, CheckCircle2, AlertTriangle, ArrowLeft } f
 import { AppIcon } from "@/components/applications/app-icon";
 import { getAppUrl, cleanAppSlug } from "@/lib/utils";
 import { AdBanner } from "@/components/ads/ad-banner";
+import { SITE_URL } from "@/lib/seo";
 
 interface DownloadPageProps {
   params: {
@@ -26,8 +27,7 @@ export async function generateMetadata({ params }: DownloadPageProps) {
   const app = await getApplicationBySlug(params.slug);
   if (!app) return { title: "Download App" };
 
-  const baseUrl =
-    process.env.NEXT_PUBLIC_SITE_URL || "https://awtmodsin.vercel.app";
+  const baseUrl = SITE_URL;
   const canonicalUrl = `${baseUrl}${getAppUrl(app.slug)}`;
 
   return {

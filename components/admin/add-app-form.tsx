@@ -26,6 +26,7 @@ import {
   Gamepad2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { SeoInspector } from "@/components/admin/seo-inspector";
 
 interface AddAppFormProps {
   categories: AppCategory[];
@@ -1472,6 +1473,19 @@ export function AddAppForm({ categories, initialApp }: AddAppFormProps) {
           </div>
         )}
       </div>
+
+      {/* Real-Time Search & Social SEO Engine */}
+      <SeoInspector
+        appName={name}
+        slug={slug}
+        description={description}
+        shortDescription={shortDescription}
+        iconUrl={iconUrl}
+        versionName={versionName}
+        isPc={platform === "pc"}
+        developer={developer}
+        categoryName={categories.find((c) => c.id === categoryId)?.name}
+      />
 
       {/* SECTION E: Publishing Options */}
       <div className="rounded-3xl border border-border bg-card p-6 sm:p-8 space-y-5">

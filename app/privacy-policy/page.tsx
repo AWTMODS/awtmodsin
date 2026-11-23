@@ -1,6 +1,12 @@
-export const metadata = {
-  title: "Privacy Policy",
-  description: "AWTMods Privacy Policy regarding data handling and visitor safety.",
+import { SITE_URL, SITE_NAME } from "@/lib/seo";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: `Privacy Policy | ${SITE_NAME}`,
+  description: "AWTMods Privacy Policy regarding visitor safety, anonymous telemetry, and data privacy.",
+  alternates: {
+    canonical: `${SITE_URL}/privacy-policy`,
+  },
 };
 
 export default function PrivacyPolicyPage() {

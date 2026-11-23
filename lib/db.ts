@@ -70,6 +70,22 @@ export function getDbClient() {
 // APPLICATIONS QUERIES
 // ==========================================
 
+export async function getAllPublishedAppsForSitemap(): Promise<Array<{ slug: string; updated_at: string }>> {
+  const supabase = getDbClient();
+  if (!supabase) return [];
+  try {
+    const { data } = await supabase
+      .from("applications")
+      .select("slug, updated_at")
+      .eq("status", "published")
+      .order("updated_at", { ascending: false });
+    return data || [];
+  } catch (err) {
+    console.error("Error fetching sitemap apps:", err);
+    return [];
+  }
+}
+
 export async function getApplications(options?: {
   categorySlug?: string;
   platform?: string;

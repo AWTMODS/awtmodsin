@@ -1,6 +1,12 @@
-export const metadata = {
-  title: "Terms of Service",
-  description: "Terms and conditions for utilizing the AWTMods website and directory.",
+import { SITE_URL, SITE_NAME } from "@/lib/seo";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: `Terms of Service | ${SITE_NAME}`,
+  description: "Terms and conditions for utilizing the AWTMods website, catalog, and software directory.",
+  alternates: {
+    canonical: `${SITE_URL}/terms`,
+  },
 };
 
 export default function TermsPage() {

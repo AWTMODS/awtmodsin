@@ -1,27 +1,45 @@
 import { getApplications, getCategories } from "@/lib/db";
 import { AppCard } from "@/components/applications/app-card";
 import { Gamepad2, Sparkles } from "lucide-react";
+import { SITE_URL, SITE_NAME } from "@/lib/seo";
 import type { Metadata } from "next";
 
-const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://awtmodsin.vercel.app";
+const baseUrl = SITE_URL;
 
 export const metadata: Metadata = {
-  title: "Modded Android Games & APKs - Safe & High Speed Downloads",
+  title: `Android Games & APK Downloads | ${SITE_NAME}`,
   description:
-    "Download verified modded Android games with unlocked features, ad-free gameplay, and high frame rates.",
+    "Download verified Android games with unlocked features, ad-free gameplay, and high frame rates. High-speed direct mirrors on AWTMods.",
+  keywords: [
+    "Android Games",
+    "Modded Android Games",
+    "APK Games Download",
+    "Mobile Gaming",
+    "AWTMods Games",
+  ],
   alternates: {
     canonical: `${baseUrl}/games`,
   },
   openGraph: {
-    title: "Modded Android Games & APKs | AWTMods",
-    description: "Download verified modded Android games with unlocked features and direct high-speed APK downloads.",
+    title: `Android Games & APK Downloads | ${SITE_NAME}`,
+    description: "Download verified Android games with unlocked features and direct high-speed APK downloads.",
     url: `${baseUrl}/games`,
     type: "website",
+    siteName: SITE_NAME,
+    images: [
+      {
+        url: `${baseUrl}/icon.png`,
+        width: 512,
+        height: 512,
+        alt: "AWTMods Games",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Modded Android Games & APKs | AWTMods",
-    description: "Download verified modded Android games with unlocked features and direct high-speed APK downloads.",
+    title: `Android Games & APK Downloads | ${SITE_NAME}`,
+    description: "Download verified Android games with unlocked features and direct high-speed APK downloads.",
+    creator: "@awtmods",
   },
 };
 

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { getCategoryBySlug, getApplications } from "@/lib/db";
 import { AppCard } from "@/components/applications/app-card";
+import { SITE_URL, SITE_NAME, buildCategoryJsonLd } from "@/lib/seo";
 import type { Metadata } from "next";
 
 interface CategoryPageProps {
@@ -15,12 +16,11 @@ export async function generateMetadata({ params }: CategoryPageProps): Promise<M
   const category = await getCategoryBySlug(params.slug);
   if (!category) return { title: "Category Not Found" };
 
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://awtmodsin.vercel.app";
-  const canonicalUrl = `${baseUrl}/categories/${category.slug}`;
-  const title = `${category.name} Modded Apps & APKs - Free Download`;
+  const canonicalUrl = `${SITE_URL}/categories/${category.slug}`;
+  const title = `${category.name} Apps & Games APK Download | ${SITE_NAME}`;
   const description =
     category.description ||
-    `Download the best verified ${category.name} modded applications and games for Android at AWTMods.`;
+    `Browse and download verified ${category.name} applications and games for Android at AWTMods. High-speed mirrors and detailed changelogs.`;
 
   return {
     title,
@@ -33,12 +33,21 @@ export async function generateMetadata({ params }: CategoryPageProps): Promise<M
       description,
       url: canonicalUrl,
       type: "website",
-      siteName: "AWTMods",
+      siteName: SITE_NAME,
+      images: [
+        {
+          url: `${SITE_URL}/icon.png`,
+          width: 512,
+          height: 512,
+          alt: `${category.name} category on AWTMods`,
+        },
+      ],
     },
     twitter: {
       card: "summary_large_image",
       title,
       description,
+      creator: "@awtmods",
     },
   };
 }
@@ -56,53 +65,7 @@ export default async function CategoryDetailPage({ params }: CategoryPageProps) 
     limit: 24,
   });
 
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://awtmodsin.vercel.app";
-  const categoryUrl = `${baseUrl}/categories/${category.slug}`;
-
-  const categoryJsonLd = {
-    "@context": "https://schema.org",
-    "@graph": [
-      {
-        "@type": "CollectionPage",
-        "@id": categoryUrl,
-        url: categoryUrl,
-        name: `${category.name} Apps & Games`,
-        description:
-          category.description ||
-          `Browse verified modded Android applications in ${category.name}.`,
-        isPartOf: {
-          "@type": "WebSite",
-          "@id": `${baseUrl}/#website`,
-          name: "AWTMods",
-          url: baseUrl,
-        },
-      },
-      {
-        "@type": "BreadcrumbList",
-        "@id": `${categoryUrl}#breadcrumb`,
-        itemListElement: [
-          {
-            "@type": "ListItem",
-            position: 1,
-            name: "Home",
-            item: baseUrl,
-          },
-          {
-            "@type": "ListItem",
-            position: 2,
-            name: "Categories",
-            item: `${baseUrl}/categories`,
-          },
-          {
-            "@type": "ListItem",
-            position: 3,
-            name: category.name,
-            item: categoryUrl,
-          },
-        ],
-      },
-    ],
-  };
+  const categoryJsonLd = buildCategoryJsonLd(category);
 
   return (
     <div className="container mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">

@@ -1,8 +1,8 @@
 import { MetadataRoute } from "next";
+import { SITE_URL } from "@/lib/seo";
 
 export default function robots(): MetadataRoute.Robots {
-  const baseUrl =
-    process.env.NEXT_PUBLIC_SITE_URL || "https://awtmodsin.vercel.app";
+  const baseUrl = SITE_URL;
 
   return {
     rules: [
@@ -12,10 +12,10 @@ export default function robots(): MetadataRoute.Robots {
         disallow: [
           "/admin",
           "/admin/*",
-          "/api/admin",
-          "/api/admin/*",
+          "/api/*",
           "/download/*",
           "/search*",
+          "/report-issue*",
         ],
       },
       {
@@ -24,10 +24,22 @@ export default function robots(): MetadataRoute.Robots {
         disallow: [
           "/admin",
           "/admin/*",
-          "/api/admin",
-          "/api/admin/*",
+          "/api/*",
           "/download/*",
           "/search*",
+          "/report-issue*",
+        ],
+      },
+      {
+        userAgent: "Bingbot",
+        allow: "/",
+        disallow: [
+          "/admin",
+          "/admin/*",
+          "/api/*",
+          "/download/*",
+          "/search*",
+          "/report-issue*",
         ],
       },
     ],

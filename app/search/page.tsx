@@ -2,6 +2,7 @@ import { getApplications, getCategories } from "@/lib/db";
 import { AppCard } from "@/components/applications/app-card";
 import { SearchBarClient } from "@/components/search/search-bar-client";
 import { Search } from "lucide-react";
+import { SITE_URL, SITE_NAME } from "@/lib/seo";
 
 interface SearchPageProps {
   searchParams: {
@@ -14,11 +15,14 @@ interface SearchPageProps {
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Search Applications & Mods | AWTMods",
-  description: "Search across hundreds of modded Android applications, games, and PC software.",
+  title: `Search Applications & Games | ${SITE_NAME}`,
+  description: "Search across hundreds of verified Android applications, utilities, games, and PC software.",
   robots: {
     index: false,
     follow: true,
+  },
+  alternates: {
+    canonical: `${SITE_URL}/search`,
   },
 };
 

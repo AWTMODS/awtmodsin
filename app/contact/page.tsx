@@ -1,9 +1,14 @@
 import { Mail, Send, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SITE_URL, SITE_NAME } from "@/lib/seo";
+import type { Metadata } from "next";
 
-export const metadata = {
-  title: "Contact Us",
-  description: "Get in touch with the AWTMods administration team.",
+export const metadata: Metadata = {
+  title: `Contact Us | ${SITE_NAME}`,
+  description: "Get in touch with the AWTMods administration and developer support team.",
+  alternates: {
+    canonical: `${SITE_URL}/contact`,
+  },
 };
 
 export default function ContactPage() {

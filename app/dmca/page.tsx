@@ -1,6 +1,12 @@
-export const metadata = {
-  title: "DMCA Copyright Notice",
-  description: "Digital Millennium Copyright Act compliance and takedown notice procedure.",
+import { SITE_URL, SITE_NAME } from "@/lib/seo";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: `DMCA Copyright Notice | ${SITE_NAME}`,
+  description: "Digital Millennium Copyright Act compliance and takedown notice procedure for AWTMods.",
+  alternates: {
+    canonical: `${SITE_URL}/dmca`,
+  },
 };
 
 export default function DmcaPage() {

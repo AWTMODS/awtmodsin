@@ -13,9 +13,10 @@ import { FeaturedSection } from "@/components/homepage/featured-section";
 import { CategoriesSection } from "@/components/homepage/categories-section";
 import { LatestReleasesSection } from "@/components/homepage/latest-releases-section";
 import { TelegramBanner } from "@/components/homepage/telegram-banner";
+import { SITE_URL, SITE_NAME } from "@/lib/seo";
 
-// Edge-cached for 60 seconds (with instant on-demand revalidation on admin updates)
-export const revalidate = 60;
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default async function HomePage() {
   const [
@@ -42,8 +43,7 @@ export default async function HomePage() {
     .filter((a) => (a as any).platform === "pc" || a.category?.slug === "pc-software")
     .slice(0, 4);
 
-  const baseUrl =
-    process.env.NEXT_PUBLIC_SITE_URL || "https://awtmodsin.vercel.app";
+  const baseUrl = SITE_URL;
 
   const homeJsonLd = {
     "@context": "https://schema.org",

@@ -205,7 +205,9 @@ export default function PatcherAdminPage() {
         const tg: Record<string, boolean> = {};
 
         (data.staged || []).forEach((item: PatcherReleaseItem) => {
-          urls[item.id] = item.download_sources?.[0]?.download_url || "https://telegram.me/ARTWEBTECHOFFICIAL";
+          urls[item.id] = item.download_sources?.find((s: any) => s.download_url && !s.download_url.includes("ARTWEBTE"))?.download_url
+            || item.download_sources?.[0]?.download_url
+            || "https://t.me/awtmods";
           notes[item.id] = item.release_notes || "Base Update\nNew Features\nFixed Bugs";
           tg[item.id] = true;
         });
@@ -235,7 +237,7 @@ export default function PatcherAdminPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           version_id: item.id,
-          update_url: editUrls[item.id] || "https://telegram.me/ARTWEBTECHOFFICIAL",
+          update_url: editUrls[item.id] || "https://t.me/awtmods",
           release_notes: editNotes[item.id] || item.release_notes,
           broadcast_telegram: broadcastTg[item.id] ?? false,
         }),
@@ -376,7 +378,7 @@ export default function PatcherAdminPage() {
                       className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary font-mono"
                       value={editUrls[item.id] ?? ""}
                       onChange={(e) => setEditUrls({ ...editUrls, [item.id]: e.target.value })}
-                      placeholder="https://t.me/ARTWEBTECHOFFICIAL/1234"
+                      placeholder="https://t.me/awtmods/1234 or DevUploads link"
                     />
                   </div>
 
@@ -424,7 +426,7 @@ export default function PatcherAdminPage() {
                               description: editNotes[item.id] || item.release_notes || "Base Update\nNew Features\nFixed Bugs",
                               update_button_text: "Update Now",
                               Update_dismiss_button_text: "Dismiss",
-                              update_url: editUrls[item.id] || "https://telegram.me/ARTWEBTECHOFFICIAL",
+                              update_url: editUrls[item.id] || "https://t.me/awtmods",
                               auto_redirect_enabled: false,
                               auto_redirect_delay: 6,
                               show_only_update_button: true,
@@ -446,7 +448,7 @@ export default function PatcherAdminPage() {
                       onChange={(e) => setBroadcastTg({ ...broadcastTg, [item.id]: e.target.checked })}
                       className="rounded border-border"
                     />
-                    <span>Automatically Broadcast release to Telegram channel (@ARTWEBTECHOFFICIAL)</span>
+                    <span>Automatically Broadcast release to Telegram channel (@awtmods)</span>
                   </label>
 
                   <div className="flex items-center gap-2">

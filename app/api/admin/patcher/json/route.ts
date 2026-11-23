@@ -47,7 +47,7 @@ export async function GET(req: Request) {
 
     const sources = activeVersion?.download_sources || [];
     const primarySource = sources.find((s: any) => s.is_primary && s.is_active) || sources[0];
-    const downloadUrl = primarySource?.download_url || "https://telegram.me/ARTWEBTECHOFFICIAL";
+    const downloadUrl = primarySource?.download_url || "https://t.me/awtmods";
 
     const defaultPayload = [
       {

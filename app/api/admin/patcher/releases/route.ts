@@ -87,11 +87,26 @@ export async function GET() {
       console.error("Live versions error:", liveErr);
     }
 
+    // Deduplicate live versions so each package appears at most once in active list
+    const seenLiveKeys = new Set<string>();
+    const uniqueLive: any[] = [];
+    const sortedLive = (liveVersions || []).sort(
+      (a: any, b: any) => (b.version_code || 0) - (a.version_code || 0)
+    );
+    for (const v of sortedLive) {
+      const pkg = v.application?.package_name?.toLowerCase();
+      const dedupKey = pkg || v.application?.id || v.id;
+      if (dedupKey && !seenLiveKeys.has(dedupKey)) {
+        seenLiveKeys.add(dedupKey);
+        uniqueLive.push(v);
+      }
+    }
+
     return NextResponse.json(
       {
         success: true,
         staged: uniqueStaged,
-        live: liveVersions || [],
+        live: uniqueLive,
       },
       {
         headers: {

@@ -11,7 +11,7 @@ export async function POST(req: Request) {
     const versionCode = parseInt(body.version_code || body.versionCode, 10);
     const versionName = (body.version_name || body.versionName || (body.clean_ver ? `v${body.clean_ver}` : `v${versionCode}`)).trim();
     const fileSize = (body.file_size || body.fileSize || "50 MB").trim();
-    const updateUrl = (body.update_url || body.download_url || "").trim() || "https://telegram.me/ARTWEBTECHOFFICIAL";
+    const updateUrl = (body.update_url || body.download_url || "").trim() || "https://t.me/awtmods";
     const releaseNotes = body.description || "Base Update\nNew Features\nFixed Bugs";
 
     if (!packageName || isNaN(versionCode)) {

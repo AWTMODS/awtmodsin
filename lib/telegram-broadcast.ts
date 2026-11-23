@@ -831,7 +831,7 @@ export async function sendPatcherStagedAlertToAdmin(
       `<code>${escapeHtml(cleanNotes.slice(0, 300))}</code>`,
       ``,
       `🔗 <b>Download Link:</b>`,
-      `<code>${escapeHtml(downloadUrl || "https://telegram.me/ARTWEBTECHOFFICIAL")}</code>`,
+      `<code>${escapeHtml(downloadUrl || "https://t.me/awtmods")}</code>`,
       ``,
       `💡 <i>Tap <b>Publish Live</b> below to approve immediately, or reply to this message with a new download link (e.g. from Telegram channel or DevUploads).</i>`,
     ].filter(Boolean).join("\n");

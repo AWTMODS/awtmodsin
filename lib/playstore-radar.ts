@@ -13,6 +13,7 @@ export interface RadarAppUpdate {
   appName: string;
   slug: string;
   packageName: string;
+  iconUrl?: string;
   currentModVersion: string;
   playStoreVersion: string;
   changelog?: string;
@@ -289,6 +290,7 @@ export async function checkPlayStoreUpdates(options?: {
               appName: app.name,
               slug: app.slug,
               packageName: app.package_name,
+              iconUrl: app.icon_url || detail.icon || existingUpdate?.iconUrl || "",
               currentModVersion: currentModVer,
               playStoreVersion: playStoreVer,
               changelog: detail.recentChanges || "",

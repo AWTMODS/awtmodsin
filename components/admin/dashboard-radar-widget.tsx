@@ -12,6 +12,7 @@ export interface RadarAppUpdate {
   appName: string;
   slug: string;
   packageName: string;
+  iconUrl?: string;
   currentModVersion: string;
   playStoreVersion: string;
   changelog?: string;
@@ -234,15 +235,39 @@ export function DashboardRadarWidget({
                 className="p-3.5 rounded-2xl border border-border/80 bg-background/60 backdrop-blur-xs flex flex-col justify-between gap-3 shadow-2xs"
               >
                 <div>
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="font-bold text-sm text-foreground line-clamp-1">
-                      {app.appName}
-                    </span>
+                  <div className="flex items-start justify-between gap-2.5">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="relative h-10 w-10 rounded-xl overflow-hidden border border-border/80 bg-muted/40 shrink-0 shadow-2xs">
+                        {app.iconUrl ? (
+                          <img
+                            src={app.iconUrl}
+                            alt={app.appName}
+                            className="h-full w-full object-cover"
+                            loading="lazy"
+                            onError={(e) => {
+                              (e.currentTarget as HTMLElement).style.display = "none";
+                            }}
+                          />
+                        ) : (
+                          <div className="h-full w-full flex items-center justify-center font-bold text-xs text-amber-500 bg-amber-500/10">
+                            {app.appName.slice(0, 1).toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <span className="font-bold text-sm text-foreground line-clamp-1 block leading-snug" title={app.appName}>
+                          {app.appName}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground font-mono truncate block mt-0.5" title={app.packageName}>
+                          {app.packageName}
+                        </span>
+                      </div>
+                    </div>
                     <a
                       href={`https://play.google.com/store/apps/details?id=${app.packageName}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-muted-foreground hover:text-foreground p-0.5"
+                      className="text-muted-foreground hover:text-foreground p-1 shrink-0 rounded-lg hover:bg-muted/50 transition-colors"
                       title="Open Google Play Store"
                     >
                       <ExternalLink className="h-3.5 w-3.5" />

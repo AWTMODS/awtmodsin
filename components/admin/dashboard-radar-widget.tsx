@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Radio, Zap, ExternalLink, RefreshCw, CheckCircle2, ArrowRight } from "lucide-react";
+import { Radio, Zap, ExternalLink, RefreshCw, CheckCircle2, ArrowRight, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
@@ -18,6 +18,7 @@ export interface RadarAppUpdate {
   changelog?: string;
   detectedAt: string;
   isMuted?: boolean;
+  workflowStatus?: string;
 }
 
 interface DashboardRadarWidgetProps {
@@ -32,6 +33,7 @@ export function DashboardRadarWidget({
   const [updates, setUpdates] = useState<Record<string, RadarAppUpdate>>(initialUpdates);
   const [lastScanAt, setLastScanAt] = useState<string>(initialLastScan);
   const [isScanning, setIsScanning] = useState(false);
+  const [startingAppId, setStartingAppId] = useState<string | null>(null);
 
   // Helper to format scan time relatively
   const formatScanTime = (isoString?: string) => {
@@ -140,7 +142,42 @@ export function DashboardRadarWidget({
     }
   };
 
-  const updateList = Object.values(updates).filter((u) => !u.isMuted);
+  const handleStartModding = async (app: RadarAppUpdate) => {
+    setStartingAppId(app.appId);
+    try {
+      const targetId = app.appId.startsWith("radar-") ? app.appId : `radar-${app.appId}`;
+      const res = await fetch("/api/admin/radar/workflow", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "start_modding",
+          appId: targetId,
+          priority: "High",
+          remarks: `Modding initiated from Dashboard for ${app.appName} (${app.playStoreVersion})`,
+          adminName: "Aadith C V",
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to start modding");
+
+      toast.success(`🚀 Modding started for ${app.appName}! Moved to Modding Pipeline.`);
+      // Immediately remove from local list so it disappears without waiting for a re-scan
+      setUpdates((prev) => {
+        const next = { ...prev };
+        delete next[app.appId];
+        return next;
+      });
+    } catch (err: any) {
+      toast.error(err.message || "Failed to start modding");
+    } finally {
+      setStartingAppId(null);
+    }
+  };
+
+  const updateList = Object.values(updates).filter(
+    (u) => !u.isMuted && (!u.workflowStatus || u.workflowStatus === "UPDATE_DETECTED")
+  );
   const hasUpdates = updateList.length > 0;
 
   return (
@@ -291,12 +328,26 @@ export function DashboardRadarWidget({
                 </div>
 
                 <div className="flex items-center gap-2 pt-1 border-t border-border/40">
+                  <Button
+                    size="sm"
+                    disabled={startingAppId === app.appId}
+                    onClick={() => handleStartModding(app)}
+                    className="flex-1 text-xs font-bold py-1.5 h-8 rounded-xl bg-amber-500 hover:bg-amber-400 text-black inline-flex items-center justify-center gap-1.5 transition-colors shadow-2xs"
+                  >
+                    {startingAppId === app.appId ? (
+                      <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Play className="h-3.5 w-3.5 fill-current" />
+                    )}
+                    <span>{startingAppId === app.appId ? "Starting..." : "Start Modding"}</span>
+                  </Button>
                   <Link
                     href={`/admin/radar/apps/${app.appId}`}
-                    className="w-full text-center text-xs font-bold py-1.5 px-3 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-500 hover:bg-amber-500/20 inline-flex items-center justify-center gap-1.5 transition-colors"
+                    className="text-center text-xs font-semibold py-1.5 px-3 h-8 rounded-xl bg-muted/60 hover:bg-muted border border-border text-foreground inline-flex items-center justify-center gap-1 transition-colors"
+                    title="View Details & Pipeline"
                   >
-                    <Zap className="h-3.5 w-3.5" />
-                    <span>Manage Mod Pipeline</span>
+                    <Zap className="h-3.5 w-3.5 text-amber-500" />
+                    <span>Pipeline</span>
                   </Link>
                 </div>
               </div>

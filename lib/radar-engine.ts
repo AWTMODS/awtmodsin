@@ -1,6 +1,7 @@
 import { getDbClient, getSiteSettings } from "./db";
 import { isNewerVersion } from "./version-comparator";
 import { revalidatePath } from "next/cache";
+import { getRadarState, saveRadarState } from "./playstore-radar";
 
 export type RadarWorkflowStatus =
   | "UPDATE_DETECTED"
@@ -1000,6 +1001,49 @@ export async function removeRadarApp(id: string): Promise<boolean> {
 // ==============================================================================
 
 /**
+ * Synchronizes the app's workflow status into playstore_radar_state in site_settings
+ * so the DashboardRadarWidget instantly mutes and hides apps in progress, or removes released ones.
+ */
+async function syncRadarStateWorkflowStatus(
+  app: RadarTrackedApp,
+  status: RadarWorkflowStatus
+) {
+  try {
+    const radarState = await getRadarState();
+    let changed = false;
+    const rawId = (app.id || "").replace(/^radar-/, "");
+    const targetPkg = (app.package_name || "").toLowerCase();
+
+    for (const [key, update] of Object.entries(radarState.updates || {})) {
+      if (!update) continue;
+      const updatePkg = (update.packageName || "").toLowerCase();
+      const updateId = (update.appId || "").toLowerCase();
+
+      if (
+        updateId === app.id.toLowerCase() ||
+        updateId === rawId.toLowerCase() ||
+        updatePkg === targetPkg
+      ) {
+        if (status === "MOD_RELEASED") {
+          delete radarState.updates[key];
+          changed = true;
+        } else {
+          update.workflowStatus = status;
+          update.isMuted = true;
+          changed = true;
+        }
+      }
+    }
+
+    if (changed) {
+      await saveRadarState(radarState);
+    }
+  } catch (err) {
+    console.warn("syncRadarStateWorkflowStatus error:", err);
+  }
+}
+
+/**
  * 1 -> 2: Transition from UPDATE_DETECTED to MODDING_STARTED
  */
 export async function transitionToModdingStarted(params: {
@@ -1081,6 +1125,9 @@ export async function transitionToModdingStarted(params: {
 
   await persistState(state);
 
+  // Sync into playstore_radar_state so dashboard widget updates immediately
+  await syncRadarStateWorkflowStatus(app, "MODDING_STARTED");
+
   // Telegram alert
   await dispatchTelegramNotification({
     type: "MODDING_STARTED",
@@ -1145,6 +1192,8 @@ export async function transitionToModdedCompleted(params: {
 
   await persistState(state);
 
+  await syncRadarStateWorkflowStatus(app, "MODDED_COMPLETED");
+
   await dispatchTelegramNotification({
     type: "MODDED_COMPLETED",
     app,
@@ -1198,6 +1247,8 @@ export async function transitionToReadyToPublish(params: {
   });
 
   await persistState(state);
+
+  await syncRadarStateWorkflowStatus(app, "READY_TO_PUBLISH");
 
   await dispatchTelegramNotification({
     type: "READY_TO_PUBLISH",
@@ -1282,6 +1333,9 @@ export async function transitionToModReleased(params: {
 
   // 4. Automatically persist state and update stats
   await persistState(state);
+
+  // Automatically remove from playstore_radar_state updates
+  await syncRadarStateWorkflowStatus(app, "MOD_RELEASED");
 
   // 5. Telegram broadcast & alert
   await dispatchTelegramNotification({

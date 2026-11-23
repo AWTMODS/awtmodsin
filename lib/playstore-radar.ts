@@ -21,6 +21,7 @@ export interface RadarAppUpdate {
   lastNotifiedAt?: string;
   lastNotifiedVersion?: string;
   isMuted?: boolean;
+  workflowStatus?: string;
 }
 
 export interface RadarState {
@@ -47,11 +48,54 @@ export async function getRadarState(): Promise<RadarState> {
     .eq("setting_key", RADAR_SETTING_KEY)
     .maybeSingle();
 
-  if (data?.setting_value) {
-    return data.setting_value as RadarState;
+  const state: RadarState = (data?.setting_value as RadarState) || {
+    lastScanAt: "",
+    totalChecked: 0,
+    updatesCount: 0,
+    updates: {},
+  };
+
+  // Cross-reference with radar_engine_full_state so apps already in modding workflow
+  // (MODDING_STARTED, MODDED_COMPLETED, READY_TO_PUBLISH, MOD_RELEASED) are automatically muted and excluded
+  try {
+    const { data: engineData } = await supabase
+      .from("site_settings")
+      .select("setting_value")
+      .eq("setting_key", "radar_engine_full_state")
+      .maybeSingle();
+
+    if (engineData?.setting_value?.apps && state.updates) {
+      const apps = (engineData.setting_value.apps || []) as any[];
+      const statusMap = new Map<string, string>();
+      for (const app of apps) {
+        if (app.package_name) statusMap.set(app.package_name.toLowerCase(), app.workflow_status);
+        if (app.id) statusMap.set(app.id.toLowerCase(), app.workflow_status);
+        const rawId = (app.id || "").replace(/^radar-/, "");
+        if (rawId) statusMap.set(rawId.toLowerCase(), app.workflow_status);
+      }
+
+      for (const [key, update] of Object.entries(state.updates)) {
+        if (!update) continue;
+        const pkgStatus = update.packageName ? statusMap.get(update.packageName.toLowerCase()) : undefined;
+        const idStatus = update.appId ? statusMap.get(update.appId.toLowerCase()) : undefined;
+        const status = pkgStatus || idStatus;
+
+        if (status && status !== "UPDATE_DETECTED") {
+          update.workflowStatus = status;
+          update.isMuted = true;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("getRadarState engine sync warning:", err);
   }
 
-  return { lastScanAt: "", totalChecked: 0, updatesCount: 0, updates: {} };
+  // Count unmuted, pending actionable updates
+  state.updatesCount = Object.values(state.updates || {}).filter(
+    (u) => !u.isMuted && (!u.workflowStatus || u.workflowStatus === "UPDATE_DETECTED")
+  ).length;
+
+  return state;
 }
 
 /**
@@ -244,6 +288,24 @@ export async function checkPlayStoreUpdates(options?: {
   const currentState = await getRadarState();
   const currentUpdates = { ...currentState.updates };
 
+  // Fetch active workflow status so apps already being modded are respected
+  const { data: engineDoc } = await supabase
+    .from("site_settings")
+    .select("setting_value")
+    .eq("setting_key", "radar_engine_full_state")
+    .maybeSingle();
+
+  const engineApps = (engineDoc?.setting_value?.apps || []) as any[];
+  const inPipelineMap = new Map<string, string>();
+  for (const ea of engineApps) {
+    if (ea.workflow_status && ea.workflow_status !== "UPDATE_DETECTED") {
+      if (ea.package_name) inPipelineMap.set(ea.package_name.toLowerCase(), ea.workflow_status);
+      if (ea.id) inPipelineMap.set(ea.id.toLowerCase(), ea.workflow_status);
+      const raw = (ea.id || "").replace(/^radar-/, "");
+      if (raw) inPipelineMap.set(raw.toLowerCase(), ea.workflow_status);
+    }
+  }
+
   const detectedUpdates: RadarAppUpdate[] = [];
 
   // 2. Iterate in fast parallel batches of 12 for high speed & low latency
@@ -285,6 +347,15 @@ export async function checkPlayStoreUpdates(options?: {
           if (isNewerVersion(playStoreVer, currentModVer)) {
             const existingUpdate = currentUpdates[app.id];
 
+            const pipelineStatus =
+              inPipelineMap.get(app.package_name.toLowerCase()) ||
+              inPipelineMap.get(app.id.toLowerCase()) ||
+              existingUpdate?.workflowStatus;
+
+            const isMutedNow =
+              !!existingUpdate?.isMuted ||
+              (!!pipelineStatus && pipelineStatus !== "UPDATE_DETECTED");
+
             const updateInfo: RadarAppUpdate = {
               appId: app.id,
               appName: app.name,
@@ -297,16 +368,19 @@ export async function checkPlayStoreUpdates(options?: {
               detectedAt: new Date().toISOString(),
               lastNotifiedAt: existingUpdate?.lastNotifiedAt,
               lastNotifiedVersion: existingUpdate?.lastNotifiedVersion,
-              isMuted: existingUpdate?.isMuted || false,
+              isMuted: isMutedNow,
+              workflowStatus: pipelineStatus || "UPDATE_DETECTED",
             };
 
             currentUpdates[app.id] = updateInfo;
-            detectedUpdates.push(updateInfo);
+            if (!isMutedNow) {
+              detectedUpdates.push(updateInfo);
+            }
 
-            // Notify Admin via Telegram Bot if not muted and not already notified for this version
+            // Notify Admin via Telegram Bot if not muted and not already in modding pipeline
             if (
               shouldNotify &&
-              !updateInfo.isMuted &&
+              !isMutedNow &&
               existingUpdate?.lastNotifiedVersion !== playStoreVer
             ) {
               const notified = await sendRadarAlertToAdmin({

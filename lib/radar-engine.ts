@@ -317,10 +317,19 @@ async function loadState(): Promise<RadarInMemoryState> {
             if (siteVer) existingApp.last_detected_version = siteVer;
             didChange = true;
           }
+          // Synchronize workflow status from playstore_radar_state so active modding is preserved
+          if (update.workflowStatus && existingApp.workflow_status !== update.workflowStatus) {
+            existingApp.workflow_status = update.workflowStatus;
+            didChange = true;
+          }
           const matchingCycle = inMemoryState.cycles.find(
             (c) => c.radar_app_id === existingApp?.id
           );
           if (matchingCycle) {
+            if (update.workflowStatus && matchingCycle.workflow_status !== update.workflowStatus) {
+              matchingCycle.workflow_status = update.workflowStatus;
+              didChange = true;
+            }
             if (matchingCycle.target_play_store_version !== playVer) {
               matchingCycle.target_play_store_version = playVer;
               matchingCycle.mod_version = `${playVer} VIP Mod`;
@@ -335,6 +344,7 @@ async function loadState(): Promise<RadarInMemoryState> {
           // Add this detected app into active tracking so it resolves everywhere
           const newAppId = `radar-${rawId}`;
           const newCycleId = `cycle-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+          const initialStatus = update.workflowStatus || "UPDATE_DETECTED";
           const newApp: RadarTrackedApp = {
             id: newAppId,
             package_name: update.packageName.trim(),
@@ -347,7 +357,7 @@ async function loadState(): Promise<RadarInMemoryState> {
             current_play_store_version: playVer,
             last_detected_version: siteVer || playVer,
             is_active_tracking: true,
-            workflow_status: "UPDATE_DETECTED",
+            workflow_status: initialStatus,
             last_scanned_at: update.detectedAt || now,
             last_detected_at: update.detectedAt || now,
             created_at: now,
@@ -360,7 +370,7 @@ async function loadState(): Promise<RadarInMemoryState> {
             cycle_number: 1,
             target_play_store_version: playVer,
             mod_version: `${playVer} VIP Mod`,
-            workflow_status: "UPDATE_DETECTED",
+            workflow_status: initialStatus,
             priority: "Medium",
             assigned_modder: "Aadith C V",
             changelog: update.changelog,
@@ -374,27 +384,24 @@ async function loadState(): Promise<RadarInMemoryState> {
         }
       }
 
-      // CRITICAL SANITIZATION: Clean up any previously assigned random/mock statuses.
-      // Only actual admin actions (verified by audit activities/remarks) advance workflow status.
+      // Ensure apps with no newer version on Play Store (Play == Site) are marked MOD_RELEASED (up to date),
+      // so they do not falsely inflate the "Action Required" updates queue.
       inMemoryState.apps.forEach((app) => {
-        const hasRealRemarks = (inMemoryState.remarks || []).some((r) => r.radar_app_id === app.id);
-        const hasRealActivities = (inMemoryState.activities || []).some((a) => a.radar_app_id === app.id);
-        if (app.workflow_status !== "UPDATE_DETECTED" && !hasRealRemarks && !hasRealActivities) {
-          app.workflow_status = "UPDATE_DETECTED";
+        const hasNewer = isNewerVersion(
+          app.current_play_store_version || "1.0.0",
+          app.last_detected_version || "1.0.0"
+        );
+        if (!hasNewer && app.workflow_status === "UPDATE_DETECTED") {
+          app.workflow_status = "MOD_RELEASED";
           didChange = true;
         }
       });
 
+      // Synchronize cycle status with app status
       (inMemoryState.cycles || []).forEach((c) => {
-        const hasRealRemarks = (inMemoryState.remarks || []).some((r) => r.radar_app_id === c.radar_app_id);
-        const hasRealActivities = (inMemoryState.activities || []).some((a) => a.radar_app_id === c.radar_app_id);
-        if (c.workflow_status !== "UPDATE_DETECTED" && !hasRealRemarks && !hasRealActivities) {
-          c.workflow_status = "UPDATE_DETECTED";
-          c.priority = "Medium";
-          c.modding_started_at = undefined;
-          c.modded_completed_at = undefined;
-          c.ready_to_publish_at = undefined;
-          c.released_at = undefined;
+        const matchingApp = inMemoryState.apps.find((a) => a.id === c.radar_app_id);
+        if (matchingApp && c.workflow_status !== matchingApp.workflow_status) {
+          c.workflow_status = matchingApp.workflow_status;
           didChange = true;
         }
       });

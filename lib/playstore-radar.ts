@@ -138,6 +138,42 @@ export async function getRadarState(): Promise<RadarState> {
         if (status && status !== "UPDATE_DETECTED") {
           update.workflowStatus = status;
           update.isMuted = true;
+        } else if (status === "UPDATE_DETECTED") {
+          update.workflowStatus = "UPDATE_DETECTED";
+          update.isMuted = false;
+        }
+      }
+
+      // Ensure any tracked app from engine that has an active UPDATE_DETECTED is present in state.updates
+      for (const app of apps) {
+        if (
+          app.workflow_status === "UPDATE_DETECTED" &&
+          isNewerVersion(
+            app.current_play_store_version || "1.0.0",
+            app.last_detected_version || "1.0.0"
+          )
+        ) {
+          const rawId = (app.id || "").replace(/^radar-/, "");
+          const existing =
+            state.updates[rawId] ||
+            state.updates[app.id] ||
+            Object.values(state.updates).find(
+              (u) => u.packageName?.toLowerCase() === app.package_name?.toLowerCase()
+            );
+          if (!existing) {
+            state.updates[rawId] = {
+              appId: rawId,
+              appName: app.app_name,
+              slug: app.slug || "",
+              packageName: app.package_name,
+              iconUrl: app.icon_url,
+              currentModVersion: app.last_detected_version || "v1.0.0",
+              playStoreVersion: app.current_play_store_version || "v1.0.0",
+              detectedAt: app.last_detected_at || new Date().toISOString(),
+              isMuted: false,
+              workflowStatus: "UPDATE_DETECTED",
+            };
+          }
         }
       }
     }

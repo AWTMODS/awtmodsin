@@ -26,6 +26,25 @@ export async function GET() {
       console.error("Staged versions error:", stagedErr);
     }
 
+    // Only allow the latest version per application in the staging queue
+    const seenAppIds = new Set<string>();
+    const uniqueStaged: any[] = [];
+    const sortedStaged = (stagedVersions || []).sort(
+      (a: any, b: any) => (b.version_code || 0) - (a.version_code || 0)
+    );
+    for (const v of sortedStaged) {
+      const appId = v.application?.id;
+      if (appId && !seenAppIds.has(appId)) {
+        seenAppIds.add(appId);
+        uniqueStaged.push(v);
+      } else if (appId) {
+        // Automatically prune duplicate older draft
+        supabase.from("download_sources").delete().eq("version_id", v.id).then(() => {
+          supabase.from("application_versions").delete().eq("id", v.id);
+        });
+      }
+    }
+
     // 2. Fetch live published versions
     const { data: liveVersions, error: liveErr } = await supabase
       .from("application_versions")
@@ -45,7 +64,7 @@ export async function GET() {
     return NextResponse.json(
       {
         success: true,
-        staged: stagedVersions || [],
+        staged: uniqueStaged,
         live: liveVersions || [],
       },
       {

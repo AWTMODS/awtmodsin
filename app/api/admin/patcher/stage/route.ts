@@ -130,14 +130,30 @@ export async function POST(req: Request) {
       if (newApp.slug) appSlug = newApp.slug;
     }
 
-    // 2. Clean up any stale unapproved draft versions for this same application
-    // so the staging queue only holds the latest patched build for this app
-    await supabase
+    // 2. Only allow the latest version: clean up older drafts or reject if newer already exists
+    const { data: existingDrafts } = await supabase
       .from("application_versions")
-      .delete()
+      .select("id, version_code")
       .eq("application_id", appId)
-      .eq("status", "draft")
-      .neq("version_code", versionCode);
+      .eq("status", "draft");
+
+    const higherDraft = (existingDrafts as any[])?.find((d: any) => (d.version_code || 0) > versionCode);
+    if (higherDraft) {
+      return NextResponse.json({
+        success: false,
+        message: `A newer version (v${higherDraft.version_code}) is already staged. Older version v${versionCode} was ignored.`,
+        package_name: packageName,
+        version_code: versionCode,
+      });
+    }
+
+    if (existingDrafts && existingDrafts.length > 0) {
+      const olderIds = (existingDrafts as any[]).filter((d: any) => d.version_code !== versionCode).map((d: any) => d.id);
+      if (olderIds.length > 0) {
+        await supabase.from("download_sources").delete().in("version_id", olderIds);
+        await supabase.from("application_versions").delete().in("id", olderIds);
+      }
+    }
 
     // Find or create the version as DRAFT (staged)
     const { data: existingVer } = await supabase

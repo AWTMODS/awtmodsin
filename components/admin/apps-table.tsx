@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -47,7 +47,7 @@ export function AppsTable({
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedStatus, setSelectedStatus] = useState(defaultStatus);
-  const [typeFilter, setTypeFilter] = useState<"all" | "apps" | "games" | "pc">(
+  const [typeFilter, setTypeFilter] = useState<"all" | "apps" | "games" | "pc" | "duplicates">(
     defaultType === "games" || defaultType === "pc" || defaultType === "apps"
       ? (defaultType as any)
       : "all"
@@ -172,6 +172,20 @@ export function AppsTable({
     }
   };
 
+  // Detect duplicate packages across all applications
+  const duplicatePackages = useMemo(() => {
+    const pkgCounts = new Map<string, number>();
+    for (const app of apps) {
+      const p = app.package_name?.trim().toLowerCase();
+      if (p) pkgCounts.set(p, (pkgCounts.get(p) || 0) + 1);
+    }
+    const dups = new Set<string>();
+    pkgCounts.forEach((count, pkg) => {
+      if (count > 1) dups.add(pkg);
+    });
+    return dups;
+  }, [apps]);
+
   const allCount = apps.length;
   const pcCount = apps.filter(
     (app) => (app as any).platform === "pc" || app.category?.slug === "pc-software"
@@ -217,10 +231,27 @@ export function AppsTable({
       matchesType = isGame;
     } else if (typeFilter === "pc") {
       matchesType = isPC;
+    } else if (typeFilter === "duplicates") {
+      matchesType = duplicatePackages.has((app.package_name || "").trim().toLowerCase());
     }
 
     return matchesSearch && matchesCategory && matchesStatus && matchesType;
   });
+
+  // When viewing duplicates, sort them side-by-side grouped by package name
+  const displayApps = useMemo(() => {
+    if (typeFilter === "duplicates") {
+      return [...filteredApps].sort((a, b) => {
+        const pkgA = (a.package_name || "").toLowerCase();
+        const pkgB = (b.package_name || "").toLowerCase();
+        if (pkgA !== pkgB) return pkgA.localeCompare(pkgB);
+        const codeA = a.latest_version?.version_code || 0;
+        const codeB = b.latest_version?.version_code || 0;
+        return codeB - codeA;
+      });
+    }
+    return filteredApps;
+  }, [filteredApps, typeFilter]);
 
   const handleToggleStatus = async (app: Application) => {
     const newStatus = app.status === "published" ? "draft" : "published";
@@ -344,6 +375,23 @@ export function AppsTable({
             {pcCount}
           </span>
         </button>
+
+        {duplicatePackages.size > 0 && (
+          <button
+            type="button"
+            onClick={() => setTypeFilter("duplicates")}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
+              typeFilter === "duplicates"
+                ? "bg-rose-500/20 text-rose-400 shadow-xs border border-rose-500/40"
+                : "text-rose-400/80 hover:text-rose-400 hover:bg-rose-500/10"
+            }`}
+          >
+            <span>⚠️ Duplicates</span>
+            <span className="px-1.5 py-0.5 rounded-md bg-rose-500/20 text-rose-400 text-[10px] font-bold">
+              {duplicatePackages.size} packages
+            </span>
+          </button>
+        )}
       </div>
 
       {/* Search, Filter & Action Toolbar */}
@@ -462,6 +510,30 @@ export function AppsTable({
         </div>
       </div>
 
+      {/* Duplicate Warning Callout */}
+      {typeFilter === "duplicates" && (
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs sm:text-sm">
+          <div className="flex items-center gap-2.5">
+            <span className="text-xl">⚠️</span>
+            <div>
+              <p className="font-bold text-foreground">
+                Duplicate Posts Detected ({duplicatePackages.size} packages, {displayApps.length} total posts)
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                The posts are grouped side-by-side by package name. Compare the version codes below and click the red trash can icon to delete older or redundant posts.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setTypeFilter("all")}
+            className="text-xs font-bold underline shrink-0 hover:text-rose-300 transition-colors"
+          >
+            Show All Apps
+          </button>
+        </div>
+      )}
+
       {/* Applications Data Table */}
       <div className="rounded-3xl border border-border bg-card overflow-hidden shadow-xs">
         <div className="overflow-x-auto">
@@ -478,21 +550,25 @@ export function AppsTable({
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60">
-              {filteredApps.length === 0 ? (
+              {displayApps.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-muted-foreground">
                     No applications found matching criteria.
                   </td>
                 </tr>
               ) : (
-                filteredApps.map((app) => {
+                displayApps.map((app) => {
                   const version = app.latest_version?.version_name || "v1.0";
+                  const versionCode = app.latest_version?.version_code;
                   const size = app.latest_version?.file_size || "50 MB";
+                  const isDuplicatePkg = duplicatePackages.has((app.package_name || "").trim().toLowerCase());
 
                   return (
                     <tr
                       key={app.id}
-                      className="hover:bg-muted/30 transition-colors"
+                      className={`hover:bg-muted/30 transition-colors ${
+                        isDuplicatePkg && typeFilter === "duplicates" ? "bg-rose-500/[0.04]" : ""
+                      }`}
                     >
                       {/* App Icon + Name */}
                       <td className="py-3 px-4">
@@ -512,14 +588,21 @@ export function AppsTable({
                             <span>{app.name.slice(0, 1)}</span>
                           </div>
                           <div>
-                            <div className="font-semibold text-foreground flex items-center gap-1.5">
+                            <div className="font-semibold text-foreground flex items-center gap-1.5 flex-wrap">
                               <span>{app.name}</span>
                               {app.is_featured && (
                                 <Star className="h-3 w-3 text-amber-500 fill-amber-500" />
                               )}
+                              {isDuplicatePkg && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30">
+                                  Duplicate
+                                </span>
+                              )}
                             </div>
-                            <div className="text-[11px] text-muted-foreground font-mono">
-                              {app.developer}
+                            <div className="text-[11px] text-muted-foreground font-mono flex items-center gap-1.5 flex-wrap">
+                              <span>{app.developer}</span>
+                              <span className="text-muted-foreground/50">•</span>
+                              <span className="text-[10px] text-muted-foreground/80">{app.package_name}</span>
                             </div>
                           </div>
                         </div>
@@ -529,6 +612,11 @@ export function AppsTable({
                       <td className="py-3 px-4 font-mono text-xs">
                         <div className="flex flex-col gap-1 items-start">
                           <span className="font-semibold text-foreground">{version}</span>
+                          {versionCode !== undefined && (
+                            <span className="text-[10px] text-muted-foreground font-mono">
+                              code: {versionCode}
+                            </span>
+                          )}
                           {radarUpdates[app.id] && (
                             <a
                               href={`https://play.google.com/store/apps/details?id=${app.package_name}`}

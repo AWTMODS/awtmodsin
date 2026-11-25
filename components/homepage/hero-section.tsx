@@ -349,7 +349,7 @@ export function HeroSection({
               style={{ WebkitOverflowScrolling: "touch" }}
             >
               {recent7.map((app) => {
-                const timeBadge = getRelativeTimeBadge(app.created_at || app.updated_at);
+                const timeBadge = getRelativeTimeBadge(app.updated_at || app.created_at);
                 const isPC = (app as any).platform === "pc" || app.category?.slug === "pc-software";
 
                 return (

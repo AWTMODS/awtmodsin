@@ -258,7 +258,7 @@ export async function POST(req: Request) {
           // 3. Mark application as published
           await supabase
             .from("applications")
-            .update({ status: "published" })
+            .update({ status: "published", updated_at: new Date().toISOString() })
             .eq("id", ver.application_id);
 
           purgeAppCaches(app?.slug);
@@ -1703,6 +1703,10 @@ export async function POST(req: Request) {
                 reply_markup: {
                   inline_keyboard: [
                     [
+                      { text: "⏱️ In 15 Mins", callback_data: `sched_do:${app.id}:15` },
+                      { text: "⏱️ In 30 Mins", callback_data: `sched_do:${app.id}:30` },
+                    ],
+                    [
                       { text: "⏱️ In 1 Hour", callback_data: `sched_do:${app.id}:60` },
                       { text: "⏱️ In 3 Hours", callback_data: `sched_do:${app.id}:180` },
                     ],
@@ -1729,28 +1733,46 @@ export async function POST(req: Request) {
           const timing = rest[1] || "60";
           const app = await getApplicationById(appId);
           if (app) {
+            const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
             let targetDate = new Date();
-            if (timing === "60") {
+            if (timing === "15") {
+              targetDate = new Date(Date.now() + 15 * 60 * 1000);
+            } else if (timing === "30") {
+              targetDate = new Date(Date.now() + 30 * 60 * 1000);
+            } else if (timing === "60") {
               targetDate = new Date(Date.now() + 60 * 60 * 1000);
             } else if (timing === "180") {
               targetDate = new Date(Date.now() + 180 * 60 * 1000);
-            } else if (timing === "peak18") {
-              targetDate.setHours(18, 0, 0, 0);
-              if (targetDate.getTime() <= Date.now()) {
-                targetDate.setDate(targetDate.getDate() + 1);
+            } else if (timing === "peak18" || timing === "peak21" || timing === "tomorrow10") {
+              const nowIst = new Date(Date.now() + IST_OFFSET_MS);
+              if (timing === "peak18") {
+                nowIst.setUTCHours(18, 0, 0, 0);
+                if (nowIst.getTime() <= Date.now() + IST_OFFSET_MS) {
+                  nowIst.setUTCDate(nowIst.getUTCDate() + 1);
+                }
+              } else if (timing === "peak21") {
+                nowIst.setUTCHours(21, 0, 0, 0);
+                if (nowIst.getTime() <= Date.now() + IST_OFFSET_MS) {
+                  nowIst.setUTCDate(nowIst.getUTCDate() + 1);
+                }
+              } else if (timing === "tomorrow10") {
+                nowIst.setUTCDate(nowIst.getUTCDate() + 1);
+                nowIst.setUTCHours(10, 0, 0, 0);
               }
-            } else if (timing === "peak21") {
-              targetDate.setHours(21, 0, 0, 0);
-              if (targetDate.getTime() <= Date.now()) {
-                targetDate.setDate(targetDate.getDate() + 1);
-              }
-            } else if (timing === "tomorrow10") {
-              targetDate.setDate(targetDate.getDate() + 1);
-              targetDate.setHours(10, 0, 0, 0);
+              targetDate = new Date(nowIst.getTime() - IST_OFFSET_MS);
             }
 
             const { scheduleAppPost } = await import("@/lib/telegram-scheduler");
             await scheduleAppPost(app.id, targetDate.toISOString(), adminChatId);
+
+            await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                callback_query_id: cq.id,
+                text: `⏰ Scheduled for ${targetDate.toLocaleTimeString("en-US", { timeZone: "Asia/Kolkata" })} IST`,
+              }),
+            }).catch(() => {});
 
             await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
               method: "POST",
@@ -1758,15 +1780,40 @@ export async function POST(req: Request) {
               body: JSON.stringify({
                 chat_id: adminChatId,
                 text: (
-                  `⏰ <b>Post Scheduled Successfully!</b>\n\n` +
+                  `⏰ <b>Telegram Post Scheduled!</b>\n\n` +
                   `📦 <b>App:</b> ${app.name}\n` +
                   `📅 <b>Scheduled For:</b> <code>${targetDate.toLocaleString("en-US", { timeZone: "Asia/Kolkata" })} IST</code>\n` +
                   `📢 <b>Target Channel:</b> ${settings.telegramChannelId || "@awtmods"}\n\n` +
-                  `<i>The bot will automatically publish this to the website and channel when the scheduled time arrives.</i>`
+                  `<i>Website is already live. The bot will broadcast to the Telegram channel at the scheduled time.</i>`
                 ),
                 parse_mode: "HTML",
               }),
             });
+          }
+        }
+
+        if (action === "sched_skip") {
+          const appId = rest[0];
+          const app = await getApplicationById(appId);
+          await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              callback_query_id: cq.id,
+              text: "⏭️ Skipped Telegram channel broadcast.",
+            }),
+          }).catch(() => {});
+          if (cq.message?.message_id) {
+            await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: adminChatId,
+                message_id: cq.message.message_id,
+                text: `✅ <b>Website Updated Live</b> (${app?.name || "App"})\n⏭️ <i>Telegram channel broadcast skipped by Admin.</i>`,
+                parse_mode: "HTML",
+              }),
+            }).catch(() => {});
           }
         }
 
@@ -2188,38 +2235,15 @@ export async function POST(req: Request) {
                   .update({ status: "published", is_latest: true })
                   .eq("id", verData.id);
 
-                // 4. Mark app as published
+                // 4. Mark app as published & bump updated_at so it appears in Latest Releases
                 await supabase
                   .from("applications")
-                  .update({ status: "published" })
+                  .update({ status: "published", updated_at: new Date().toISOString() })
                   .eq("id", appData.id);
 
                 purgeAppCaches(appData.slug);
 
-                // 5. Broadcast to Telegram channel with app logo
-                try {
-                  const { broadcastToTelegram } = await import("@/lib/telegram-broadcast");
-                  const fullApp = await getApplicationById(appData.id);
-                  if (fullApp) {
-                    await broadcastToTelegram({
-                      app: fullApp,
-                      version: {
-                        ...verData,
-                        application_id: appData.id,
-                        file_size: "50 MB",
-                        architecture: "arm64-v8a",
-                        android_requirement: "Android 7.0+",
-                        status: "published",
-                        created_at: new Date().toISOString(),
-                      },
-                      force: true,
-                    });
-                  }
-                } catch (bErr) {
-                  console.warn("Broadcast error on reply publish:", bErr);
-                }
-
-                // 6. Auto-resolve & archive from Play Store Radar
+                // 5. Auto-resolve & archive from Play Store Radar
                 try {
                   const { getRadarTrackedApps, transitionToModReleased } = await import("@/lib/radar-engine");
                   const radarApps = await getRadarTrackedApps();
@@ -2239,35 +2263,50 @@ export async function POST(req: Request) {
                   console.warn("Radar transition error on reply publish:", rErr);
                 }
 
-                // 7. Notify community subscribers
-                try {
-                  const { notifySubscribersOfAppUpdate } = await import("@/lib/telegram-broadcast");
-                  await notifySubscribersOfAppUpdate(appData, verData, newDownloadUrl);
-                } catch (nErr) {
-                  console.warn("Notify subscribers error on reply:", nErr);
-                }
-
-                // 8. Confirm to Admin
+                // 6. Ask Admin to Publish Now or Schedule the Telegram Channel Post (do NOT auto-post to Telegram)
                 const verLabel = verData.version_name || `v${verData.version_code}`;
+                const channelHandle = settings.telegramChannelId || "@awtmods";
                 await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
                     chat_id: adminChatId,
                     text: (
-                      `🚀 <b>DOWNLOAD LINK ATTACHED &amp; PUBLISHED LIVE!</b>\n\n` +
+                      `✅ <b>WEBSITE UPDATED LIVE!</b>\n\n` +
                       `📱 <b>App:</b> <b>${escapeHtml(appData.name)}</b> (${escapeHtml(verLabel)})\n` +
-                      `🔗 <b>New Download URL:</b> <code>${escapeHtml(newDownloadUrl)}</code>\n\n` +
-                      `✅ Published on live website\n` +
-                      `✅ Broadcasted to channel with logo\n` +
-                      `✅ Play Store Radar auto-resolved &amp; archived\n` +
-                      `✅ Community subscribers notified`
+                      `🔗 <b>Download URL:</b> <code>${escapeHtml(newDownloadUrl)}</code>\n` +
+                      `🌐 <b>Website:</b> Published automatically &amp; Radar resolved\n\n` +
+                      `⏰ <b>Schedule Telegram Post (${escapeHtml(channelHandle)}):</b>\n` +
+                      `Choose when to broadcast this update to your Telegram channel:`
                     ),
                     parse_mode: "HTML",
+                    reply_markup: {
+                      inline_keyboard: [
+                        [
+                          { text: "🚀 Post to Telegram Now", callback_data: `broadcast:${appData.id}` },
+                        ],
+                        [
+                          { text: "⏱️ In 15 Mins", callback_data: `sched_do:${appData.id}:15` },
+                          { text: "⏱️ In 30 Mins", callback_data: `sched_do:${appData.id}:30` },
+                        ],
+                        [
+                          { text: "⏱️ In 1 Hour", callback_data: `sched_do:${appData.id}:60` },
+                          { text: "⏱️ In 3 Hours", callback_data: `sched_do:${appData.id}:180` },
+                        ],
+                        [
+                          { text: "🌅 Peak 6:00 PM", callback_data: `sched_do:${appData.id}:peak18` },
+                          { text: "🌃 Peak 9:00 PM", callback_data: `sched_do:${appData.id}:peak21` },
+                        ],
+                        [
+                          { text: "☀️ Tomorrow 10:00 AM", callback_data: `sched_do:${appData.id}:tomorrow10` },
+                          { text: "⏭️ Skip Telegram", callback_data: `sched_skip:${appData.id}` },
+                        ],
+                      ],
+                    },
                   }),
                 }).catch(() => {});
 
-                return NextResponse.json({ ok: true, replyPublished: appData.name });
+                return NextResponse.json({ ok: true, replyWebsitePublishedAwaitingSchedule: appData.name });
               }
             }
           }

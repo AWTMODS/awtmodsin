@@ -7,9 +7,11 @@ import {
   getAnalyticsChartData,
 } from "@/lib/db";
 import { getRadarState } from "@/lib/playstore-radar";
+import { getScheduledPosts } from "@/lib/telegram-scheduler";
 import { formatNumber } from "@/lib/utils";
 import { DashboardCharts } from "@/components/admin/dashboard-charts";
 import { DashboardRadarWidget } from "@/components/admin/dashboard-radar-widget";
+import { DashboardScheduledPostsWidget } from "@/components/admin/dashboard-scheduled-posts-widget";
 import {
   Layers,
   Download,
@@ -32,7 +34,7 @@ export const metadata = {
 };
 
 export default async function AdminDashboardPage() {
-  const [stats, { applications }, categories, reports, chartData, radarState] =
+  const [stats, { applications }, categories, reports, chartData, radarState, scheduledPosts] =
     await Promise.all([
       getSiteStats(),
       getApplications({ limit: 10, sortBy: "downloads", status: "all" }),
@@ -40,6 +42,7 @@ export default async function AdminDashboardPage() {
       getReports("pending"),
       getAnalyticsChartData(30),
       getRadarState(),
+      getScheduledPosts(),
     ]);
 
   const statCards = [
@@ -150,18 +153,16 @@ export default async function AdminDashboardPage() {
           const Icon = c.icon;
           const CardContent = (
             <div
-              className={`h-full p-4 sm:p-5 rounded-3xl border bg-card shadow-xs space-y-2 transition-all hover:border-neutral-400/50 ${
-                c.highlight
+              className={`h-full p-4 sm:p-5 rounded-3xl border bg-card shadow-xs space-y-2 transition-all hover:border-neutral-400/50 ${c.highlight
                   ? "border-amber-500/40 bg-amber-500/[0.04]"
                   : "border-border"
-              }`}
+                }`}
             >
               <div className="flex items-center justify-between text-muted-foreground">
                 <span className="text-xs font-semibold">{c.title}</span>
                 <Icon
-                  className={`h-4 w-4 ${
-                    c.highlight ? "text-amber-500" : ""
-                  }`}
+                  className={`h-4 w-4 ${c.highlight ? "text-amber-500" : ""
+                    }`}
                 />
               </div>
               <div className="text-2xl sm:text-3xl font-black text-foreground tracking-tight flex items-baseline gap-2">
@@ -213,6 +214,9 @@ export default async function AdminDashboardPage() {
           </Link>
         </div>
       )}
+
+      {/* Scheduled Telegram Posts Section */}
+      <DashboardScheduledPostsWidget initialPosts={scheduledPosts} />
 
       {/* Play Store Version Radar Live Section */}
       <DashboardRadarWidget

@@ -95,7 +95,7 @@ export async function getApplications(options?: {
   trending?: boolean;
   limit?: number;
   offset?: number;
-  sortBy?: "newest" | "oldest" | "downloads" | "alphabetical";
+  sortBy?: "newest" | "updated" | "oldest" | "downloads" | "alphabetical";
 }): Promise<{ applications: Application[]; total: number }> {
   const cacheKey = JSON.stringify(options || {});
   const now = Date.now();
@@ -155,6 +155,8 @@ export async function getApplications(options?: {
         query = query.order("created_at", { ascending: true });
       } else if (options?.sortBy === "alphabetical") {
         query = query.order("name", { ascending: true });
+      } else if (options?.sortBy === "updated") {
+        query = query.order("updated_at", { ascending: false });
       } else {
         query = query.order("created_at", { ascending: false });
       }
@@ -242,6 +244,12 @@ export async function getApplications(options?: {
     );
   } else if (options?.sortBy === "alphabetical") {
     filtered.sort((a, b) => a.name.localeCompare(b.name));
+  } else if (options?.sortBy === "updated") {
+    filtered.sort(
+      (a, b) =>
+        new Date(b.updated_at || b.created_at).getTime() -
+        new Date(a.updated_at || a.created_at).getTime()
+    );
   } else {
     filtered.sort(
       (a, b) =>
@@ -1062,6 +1070,10 @@ export async function updateApplication(
       );
 
       if (!error && result?.success && result?.app) {
+        await supabase
+          .from("applications")
+          .update({ updated_at: new Date().toISOString() })
+          .eq("id", id);
         const fullApp = await getApplicationById(id);
         return fullApp || result.app;
       }

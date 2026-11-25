@@ -22,6 +22,7 @@ export default async function HomePage() {
   const [
     stats,
     { applications: publishedApps },
+    { applications: latestUpdatedApps },
     trendingApps,
     trendingGames,
     trendingPCSoftware,
@@ -30,6 +31,7 @@ export default async function HomePage() {
   ] = await Promise.all([
     getSiteStats(),
     getApplications({ limit: 40, sortBy: "newest" }),
+    getApplications({ limit: 7, sortBy: "updated" }),
     getTrendingAndroidApps(12),
     getTrendingAndroidGames(12),
     getTrendingPCSoftware(12),
@@ -38,7 +40,7 @@ export default async function HomePage() {
   ]);
 
   const featuredApps = publishedApps.filter((a) => a.is_featured).slice(0, 4);
-  const latestReleases = publishedApps.slice(0, 7);
+  const latestReleases = latestUpdatedApps.slice(0, 7);
   const pcSoftwares = publishedApps
     .filter((a) => (a as any).platform === "pc" || a.category?.slug === "pc-software")
     .slice(0, 4);

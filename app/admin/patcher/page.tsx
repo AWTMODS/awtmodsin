@@ -415,14 +415,22 @@ export default function PatcherAdminPage() {
                       </div>
                     )}
                     <div>
-                      <div className="font-bold text-base flex items-center gap-2">
+                      <div className="font-bold text-base flex items-center gap-2 flex-wrap">
                         {item.application?.name || "Unknown App"}
                         <span className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
                           {item.application?.package_name}
                         </span>
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        Staged {new Date(item.created_at).toLocaleTimeString()} • {new Date(item.created_at).toLocaleDateString()}
+                      <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap mt-1">
+                        {item.version_name ? (
+                          <span className="inline-flex items-center gap-1 font-mono text-amber-300 font-semibold bg-amber-400/10 px-1.5 py-0.5 rounded border border-amber-400/20">
+                            Version: {item.version_name}
+                          </span>
+                        ) : null}
+                        {item.version_name ? <span>•</span> : null}
+                        <span>
+                          Staged {new Date(item.created_at).toLocaleTimeString()} • {new Date(item.created_at).toLocaleDateString()}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -670,15 +678,19 @@ export default function PatcherAdminPage() {
                       </div>
                     )}
                     <div>
-                      <div className="font-bold text-sm flex items-center gap-2">
+                      <div className="font-bold text-sm flex items-center gap-2 flex-wrap">
                         {item.application?.name || "Unknown App"}
-                        <span className="text-xs font-mono text-muted-foreground">
+                        <span className="text-xs font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
                           {pkg}
                         </span>
                       </div>
-                      <div className="text-xs text-muted-foreground font-mono mt-0.5 flex items-center gap-2">
-                        <span>Active Version:</span>
-                        <strong className="text-emerald-400">v{item.version_code}</strong>
+                      <div className="text-xs text-muted-foreground font-mono mt-1 flex items-center gap-2 flex-wrap">
+                        {item.version_name ? (
+                          <span className="text-emerald-300 font-semibold bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                            Version: {item.version_name}
+                          </span>
+                        ) : null}
+                        <span>Code: <strong className="text-emerald-400">v{item.version_code}</strong></span>
                         <span>•</span>
                         <span>Updated: {new Date(item.created_at).toLocaleDateString()}</span>
                       </div>

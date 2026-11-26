@@ -1024,6 +1024,139 @@ export async function POST(req: Request) {
           return NextResponse.json({ ok: true });
         }
 
+        if (data === "cloud_batch_pub" || data === "cloud_batch_spread" || data === "cloud_batch_clear") {
+          const supabaseBatch = getDbClient();
+          const batchKey = `cloud_batch_${adminChatId}`;
+          const { data: batchRow } = supabaseBatch
+            ? await supabaseBatch
+                .from("site_settings")
+                .select("setting_value")
+                .eq("setting_key", batchKey)
+                .maybeSingle()
+            : { data: null };
+
+          const batchItems: Array<{
+            appId: string;
+            appName: string;
+            appSlug: string;
+            version: string;
+            size: string;
+            url: string;
+          }> = Array.isArray(batchRow?.setting_value?.items) ? batchRow.setting_value.items : [];
+
+          if (supabaseBatch) {
+            await supabaseBatch.from("site_settings").delete().eq("setting_key", batchKey);
+          }
+
+          if (data === "cloud_batch_clear" || batchItems.length === 0) {
+            await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ callback_query_id: cq.id, text: "✅ Batch cleared." }),
+            }).catch(() => {});
+            if (cq.message?.message_id) {
+              await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: adminChatId,
+                  message_id: cq.message.message_id,
+                  text: `✅ <b>Cloud Channel Batch Sync Complete</b>\n<i>All ${batchItems.length} app(s) are already live on the website.</i>`,
+                  parse_mode: "HTML",
+                }),
+              }).catch(() => {});
+            }
+            return NextResponse.json({ ok: true });
+          }
+
+          if (data === "cloud_batch_pub") {
+            let posted = 0;
+            for (const item of batchItems) {
+              const app = await getApplicationById(item.appId);
+              if (app) {
+                const res = await broadcastToTelegram({ app, force: true }).catch(() => null);
+                if (res?.success) posted++;
+              }
+            }
+            await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                callback_query_id: cq.id,
+                text: `🚀 Broadcasted ${posted}/${batchItems.length} apps to channel!`,
+              }),
+            }).catch(() => {});
+            if (cq.message?.message_id) {
+              await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: adminChatId,
+                  message_id: cq.message.message_id,
+                  text:
+                    `🎉 <b>Batch Broadcast Complete!</b>\n\n` +
+                    `📢 <b>Posted:</b> ${posted}/${batchItems.length} app(s) to ${settings.telegramChannelId || "@awtmods"}\n` +
+                    batchItems.map((it, idx) => `${idx + 1}. <b>${escapeHtml(it.appName)}</b> (${escapeHtml(it.version)})`).join("\n"),
+                  parse_mode: "HTML",
+                }),
+              }).catch(() => {});
+            }
+            return NextResponse.json({ ok: true });
+          }
+
+          if (data === "cloud_batch_spread") {
+            const { getScheduledPosts, scheduleAppPost } = await import("@/lib/telegram-scheduler");
+            const pending = (await getScheduledPosts()).filter((p) => p.status === "pending");
+            let cursorMs = pending.reduce((max, p) => {
+              const ms = new Date(p.scheduledFor).getTime();
+              return Number.isFinite(ms) && ms > max ? ms : max;
+            }, Date.now());
+
+            const lines: string[] = [];
+            for (let i = 0; i < batchItems.length; i++) {
+              const item = batchItems[i];
+              cursorMs += 60 * 60 * 1000;
+              const targetDate = new Date(cursorMs);
+              await scheduleAppPost(item.appId, targetDate.toISOString(), adminChatId);
+              const istTime = targetDate.toLocaleString("en-US", {
+                timeZone: "Asia/Kolkata",
+                month: "short",
+                day: "numeric",
+                hour: "numeric",
+                minute: "2-digit",
+                hour12: true,
+              });
+              lines.push(`${i + 1}. <b>${escapeHtml(item.appName)}</b> → <code>${istTime} IST</code>`);
+            }
+
+            await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                callback_query_id: cq.id,
+                text: `📅 Auto-Spread scheduled ${batchItems.length} posts (+1h apart)!`,
+              }),
+            }).catch(() => {});
+
+            if (cq.message?.message_id) {
+              await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: adminChatId,
+                  message_id: cq.message.message_id,
+                  text:
+                    `📅 <b>Batch Auto-Spread Queued!</b>\n\n` +
+                    lines.join("\n") +
+                    `\n\n<i>Use /queue anytime to manage or post early.</i>`,
+                  parse_mode: "HTML",
+                }),
+              }).catch(() => {});
+            }
+            return NextResponse.json({ ok: true });
+          }
+        }
+
         if (data === "adm_vip_list") {
           const { getVipUsers } = await import("@/lib/telegram-vip");
           const vips = await getVipUsers();
@@ -2657,36 +2790,134 @@ export async function POST(req: Request) {
             const liveAppUrl = `${siteUrl}/apps/${cleanAppSlug(matchedApp.slug)}.html`;
             const finalVer = versionUpdates.version_name || verData.version_name || "Latest";
 
-            await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                chat_id: adminChatId,
-                text: (
-                  `☁️ <b>CLOUD CHANNEL LINK SYNCED LIVE!</b>\n\n` +
-                  `📱 <b>App:</b> <b>${escapeHtml(matchedApp.name)}</b> (${escapeHtml(finalVer)})\n` +
-                  `📁 <b>File:</b> <code>${escapeHtml(extractedFileName)}</code>\n` +
-                  `📦 <b>Size:</b> <code>${escapeHtml(extractedSize)}</code>\n` +
-                  `🔗 <b>Link:</b> <code>${escapeHtml(extractedUrl)}</code>\n\n` +
-                  `<i>Website mirror &amp; version updated automatically!</i>`
-                ),
-                parse_mode: "HTML",
-                reply_markup: {
-                  inline_keyboard: [
-                    [
-                      { text: "🚀 Post to Telegram Now", callback_data: `broadcast:${matchedApp.id}` },
-                      { text: "🌐 View Live App", url: liveAppUrl },
-                    ],
-                    [
-                      { text: "📅 Auto-Spread (+1h After Last)", callback_data: `sched_do:${matchedApp.id}:spread` },
-                      { text: "⏭️ Skip", callback_data: `sched_skip:${matchedApp.id}` },
-                    ],
-                  ],
-                },
-              }),
-            }).catch(() => {});
+            // Batch Cloud Channel Forward Sync: aggregate forwards within 10 mins into 1 live summary card
+            const batchKey = `cloud_batch_${adminChatId}`;
+            const { data: existingBatchRow } = await supabaseCloud
+              .from("site_settings")
+              .select("setting_value")
+              .eq("setting_key", batchKey)
+              .maybeSingle();
 
-            return NextResponse.json({ ok: true, cloudChannelSynced: matchedApp.slug });
+            const prevBatch = existingBatchRow?.setting_value;
+            const isRecentBatch =
+              prevBatch &&
+              prevBatch.updatedAt &&
+              Date.now() - new Date(prevBatch.updatedAt).getTime() < 10 * 60 * 1000 &&
+              Array.isArray(prevBatch.items) &&
+              prevBatch.messageId;
+
+            const newItem = {
+              appId: matchedApp.id,
+              appName: matchedApp.name,
+              appSlug: matchedApp.slug,
+              version: finalVer,
+              size: extractedSize || "Latest",
+              url: extractedUrl,
+            };
+
+            const batchItems = isRecentBatch
+              ? [
+                  ...prevBatch.items.filter((it: any) => it.appId !== matchedApp.id),
+                  newItem,
+                ]
+              : [newItem];
+
+            let summaryText = "";
+            let summaryMarkup: any;
+
+            if (batchItems.length === 1) {
+              summaryText =
+                `☁️ <b>CLOUD CHANNEL LINK SYNCED LIVE!</b>\n\n` +
+                `📱 <b>App:</b> <b>${escapeHtml(matchedApp.name)}</b> (${escapeHtml(finalVer)})\n` +
+                `📁 <b>File:</b> <code>${escapeHtml(extractedFileName)}</code>\n` +
+                `📦 <b>Size:</b> <code>${escapeHtml(extractedSize)}</code>\n` +
+                `🔗 <b>Link:</b> <code>${escapeHtml(extractedUrl)}</code>\n\n` +
+                `<i>Website mirror &amp; version updated automatically!</i>`;
+              summaryMarkup = {
+                inline_keyboard: [
+                  [
+                    { text: "🚀 Post to Telegram Now", callback_data: `broadcast:${matchedApp.id}` },
+                    { text: "🌐 View Live App", url: liveAppUrl },
+                  ],
+                  [
+                    { text: "📅 Auto-Spread (+1h After Last)", callback_data: `sched_do:${matchedApp.id}:spread` },
+                    { text: "⏭️ Skip", callback_data: `sched_skip:${matchedApp.id}` },
+                  ],
+                ],
+              };
+            } else {
+              summaryText =
+                `☁️ <b>BATCH CLOUD CHANNEL SYNC (${batchItems.length} Apps Updated)</b>\n\n` +
+                batchItems
+                  .map(
+                    (it: any, idx: number) =>
+                      `${idx + 1}. <b>${escapeHtml(it.appName)}</b> (<code>${escapeHtml(it.version)}</code> • ${escapeHtml(it.size)})`
+                  )
+                  .join("\n") +
+                `\n\n<i>All websites &amp; mirrors updated live! Choose how to publish to ${escapeHtml(settings.telegramChannelId || "@awtmods")}:</i>`;
+              summaryMarkup = {
+                inline_keyboard: [
+                  [
+                    { text: `🚀 Broadcast All (${batchItems.length})`, callback_data: "cloud_batch_pub" },
+                  ],
+                  [
+                    { text: "📅 Auto-Spread All (+1h Each)", callback_data: "cloud_batch_spread" },
+                  ],
+                  [
+                    { text: "✅ Done / Clear", callback_data: "cloud_batch_clear" },
+                  ],
+                ],
+              };
+            }
+
+            let savedMessageId: number | undefined = isRecentBatch ? prevBatch.messageId : undefined;
+            if (isRecentBatch && prevBatch.messageId) {
+              const editRes = await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: adminChatId,
+                  message_id: prevBatch.messageId,
+                  text: summaryText,
+                  parse_mode: "HTML",
+                  reply_markup: summaryMarkup,
+                }),
+              }).catch(() => null);
+              if (!editRes || !editRes.ok) {
+                savedMessageId = undefined;
+              }
+            }
+
+            if (!savedMessageId) {
+              const sendRes = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: adminChatId,
+                  text: summaryText,
+                  parse_mode: "HTML",
+                  reply_markup: summaryMarkup,
+                }),
+              }).catch(() => null);
+              savedMessageId = sendRes
+                ? (await sendRes.json().catch(() => null))?.result?.message_id
+                : undefined;
+            }
+
+            await supabaseCloud.from("site_settings").upsert(
+              {
+                setting_key: batchKey,
+                setting_value: {
+                  messageId: savedMessageId,
+                  updatedAt: new Date().toISOString(),
+                  items: batchItems,
+                },
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: "setting_key" }
+            );
+
+            return NextResponse.json({ ok: true, cloudChannelSynced: matchedApp.slug, batchCount: batchItems.length });
           }
         } else {
           const candidateNames = candidates.slice(0, 3).map((c) => `• ${escapeHtml(c.name)}`).join("\n");

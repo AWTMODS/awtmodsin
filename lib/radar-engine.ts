@@ -1187,18 +1187,20 @@ export async function transitionToModdingStarted(params: {
 
   await persistState(state);
 
-  // Sync into playstore_radar_state so dashboard widget updates immediately
-  await syncRadarStateWorkflowStatus(app, "MODDING_STARTED");
+  // Sync into playstore_radar_state so dashboard widget updates immediately (run in parallel)
+  syncRadarStateWorkflowStatus(app, "MODDING_STARTED").catch((err) =>
+    console.error("syncRadarStateWorkflowStatus error:", err)
+  );
 
-  // Telegram alert
-  await dispatchTelegramNotification({
+  // Telegram alert non-blocking
+  dispatchTelegramNotification({
     type: "MODDING_STARTED",
     app,
     priority: params.priority || "Medium",
     modder: params.assignedModder || "Aadith C V",
     notes: params.remarks,
     performedBy: params.adminName,
-  });
+  }).catch((err) => console.error("dispatchTelegramNotification error:", err));
 
   return { success: true };
 }

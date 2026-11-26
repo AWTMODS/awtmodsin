@@ -260,6 +260,8 @@ export function AppsTable({
   }, [filteredApps, typeFilter]);
 
   const handleStartModding = async (app: Application) => {
+    // Optimistic UI: mark as started immediately
+    setStartedModdingIds((prev) => ({ ...prev, [app.id]: true }));
     setStartingAppId(app.id);
     try {
       const res = await fetch("/api/admin/radar/workflow", {
@@ -276,7 +278,6 @@ export function AppsTable({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to start modding");
 
-      setStartedModdingIds((prev) => ({ ...prev, [app.id]: true }));
       toast.success(`🚀 Modding started for ${app.name}! Added to Modding Queue.`, {
         action: {
           label: "Open Queue",
@@ -284,6 +285,7 @@ export function AppsTable({
         },
       });
     } catch (err: any) {
+      setStartedModdingIds((prev) => ({ ...prev, [app.id]: false }));
       toast.error(err.message || "Failed to start modding");
     } finally {
       setStartingAppId(null);

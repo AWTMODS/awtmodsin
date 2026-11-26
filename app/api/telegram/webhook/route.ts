@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
-import { getSiteSettings, getApplicationBySlug, getApplicationById, getApplications, getDbClient, invalidateDbCache, getSiteStats, createModRequest, deleteApplication } from "@/lib/db";
+import { getSiteSettings, getApplicationBySlug, getApplicationById, getApplications, getCategories, createApplication, getDbClient, invalidateDbCache, getSiteStats, createModRequest, deleteApplication } from "@/lib/db";
 import { isUserVip, recordUserInteraction, activateUserVip } from "@/lib/telegram-vip";
 import { broadcastToTelegram } from "@/lib/telegram-broadcast";
 import { checkAndMarkTelegramUpdate } from "@/lib/telegram-dedup";
@@ -40,8 +40,143 @@ function purgeAppCaches(slug?: string) {
       revalidatePath(`/apps/${clean}.html`, "page");
       revalidatePath(`/download/${clean}`, "page");
       revalidatePath(`/download/${clean}.html`, "page");
+      revalidatePath("/pc-software", "page");
     }
   } catch {}
+}
+
+async function buildScheduledQueueView() {
+  const { getScheduledPosts } = await import("@/lib/telegram-scheduler");
+  const allPosts = await getScheduledPosts();
+  const pending = allPosts
+    .filter((p) => p.status === "pending")
+    .sort((a, b) => new Date(a.scheduledFor).getTime() - new Date(b.scheduledFor).getTime());
+
+  let text = `📅 <b>Scheduled Queue Manager</b>\n\n`;
+  const inline_keyboard: Array<Array<{ text: string; callback_data: string }>> = [];
+
+  if (pending.length === 0) {
+    text +=
+      `No pending posts are currently queued.\n\n` +
+      `<i>Use "📅 Auto-Spread (+1h After Last)" or "⏰ Schedule Post" on any app card to queue releases.</i>`;
+  } else {
+    text += `Showing <b>${pending.length}</b> pending release(s) in chronological order:\n\n`;
+    pending.slice(0, 8).forEach((p, idx) => {
+      const targetTime = new Date(p.scheduledFor).toLocaleString("en-US", {
+        timeZone: "Asia/Kolkata",
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      });
+      text += `${idx + 1}. <b>${escapeHtml(p.appName)}</b>\n   🕒 <code>${targetTime} IST</code>\n`;
+      const shortName = p.appName.length > 18 ? `${p.appName.slice(0, 17)}…` : p.appName;
+      inline_keyboard.push([
+        { text: `🚀 Post: ${shortName}`, callback_data: `q_post:${p.appId}` },
+        { text: "⏰ +1h", callback_data: `q_plus1h:${p.appId}` },
+        { text: "❌", callback_data: `q_cancel:${p.appId}` },
+      ]);
+    });
+    if (pending.length > 8) {
+      text += `\n<i>+ ${pending.length - 8} more queued item(s)</i>`;
+    }
+  }
+
+  inline_keyboard.push([
+    { text: "🔄 Refresh", callback_data: "adm_scheduled" },
+    { text: "🔙 Admin Menu", callback_data: "adm_menu" },
+  ]);
+
+  return { text, reply_markup: { inline_keyboard } };
+}
+
+async function createPcSoftwareDraftFromTelegram(
+  rawInput: string,
+  adminChatId: number | string
+) {
+  const parts = rawInput.split("|").map((s) => s.trim()).filter(Boolean);
+  const softwareName = parts[0] || "";
+  if (!softwareName) return null;
+
+  const customVersion = parts[1] && !parts[1].startsWith("http") ? parts[1] : undefined;
+  const customUrl = parts.find((p) => /^https?:\/\//i.test(p));
+
+  const categories = await getCategories();
+  const pcCategory =
+    categories.find((c) => c.slug === "pc-software") ||
+    categories.find((c) => c.slug === "tools") ||
+    categories[0];
+
+  const baseSlug = softwareName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 72);
+
+  const exeBase = softwareName
+    .toLowerCase()
+    .replace(/\b(202[4-9]|pro|studio|cc|dc|pre-activated|crack|for pc|mac|windows)\b/gi, "")
+    .replace(/[^a-z0-9]+/g, "")
+    .slice(0, 24) || baseSlug.replace(/-/g, "").slice(0, 20) || "software";
+
+  const displayName = /pre-activated/i.test(softwareName)
+    ? softwareName
+    : `${softwareName} (Pre-Activated)`;
+
+  const downloadSources = customUrl
+    ? [
+        {
+          download_type: "external" as const,
+          hosting_provider: customUrl.includes("mediafire")
+            ? ("mediafire" as const)
+            : customUrl.includes("drive.google")
+            ? ("google_drive" as const)
+            : ("custom" as const),
+          download_url: customUrl,
+          mirror_name: "Windows & macOS Fast Mirror",
+          is_primary: true,
+          is_active: true,
+        },
+      ]
+    : [];
+
+  const createdApp = await createApplication({
+    name: displayName,
+    slug: `${baseSlug}-${Date.now().toString().slice(-4)}`,
+    package_name: `${exeBase}.exe`,
+    developer: "Aadith C V",
+    category_id: pcCategory?.id,
+    platform: "pc",
+    short_description: `Download ${displayName} for Windows & macOS with all Pro features unlocked.`,
+    description:
+      `### Overview\n${displayName} is available as a pre-activated offline installer for Windows and macOS.\n\n` +
+      `### Key Highlights\n- Pre-activated lifetime license (no crack/keygen steps)\n- Full offline installer package\n- Supports Windows 10/11 (64-bit) & macOS`,
+    icon_url: "/icons/default-app.png",
+    android_requirement: "Windows 10/11 (64-bit) & macOS",
+    status: "draft",
+    mod_features: [
+      "Pre-Activated / Lifetime License Unlocked",
+      "No Crack or Keygen Required (Auto-Activated)",
+      "Full Offline Installer (Windows & macOS)",
+      "All Pro Studio Tools & Exports Enabled",
+    ],
+    version: {
+      version_name: customVersion || "2026 Latest",
+      version_code: 1,
+      file_size: "Varies by OS",
+      architecture: "x64 / ARM64 (Win & Mac)",
+      android_requirement: "Windows 10/11 & macOS",
+      release_notes: "Pre-Activated Windows & macOS release",
+      status: "draft",
+      download_sources: downloadSources,
+    },
+  });
+
+  purgeAppCaches(createdApp.slug);
+  const { sendDraftPreviewToAdmin } = await import("@/lib/telegram-broadcast");
+  await sendDraftPreviewToAdmin(createdApp, adminChatId);
+  return createdApp;
 }
 
 async function buildAdminMenuContent(settings: any) {
@@ -104,8 +239,11 @@ async function buildAdminMenuContent(settings: any) {
         { text: "✨ Auto-Scrape App", callback_data: "adm_newapp" },
       ],
       [
+        { text: "💻 New PC Software", callback_data: "adm_newpc" },
+        { text: "📅 Scheduled Queue", callback_data: "adm_scheduled" },
+      ],
+      [
         { text: "🔍 Search & Edit App", callback_data: "adm_search_app" },
-        { text: "📅 Scheduled Posts", callback_data: "adm_scheduled" },
       ],
       [
         { text: `👑 VIP Subscribers (${activeVipCount})`, callback_data: "adm_vip_list" },
@@ -415,6 +553,10 @@ export async function POST(req: Request) {
         // 1.1 Admin Command Center Callbacks
         // ==========================================
         if (data === "adm_menu") {
+          const sb = getDbClient();
+          if (sb) {
+            await sb.from("site_settings").delete().eq("setting_key", `admin_wizard_${adminChatId}`);
+          }
           await sendOrEditAdminMenu(adminChatId, token, settings, cq.message?.message_id);
           await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
             method: "POST",
@@ -711,21 +853,55 @@ export async function POST(req: Request) {
           return NextResponse.json({ ok: true });
         }
 
-        if (data === "adm_scheduled") {
-          const { getScheduledPosts } = await import("@/lib/telegram-scheduler");
-          const posts = await getScheduledPosts();
+        if (data === "adm_newpc") {
+          const pcPromptText = (
+            `💻 <b>One-Tap PC Software Creator</b>\n\n` +
+            `Reply with the software name (or <code>Name | Version | Download URL</code>):\n\n` +
+            `• <code>Adobe Photoshop 2026</code>\n` +
+            `• <code>DaVinci Resolve Studio 21 | v21.0 | https://devuploads.com/...</code>\n\n` +
+            `The bot will auto-create the PC draft with <code>.exe</code> ID, OS requirements, and open the preview card.`
+          );
 
-          let schText = `📅 <b>Scheduled Channel Posts</b>\n\n`;
-          if (posts.length === 0) {
-            schText += `No posts are currently queued for scheduled broadcast.\n\n` +
-                       `<i>To schedule a release, click the '📅 Schedule Post' button on any draft preview card!</i>`;
-          } else {
-            schText += `Found ${posts.length} scheduled release(s):\n\n`;
-            posts.forEach((p, idx) => {
-              const targetTime = new Date(p.scheduledFor).toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
-              schText += `${idx + 1}. <b>${p.appName}</b>\n   Scheduled for: <code>${targetTime} IST</code>\n`;
-            });
+          await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: adminChatId,
+              message_id: cq.message?.message_id,
+              text: pcPromptText,
+              parse_mode: "HTML",
+              reply_markup: {
+                inline_keyboard: [[{ text: "🔙 Admin Menu", callback_data: "adm_menu" }]],
+              },
+            }),
+          }).catch(() => {});
+
+          const supabase = getDbClient();
+          if (supabase) {
+            await supabase.from("site_settings").upsert(
+              {
+                setting_key: `admin_wizard_${adminChatId}`,
+                setting_value: {
+                  step: "waiting_for_pc_name",
+                  appId: "new_pc",
+                  promptMessageId: cq.message?.message_id,
+                },
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: "setting_key" }
+            );
           }
+
+          await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ callback_query_id: cq.id }),
+          }).catch(() => {});
+          return NextResponse.json({ ok: true });
+        }
+
+        if (data === "adm_scheduled") {
+          const { text: schText, reply_markup } = await buildScheduledQueueView();
 
           await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
             method: "POST",
@@ -735,9 +911,7 @@ export async function POST(req: Request) {
               message_id: cq.message?.message_id,
               text: schText,
               parse_mode: "HTML",
-              reply_markup: {
-                inline_keyboard: [[{ text: "🔙 Admin Menu", callback_data: "adm_menu" }]],
-              },
+              reply_markup,
             }),
           }).catch(() => {});
 
@@ -745,6 +919,107 @@ export async function POST(req: Request) {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ callback_query_id: cq.id }),
+          }).catch(() => {});
+          return NextResponse.json({ ok: true });
+        }
+
+        if (data.startsWith("q_post:")) {
+          const targetAppId = data.slice("q_post:".length);
+          let app = await getApplicationById(targetAppId);
+          if (app) {
+            const supabase = getDbClient();
+            if (supabase && app.status !== "published") {
+              await supabase.from("applications").update({ status: "published" }).eq("id", targetAppId);
+              await supabase.from("application_versions").update({ status: "published" }).eq("application_id", targetAppId);
+              purgeAppCaches(app.slug);
+              app = (await getApplicationById(targetAppId)) || app;
+            }
+            await broadcastToTelegram({ app, force: true }).catch(() => {});
+            const { getScheduledPosts, saveScheduledPosts } = await import("@/lib/telegram-scheduler");
+            const posts = await getScheduledPosts();
+            await saveScheduledPosts(
+              posts.map((p) =>
+                p.appId === targetAppId && p.status === "pending" ? { ...p, status: "published" as const } : p
+              )
+            );
+          }
+
+          await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ callback_query_id: cq.id, text: "🚀 Posted to channel now!" }),
+          }).catch(() => {});
+
+          const { text: schText, reply_markup } = await buildScheduledQueueView();
+          await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: adminChatId,
+              message_id: cq.message?.message_id,
+              text: schText,
+              parse_mode: "HTML",
+              reply_markup,
+            }),
+          }).catch(() => {});
+          return NextResponse.json({ ok: true });
+        }
+
+        if (data.startsWith("q_plus1h:")) {
+          const targetAppId = data.slice("q_plus1h:".length);
+          const { getScheduledPosts, scheduleAppPost } = await import("@/lib/telegram-scheduler");
+          const posts = await getScheduledPosts();
+          const current = posts.find((p) => p.appId === targetAppId && p.status === "pending");
+          const baseMs = current ? Math.max(Date.now(), new Date(current.scheduledFor).getTime()) : Date.now();
+          const newDate = new Date(baseMs + 60 * 60 * 1000);
+          await scheduleAppPost(targetAppId, newDate.toISOString(), adminChatId);
+
+          await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              callback_query_id: cq.id,
+              text: `⏰ Rescheduled to ${newDate.toLocaleTimeString("en-US", { timeZone: "Asia/Kolkata" })} IST`,
+            }),
+          }).catch(() => {});
+
+          const { text: schText, reply_markup } = await buildScheduledQueueView();
+          await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: adminChatId,
+              message_id: cq.message?.message_id,
+              text: schText,
+              parse_mode: "HTML",
+              reply_markup,
+            }),
+          }).catch(() => {});
+          return NextResponse.json({ ok: true });
+        }
+
+        if (data.startsWith("q_cancel:")) {
+          const targetAppId = data.slice("q_cancel:".length);
+          const { cancelScheduledPost } = await import("@/lib/telegram-scheduler");
+          await cancelScheduledPost(targetAppId);
+
+          await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ callback_query_id: cq.id, text: "❌ Removed from queue." }),
+          }).catch(() => {});
+
+          const { text: schText, reply_markup } = await buildScheduledQueueView();
+          await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: adminChatId,
+              message_id: cq.message?.message_id,
+              text: schText,
+              parse_mode: "HTML",
+              reply_markup,
+            }),
           }).catch(() => {});
           return NextResponse.json({ ok: true });
         }
@@ -1136,27 +1411,14 @@ export async function POST(req: Request) {
               ? `https://t.me/${channelClean}/${bRes.messageId}`
               : `https://t.me/${channelClean}`;
 
-            // Edit the original wizard message buttons in-place to mark broadcasted
+            // Hide (delete) the draft preview card after publishing
             if (cq.message?.message_id) {
-              const liveAppUrl = `${settings.siteUrl || "https://www.awtmods.in"}/apps/${app.slug}.html`;
-              const broadcastedButtons = [
-                [
-                  { text: "✅ Broadcasted to Channel", url: postLink },
-                  { text: "🌐 View Live App", url: liveAppUrl },
-                ],
-                [
-                  { text: "📁 Save as Draft", callback_data: `wiz_draft:${app.id}` },
-                  { text: "⏰ Schedule Another", callback_data: `wiz_sched:${app.id}` },
-                ],
-              ];
-
-              await fetch(`https://api.telegram.org/bot${token}/editMessageReplyMarkup`, {
+              await fetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                   chat_id: adminChatId,
                   message_id: cq.message.message_id,
-                  reply_markup: { inline_keyboard: broadcastedButtons },
                 }),
               }).catch(() => {});
             }
@@ -2251,6 +2513,205 @@ export async function POST(req: Request) {
       String(chatId) === String(settings.telegramChannelId);
 
     // ==========================================================
+    // 2.35 CLOUD / STORAGE CHANNEL FORWARDED LINK EXTRACTOR
+    // ==========================================================
+    const privateCloudChannelId = String(settings.telegramPrivateChannelId || "-1004449242945");
+    if (String(chatId) === privateCloudChannelId && !doc) {
+      const fullText = (caption || text || "").trim();
+      const fileLinkMatch = fullText.match(/File\s*Link(?:\s*\([^)]+\))?\s*:\s*(https?:\/\/[^\s]+)/i);
+      const parsedCloud = parseApkReleaseInfo(fullText, fullText, 0);
+      const extractedUrl = fileLinkMatch?.[1]?.trim() || parsedCloud.externalUrls[0]?.url;
+
+      if (extractedUrl) {
+        const fileNameMatch = fullText.match(/File\s*Name\s*:\s*([^\n\r]+)/i);
+        const extractedFileName = (fileNameMatch?.[1] || fullText.split("\n")[0] || "").trim();
+        const sizeMatch = fullText.match(/File\s*Size\s*:\s*([^\n\r]+)/i);
+        const extractedSize = sizeMatch?.[1]?.trim() || parsedCloud.fileSize;
+        const parsedFile = parseApkReleaseInfo(extractedFileName, fullText, 0);
+
+        const { matchedApp, candidates } = await matchApplicationByApk(extractedFileName, fullText);
+        const supabaseCloud = getDbClient();
+
+        if (matchedApp && supabaseCloud) {
+          // Prefer staged "draft" version in Admin Panel first, then fallback to latest
+          let { data: verData } = await supabaseCloud
+            .from("application_versions")
+            .select("id, version_name, version_code, file_size, release_notes")
+            .eq("application_id", matchedApp.id)
+            .eq("status", "draft")
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (!verData) {
+            const fallbackVer = await supabaseCloud
+              .from("application_versions")
+              .select("id, version_name, version_code, file_size, release_notes")
+              .eq("application_id", matchedApp.id)
+              .order("is_latest", { ascending: false })
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            verData = fallbackVer.data;
+          }
+
+          if (verData) {
+            const hostingProvider = extractedUrl.includes("t.me")
+              ? "telegram"
+              : extractedUrl.includes("mediafire.com")
+              ? "mediafire"
+              : extractedUrl.includes("drive.google.com")
+              ? "google_drive"
+              : extractedUrl.includes("mega.")
+              ? "mega"
+              : "custom";
+            const mirrorName = extractedUrl.includes("devuploads")
+              ? "DevUploads Fast Mirror"
+              : extractedUrl.includes("t.me")
+              ? "Telegram Channel"
+              : "Download Mirror";
+
+            const { data: existingSrc } = await supabaseCloud
+              .from("download_sources")
+              .select("id")
+              .eq("version_id", verData.id)
+              .eq("is_primary", true)
+              .maybeSingle();
+
+            if (existingSrc) {
+              await supabaseCloud
+                .from("download_sources")
+                .update({
+                  download_url: extractedUrl,
+                  hosting_provider: hostingProvider,
+                  mirror_name: mirrorName,
+                  is_active: true,
+                  is_primary: true,
+                })
+                .eq("id", existingSrc.id);
+            } else {
+              await supabaseCloud.from("download_sources").insert({
+                version_id: verData.id,
+                download_type: "external",
+                hosting_provider: hostingProvider,
+                download_url: extractedUrl,
+                mirror_name: mirrorName,
+                is_primary: true,
+                is_active: true,
+              });
+            }
+
+            const versionUpdates: Record<string, any> = {
+              status: "published",
+              is_latest: true,
+            };
+            if (extractedSize && extractedSize !== "Varies with device") {
+              versionUpdates.file_size = extractedSize;
+            }
+            if (parsedFile.versionName && parsedFile.versionName !== "v1.0.0") {
+              versionUpdates.version_name = parsedFile.versionName;
+            }
+            if (parsedFile.versionCode && parsedFile.versionCode > 0) {
+              versionUpdates.version_code = parsedFile.versionCode;
+            }
+
+            await supabaseCloud
+              .from("application_versions")
+              .update({ is_latest: false })
+              .eq("application_id", matchedApp.id);
+            await supabaseCloud
+              .from("application_versions")
+              .update(versionUpdates)
+              .eq("id", verData.id);
+            await supabaseCloud
+              .from("applications")
+              .update({ status: "published", updated_at: new Date().toISOString() })
+              .eq("id", matchedApp.id);
+
+            purgeAppCaches(matchedApp.slug);
+
+            // Auto-resolve from Play Store Radar if tracked
+            try {
+              const pkgLower = (matchedApp.package_name || "").toLowerCase();
+              if (pkgLower) {
+                const { getRadarTrackedApps, transitionToModReleased } = await import("@/lib/radar-engine");
+                const radarApps = await getRadarTrackedApps();
+                const matchedRadarApp = radarApps.find(
+                  (ra) => (ra.package_name || "").toLowerCase() === pkgLower
+                );
+                if (matchedRadarApp) {
+                  await transitionToModReleased({
+                    appId: matchedRadarApp.id,
+                    adminName: "Telegram Cloud Channel",
+                    releasedModVersion: versionUpdates.version_name || verData.version_name || `v${verData.version_code}`,
+                    downloadUrl: extractedUrl,
+                    changelog: verData.release_notes || "Updated via Cloud Channel forwarded DevUploads link",
+                  });
+                }
+              }
+            } catch (rErr) {
+              console.warn("Radar transition error on cloud channel sync:", rErr);
+            }
+
+            const siteUrl = settings.siteUrl || "https://www.awtmods.in";
+            const liveAppUrl = `${siteUrl}/apps/${cleanAppSlug(matchedApp.slug)}.html`;
+            const finalVer = versionUpdates.version_name || verData.version_name || "Latest";
+
+            await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: adminChatId,
+                text: (
+                  `☁️ <b>CLOUD CHANNEL LINK SYNCED LIVE!</b>\n\n` +
+                  `📱 <b>App:</b> <b>${escapeHtml(matchedApp.name)}</b> (${escapeHtml(finalVer)})\n` +
+                  `📁 <b>File:</b> <code>${escapeHtml(extractedFileName)}</code>\n` +
+                  `📦 <b>Size:</b> <code>${escapeHtml(extractedSize)}</code>\n` +
+                  `🔗 <b>Link:</b> <code>${escapeHtml(extractedUrl)}</code>\n\n` +
+                  `<i>Website mirror &amp; version updated automatically!</i>`
+                ),
+                parse_mode: "HTML",
+                reply_markup: {
+                  inline_keyboard: [
+                    [
+                      { text: "🚀 Post to Telegram Now", callback_data: `broadcast:${matchedApp.id}` },
+                      { text: "🌐 View Live App", url: liveAppUrl },
+                    ],
+                    [
+                      { text: "📅 Auto-Spread (+1h After Last)", callback_data: `sched_do:${matchedApp.id}:spread` },
+                      { text: "⏭️ Skip", callback_data: `sched_skip:${matchedApp.id}` },
+                    ],
+                  ],
+                },
+              }),
+            }).catch(() => {});
+
+            return NextResponse.json({ ok: true, cloudChannelSynced: matchedApp.slug });
+          }
+        } else {
+          const candidateNames = candidates.slice(0, 3).map((c) => `• ${escapeHtml(c.name)}`).join("\n");
+          await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: adminChatId,
+              text: (
+                `⚠️ <b>Cloud Channel Link Detected (No App Match)</b>\n\n` +
+                `📁 <b>File:</b> <code>${escapeHtml(extractedFileName)}</code>\n` +
+                `🔗 <b>Link:</b> <code>${escapeHtml(extractedUrl)}</code>\n` +
+                (candidateNames ? `\n<b>Closest matches:</b>\n${candidateNames}\n` : "") +
+                `\n<i>Tip: Use /pc Name | Version | Link to create it quickly.</i>`
+              ),
+              parse_mode: "HTML",
+            }),
+          }).catch(() => {});
+
+          return NextResponse.json({ ok: true, cloudChannelUnmatched: extractedFileName });
+        }
+      }
+    }
+
+    // ==========================================================
     // 2.4 ADMIN REPLY TO PATCHER STAGED ALERT (Custom Download Link & Publish)
     // ==========================================================
     const replyTo = message.reply_to_message;
@@ -2436,7 +2897,31 @@ export async function POST(req: Request) {
         .maybeSingle();
 
       const wiz = wizData?.setting_value;
-      if (wiz && wiz.appId && wiz.step) {
+      if (wiz && wiz.step) {
+        // Step 0: One-Tap PC Software Creation
+        if (wiz.step === "waiting_for_pc_name" && text && !text.startsWith("/")) {
+          await supabase
+            .from("site_settings")
+            .delete()
+            .eq("setting_key", `admin_wizard_${adminChatId}`);
+          if (wiz.promptMessageId) {
+            await fetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ chat_id: adminChatId, message_id: wiz.promptMessageId }),
+            }).catch(() => {});
+          }
+          if (message.message_id) {
+            await fetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ chat_id: adminChatId, message_id: message.message_id }),
+            }).catch(() => {});
+          }
+          const created = await createPcSoftwareDraftFromTelegram(text, adminChatId);
+          return NextResponse.json({ ok: true, createdPcDraft: created?.slug || null });
+        }
+
         // Step 1: Version Code input
         if (wiz.step === "waiting_for_version_code" && text) {
           const newCode = parseInt(text.replace(/[^0-9]/g, ""), 10);
@@ -3373,6 +3858,78 @@ export async function POST(req: Request) {
 
       await sendOrEditAdminMenu(chatId, token, settings);
       return NextResponse.json({ ok: true });
+    }
+
+    // ==========================================
+    // 2.95 Command: /queue (Scheduled Queue Manager)
+    // ==========================================
+    if (text === "/queue" || text.startsWith("/queue ")) {
+      const isAdminUser =
+        user?.id === adminChatId ||
+        chatId === adminChatId ||
+        user?.id === 1343548529 ||
+        chatId === 1343548529;
+      if (!isAdminUser) {
+        return NextResponse.json({ ok: true });
+      }
+      const { text: schText, reply_markup } = await buildScheduledQueueView();
+      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: adminChatId,
+          text: schText,
+          parse_mode: "HTML",
+          reply_markup,
+        }),
+      }).catch(() => {});
+      return NextResponse.json({ ok: true });
+    }
+
+    // ==========================================
+    // 2.96 Command: /pc <name> (One-Tap PC Software Draft)
+    // ==========================================
+    if (text === "/pc" || text.startsWith("/pc ")) {
+      const isAdminUser =
+        user?.id === adminChatId ||
+        chatId === adminChatId ||
+        user?.id === 1343548529 ||
+        chatId === 1343548529;
+      if (!isAdminUser) {
+        return NextResponse.json({ ok: true });
+      }
+      const pcArg = text.replace(/^\/pc\s*/i, "").trim();
+      if (!pcArg) {
+        const promptRes = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: adminChatId,
+            text: (
+              `💻 <b>One-Tap PC Software Creator</b>\n\n` +
+              `Reply with the software name (or <code>Name | Version | Download URL</code>):\n` +
+              `e.g. <code>Adobe Photoshop 2026</code>`
+            ),
+            parse_mode: "HTML",
+          }),
+        }).catch(() => null);
+        const promptMessageId = promptRes ? (await promptRes.json().catch(() => null))?.result?.message_id : undefined;
+        const sb = getDbClient();
+        if (sb) {
+          await sb.from("site_settings").upsert(
+            {
+              setting_key: `admin_wizard_${adminChatId}`,
+              setting_value: { step: "waiting_for_pc_name", appId: "new_pc", promptMessageId },
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "setting_key" }
+          );
+        }
+        return NextResponse.json({ ok: true });
+      }
+
+      const created = await createPcSoftwareDraftFromTelegram(pcArg, adminChatId);
+      return NextResponse.json({ ok: true, createdPcDraft: created?.slug || null });
     }
 
     // ==========================================

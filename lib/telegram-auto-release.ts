@@ -167,9 +167,9 @@ export async function matchApplicationByApk(
   if (!supabase) return { matchedApp: null, candidates: [] };
 
   const baseName = fileName
-    .replace(/\.apk$/i, "")
+    .replace(/\.(apk|apks|xapk|zip|rar|7z|exe|dmg|pkg|msi)$/i, "")
     .replace(/[-_.]v[0-9]+.*$/i, "")
-    .replace(/[-_.](mod|pro|premium|unlocked|plus|mini).*$/i, "");
+    .replace(/[-_.](mod|pro|premium|unlocked|plus|mini|patched|pre[-_.]?activated|windows|macos|win|mac|x64|arm64).*$/i, "");
 
   const slugFromBase = cleanSlug(baseName);
 

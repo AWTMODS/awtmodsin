@@ -122,11 +122,17 @@ export async function broadcastToTelegram(
       .map((feat) => `<tg-emoji emoji-id="4956649845952611245">🟢</tg-emoji> ${escapeHtml(feat)}`)
       .join("\n");
 
-    // 2. Play Store / Official Site Link
+    // 2. Official Website Link (or Play Store for Android apps)
+    const isPc =
+      app.platform === "pc" ||
+      app.category?.slug === "pc-software" ||
+      Boolean(app.package_name?.toLowerCase().endsWith(".exe"));
+
     const storeLink =
-      app.package_name && app.package_name.includes(".") && !app.package_name.startsWith("com.awt")
+      !isPc && app.package_name && app.package_name.includes(".") && !app.package_name.startsWith("com.awt")
         ? `https://play.google.com/store/apps/details?id=${app.package_name}`
         : appUrl;
+    const storeLinkLabel = isPc ? "Official Website Link" : "Play Store / Official Site Link";
 
     const channelHandle = settings.telegramChannelId || "@awtmods";
 
@@ -165,12 +171,12 @@ export async function broadcastToTelegram(
       caption = [
         `<tg-emoji emoji-id="4956420911310832630">👑</tg-emoji> <b>${escapeHtml(app.name)}</b> <tg-emoji emoji-id="4956739572114392015">💎</tg-emoji> <b>[VIP]</b>`,
         `<tg-emoji emoji-id="4958529074533238201">ℹ️</tg-emoji> <b>Version:</b> <code>${escapeHtml(versionName)}</code> <tg-emoji emoji-id="4956290155326473271">🔔</tg-emoji> <b>#update</b>`,
-        `<tg-emoji emoji-id="4958689671950369798">🔗</tg-emoji> <a href="${storeLink}">Play Store / Official Site Link</a>`,
+        `<tg-emoji emoji-id="4958689671950369798">🔗</tg-emoji> <a href="${storeLink}">${storeLinkLabel}</a>`,
         ``,
         `<u><b>Features &amp; Mod Info:</b></u> <tg-emoji emoji-id="4956606007221421405">❤️‍🔥</tg-emoji>`,
         formattedModFeatures,
         ``,
-        `<tg-emoji emoji-id="4958534696645428119">‼️</tg-emoji> <i>Clean &amp; 100% Virus-Free APK (Verified &amp; Safe to Install)</i>`,
+        `<tg-emoji emoji-id="4958534696645428119">‼️</tg-emoji> <i>Clean &amp; 100% Virus-Free ${isPc ? "Software" : "APK"} (Verified &amp; Safe to Install)</i>`,
         ``,
         `<tg-emoji emoji-id="4958714479681471536">⭐️</tg-emoji> <b>Join Channel ➔</b> ${channelHandle}`,
         ``,
@@ -481,10 +487,16 @@ export async function sendDraftPreviewToAdmin(
       .map((feat) => `<tg-emoji emoji-id="4956649845952611245">🟢</tg-emoji> ${escapeHtml(feat)}`)
       .join("\n");
 
+    const isPc =
+      app.platform === "pc" ||
+      app.category?.slug === "pc-software" ||
+      Boolean(app.package_name?.toLowerCase().endsWith(".exe"));
+
     const storeLink =
-      app.package_name && app.package_name.includes(".") && !app.package_name.startsWith("com.awt")
+      !isPc && app.package_name && app.package_name.includes(".") && !app.package_name.startsWith("com.awt")
         ? `https://play.google.com/store/apps/details?id=${app.package_name}`
         : appUrl;
+    const storeLinkLabel = isPc ? "Official Website Link" : "Play Store / Official Site Link";
 
     const devUploadsMirror = version?.download_sources?.find(
       (s) =>
@@ -499,12 +511,12 @@ export async function sendDraftPreviewToAdmin(
     const postDraft = [
       `<tg-emoji emoji-id="4956420911310832630">👑</tg-emoji> <b>${escapeHtml(app.name)}</b> <tg-emoji emoji-id="4956739572114392015">💎</tg-emoji> <b>[VIP]</b>`,
       `<tg-emoji emoji-id="4958529074533238201">ℹ️</tg-emoji> <b>Version:</b> <code>${escapeHtml(versionName)}</code> <tg-emoji emoji-id="4956290155326473271">🔔</tg-emoji> <b>#update</b>`,
-      `<tg-emoji emoji-id="4958689671950369798">🔗</tg-emoji> <a href="${storeLink}">Play Store / Official Site Link</a>`,
+      `<tg-emoji emoji-id="4958689671950369798">🔗</tg-emoji> <a href="${storeLink}">${storeLinkLabel}</a>`,
       ``,
       `<u><b>Features &amp; Mod Info:</b></u> <tg-emoji emoji-id="4956606007221421405">❤️‍🔥</tg-emoji>`,
       formattedModFeatures,
       ``,
-      `<tg-emoji emoji-id="4958534696645428119">‼️</tg-emoji> <i>Clean &amp; 100% Virus-Free APK (Verified &amp; Safe to Install)</i>`,
+      `<tg-emoji emoji-id="4958534696645428119">‼️</tg-emoji> <i>Clean &amp; 100% Virus-Free ${isPc ? "Software" : "APK"} (Verified &amp; Safe to Install)</i>`,
       ``,
       `<tg-emoji emoji-id="4958714479681471536">⭐️</tg-emoji> <b>Join Channel ➔</b> ${channelId}`,
     ].join("\n");

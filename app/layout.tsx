@@ -5,6 +5,7 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { Toaster } from "sonner";
 import { TelegramJoinPopup } from "@/components/telegram-join-popup";
+import { RealtimeSync } from "@/components/realtime-sync";
 import { getSiteSettings } from "@/lib/db";
 import { SITE_URL, SITE_NAME, DEFAULT_SEO } from "@/lib/seo";
 
@@ -112,6 +113,7 @@ export default async function RootLayout({
               },
             }}
           />
+          <RealtimeSync />
           <TelegramJoinPopup
             telegramUrl={settings?.telegramUrl || "https://t.me/awtmods"}
             enabled={settings?.telegramPopupEnabled !== false}

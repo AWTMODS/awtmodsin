@@ -25,6 +25,7 @@ import {
   X,
   RefreshCw,
   Radio,
+  Play,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -44,6 +45,8 @@ export function AppsTable({
   const router = useRouter();
   const [apps, setApps] = useState<Application[]>(initialApps);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [startingAppId, setStartingAppId] = useState<string | null>(null);
+  const [startedModdingIds, setStartedModdingIds] = useState<Record<string, boolean>>({});
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedStatus, setSelectedStatus] = useState(defaultStatus);
@@ -200,6 +203,7 @@ export function AppsTable({
     return catSlug === "games" || catName.includes("game") || name.includes("game") || pkg.includes("game");
   }).length;
   const androidAppsCount = Math.max(0, allCount - pcCount - gamesCount);
+  const code1Count = apps.filter((app) => app.latest_version?.version_code === 1).length;
 
   const filteredApps = apps.filter((app) => {
     const matchesSearch =
@@ -215,6 +219,8 @@ export function AppsTable({
       !selectedStatus ||
       (selectedStatus === "radar_updates"
         ? !!radarUpdates[app.id]
+        : selectedStatus === "code_1"
+        ? app.latest_version?.version_code === 1
         : app.status === selectedStatus);
 
     const isPC = (app as any).platform === "pc" || app.category?.slug === "pc-software";
@@ -252,6 +258,37 @@ export function AppsTable({
     }
     return filteredApps;
   }, [filteredApps, typeFilter]);
+
+  const handleStartModding = async (app: Application) => {
+    setStartingAppId(app.id);
+    try {
+      const res = await fetch("/api/admin/radar/workflow", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "start_modding",
+          appId: `radar-${app.id}`,
+          priority: "High",
+          remarks: `Release update initiated from Apps Table (version: ${app.latest_version?.version_name || "v1.0"}, code: ${app.latest_version?.version_code ?? 1})`,
+          adminName: "Aadith C V",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to start modding");
+
+      setStartedModdingIds((prev) => ({ ...prev, [app.id]: true }));
+      toast.success(`🚀 Modding started for ${app.name}! Added to Modding Queue.`, {
+        action: {
+          label: "Open Queue",
+          onClick: () => router.push("/admin/radar/queue"),
+        },
+      });
+    } catch (err: any) {
+      toast.error(err.message || "Failed to start modding");
+    } finally {
+      setStartingAppId(null);
+    }
+  };
 
   const handleToggleStatus = async (app: Application) => {
     const newStatus = app.status === "published" ? "draft" : "published";
@@ -431,6 +468,11 @@ export function AppsTable({
               className="w-full sm:w-auto rounded-xl border border-border bg-card px-3 py-2 text-xs sm:text-sm text-foreground focus:outline-none truncate"
             >
               <option value="">All Statuses ({apps.length})</option>
+              {code1Count > 0 && (
+                <option value="code_1" className="text-amber-500 font-bold">
+                  ⚠️ Code: 1 (Needs Release) ({code1Count})
+                </option>
+              )}
               {Object.keys(radarUpdates).length > 0 && (
                 <option value="radar_updates" className="text-amber-500 font-bold">
                   🚀 Play Store Updates ({Object.keys(radarUpdates).length})
@@ -478,6 +520,32 @@ export function AppsTable({
                 </span>
               )}
             </Button>
+
+            {code1Count > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  setSelectedStatus(selectedStatus === "code_1" ? "" : "code_1")
+                }
+                className={`w-full sm:w-auto rounded-xl gap-1.5 font-bold shrink-0 shadow-2xs ${
+                  selectedStatus === "code_1"
+                    ? "border-amber-500 bg-amber-500 text-black hover:bg-amber-400"
+                    : "border-amber-500/30 bg-amber-500/5 text-amber-500 hover:bg-amber-500/10"
+                }`}
+              >
+                <span>Code: 1</span>
+                <span
+                  className={`ml-0.5 px-1.5 py-0.2 text-[10px] font-extrabold rounded-full ${
+                    selectedStatus === "code_1"
+                      ? "bg-black text-amber-400"
+                      : "bg-amber-500 text-black"
+                  }`}
+                >
+                  {code1Count}
+                </span>
+              </Button>
+            )}
 
             <Link href="/admin/versions" prefetch={true} className="w-full sm:w-auto">
               <Button
@@ -680,7 +748,36 @@ export function AppsTable({
 
                       {/* Action buttons */}
                       <td className="py-3 px-4">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {(versionCode === 1 || !!radarUpdates[app.id]) && (
+                            <button
+                              type="button"
+                              disabled={startingAppId === app.id || startedModdingIds[app.id]}
+                              onClick={() => handleStartModding(app)}
+                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors ${
+                                startedModdingIds[app.id]
+                                  ? "bg-emerald-500/15 text-emerald-500 border border-emerald-500/30"
+                                  : "bg-amber-500 hover:bg-amber-400 text-black shadow-2xs"
+                              }`}
+                              title="Start Modding & Release Update"
+                            >
+                              {startingAppId === app.id ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : startedModdingIds[app.id] ? (
+                                <CheckCircle className="h-3 w-3" />
+                              ) : (
+                                <Play className="h-3 w-3 fill-current" />
+                              )}
+                              <span>
+                                {startingAppId === app.id
+                                  ? "Starting..."
+                                  : startedModdingIds[app.id]
+                                  ? "In Queue"
+                                  : "Start Modding"}
+                              </span>
+                            </button>
+                          )}
+
                           <Link
                             href={`/admin/apps/${app.id}/edit`}
                             className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted"

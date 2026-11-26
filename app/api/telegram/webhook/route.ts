@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
-import { getSiteSettings, getApplicationBySlug, getApplicationById, getApplications, getDbClient, invalidateDbCache, getSiteStats, createModRequest } from "@/lib/db";
+import { getSiteSettings, getApplicationBySlug, getApplicationById, getApplications, getDbClient, invalidateDbCache, getSiteStats, createModRequest, deleteApplication } from "@/lib/db";
 import { isUserVip, recordUserInteraction, activateUserVip } from "@/lib/telegram-vip";
 import { broadcastToTelegram } from "@/lib/telegram-broadcast";
 import { checkAndMarkTelegramUpdate } from "@/lib/telegram-dedup";
@@ -1301,6 +1301,9 @@ export async function POST(req: Request) {
                 { text: "🖼️ Change Logo Photo", callback_data: `wiz_logo:${app.id}` },
                 { text: "📝 Edit Mod Features", callback_data: `wiz_feat:${app.id}` },
               ],
+              [
+                { text: "🗑️ Delete Post", callback_data: `wiz_delete:${app.id}` },
+              ],
             ];
 
             // 3. Update the reply markup buttons directly first so the buttons ALWAYS update in-place
@@ -1408,6 +1411,9 @@ export async function POST(req: Request) {
               [
                 { text: "🖼️ Change Logo Photo", callback_data: `wiz_logo:${app.id}` },
                 { text: "📝 Edit Mod Features", callback_data: `wiz_feat:${app.id}` },
+              ],
+              [
+                { text: "🗑️ Delete Post", callback_data: `wiz_delete:${app.id}` },
               ],
             ];
 
@@ -1636,6 +1642,56 @@ export async function POST(req: Request) {
               }),
             }).catch(() => {});
           }
+        }
+
+        // Action: Wizard Delete Post
+        if (action === "wiz_delete") {
+          const appId = rest[0] || rest.join("_");
+          const app = await getApplicationById(appId);
+          const appName = app?.name || "Application";
+          const appSlug = app?.slug;
+
+          const deleted = await deleteApplication(appId);
+          if (deleted) {
+            purgeAppCaches(appSlug);
+          }
+
+          await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              callback_query_id: cq.id,
+              text: deleted ? `🗑️ Deleted ${appName}` : "App not found or already deleted",
+            }),
+          }).catch(() => {});
+
+          if (cq.message?.message_id) {
+            const deletedMsg = `🗑️ <b>Post Deleted: ${escapeHtml(appName)}</b>\n<i>Removed from website and database.</i>`;
+            if (cq.message?.photo) {
+              await fetch(`https://api.telegram.org/bot${token}/editMessageCaption`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: adminChatId,
+                  message_id: cq.message.message_id,
+                  caption: deletedMsg,
+                  parse_mode: "HTML",
+                }),
+              }).catch(() => {});
+            } else {
+              await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: adminChatId,
+                  message_id: cq.message.message_id,
+                  text: deletedMsg,
+                  parse_mode: "HTML",
+                }),
+              }).catch(() => {});
+            }
+          }
+          return NextResponse.json({ ok: true, deleted: appId });
         }
 
         // Action: Radar Auto-Draft from Play Store

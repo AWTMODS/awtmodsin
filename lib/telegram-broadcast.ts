@@ -566,6 +566,12 @@ export async function sendDraftPreviewToAdmin(
           callback_data: `wiz_feat:${app.id}`,
         },
       ],
+      [
+        {
+          text: "🗑️ Delete Post",
+          callback_data: `wiz_delete:${app.id}`,
+        },
+      ],
     ];
 
     let photoUrl = app.icon_url;

@@ -461,6 +461,32 @@ export default function PatcherAdminPage() {
                         <span className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
                           {item.application?.package_name}
                         </span>
+                        {item.application?.id && (
+                          <a
+                            href={`/admin/apps/${item.application.id}/edit`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border border-border bg-card hover:bg-muted text-[11px] font-semibold text-muted-foreground hover:text-foreground transition shadow-2xs"
+                            title="Edit this application post in full editor"
+                          >
+                            <FileText className="w-3 h-3 text-primary" />
+                            <span>Edit Post</span>
+                            <ExternalLink className="w-2.5 h-2.5 opacity-60" />
+                          </a>
+                        )}
+                        {item.application?.slug && (
+                          <a
+                            href={`/apps/${item.application.slug}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border border-border bg-card hover:bg-muted text-[11px] font-medium text-muted-foreground hover:text-foreground transition shadow-2xs"
+                            title="View public live website post"
+                          >
+                            <Globe className="w-3 h-3 text-emerald-400" />
+                            <span>View Post</span>
+                            <ExternalLink className="w-2.5 h-2.5 opacity-60" />
+                          </a>
+                        )}
                       </div>
                       <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap mt-1">
                         {item.version_name ? (
@@ -602,11 +628,12 @@ export default function PatcherAdminPage() {
                         href={`/admin/apps/${item.application.id}/edit`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition border border-border"
-                        title="Edit App Details in Full Editor"
+                        className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-foreground bg-muted/60 hover:bg-muted rounded-lg transition border border-border shadow-2xs"
+                        title="Edit Full Post (Metadata, Mod Features, Screenshots)"
                       >
-                        <ExternalLink className="w-3.5 h-3.5" />
-                        Edit App
+                        <FileText className="w-3.5 h-3.5 text-primary" />
+                        Edit Post
+                        <ExternalLink className="w-3 h-3 opacity-60" />
                       </a>
                     )}
 
@@ -798,6 +825,30 @@ export default function PatcherAdminPage() {
                   </div>
 
                   <div className="flex items-center gap-2 flex-wrap">
+                    {item.application?.id && (
+                      <a
+                        href={`/admin/apps/${item.application.id}/edit`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border bg-card hover:bg-muted text-foreground text-xs font-bold transition shadow-xs"
+                        title="Edit Application Post"
+                      >
+                        <FileText className="w-3.5 h-3.5 text-primary" />
+                        <span>Edit Post</span>
+                        <ExternalLink className="w-2.5 h-2.5 opacity-60" />
+                      </a>
+                    )}
+                    {item.application?.slug && (
+                      <a
+                        href={`/apps/${item.application.slug}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-1.5 rounded-lg border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition"
+                        title="View Public Website Post"
+                      >
+                        <Globe className="w-3.5 h-3.5" />
+                      </a>
+                    )}
                     <div className="bg-background border border-border px-2.5 py-1 rounded-lg text-xs font-mono text-muted-foreground max-w-xs truncate">
                       {endpoint}
                     </div>

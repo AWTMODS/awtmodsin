@@ -308,7 +308,7 @@ export function DashboardRadarWidget({
               {filteredUpdates.map((app) => (
               <div
                 key={app.appId}
-                className="p-3.5 rounded-2xl border border-border/80 bg-background/60 backdrop-blur-xs flex flex-col justify-between gap-3 shadow-2xs"
+                className="p-3.5 rounded-2xl border border-border/80 bg-background/60 backdrop-blur-xs flex flex-col justify-between gap-3 shadow-2xs min-w-0 overflow-hidden"
               >
                 <div>
                   <div className="flex items-start justify-between gap-2.5">
@@ -349,14 +349,20 @@ export function DashboardRadarWidget({
                       <ExternalLink className="h-3.5 w-3.5" />
                     </a>
                   </div>
-                  <div className="flex items-center gap-2 mt-2 font-mono text-xs">
-                    <span className="text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-md">
+                  <div className="flex flex-wrap items-center gap-1.5 mt-2 font-mono text-[11px] min-w-0">
+                    <span
+                      className="text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-md max-w-full truncate"
+                      title={`Site: ${app.currentModVersion}`}
+                    >
                       Site: {app.currentModVersion}
                     </span>
-                    <span className="text-muted-foreground">➔</span>
-                    <span className="font-bold text-amber-500 bg-amber-500/15 border border-amber-500/25 px-2 py-0.5 rounded-md flex items-center gap-1">
-                      <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
-                      Play: v{app.playStoreVersion}
+                    <span className="text-muted-foreground shrink-0">➔</span>
+                    <span
+                      className="font-bold text-amber-500 bg-amber-500/15 border border-amber-500/25 px-2 py-0.5 rounded-md inline-flex items-center gap-1.5 max-w-full min-w-0"
+                      title={`Play: v${app.playStoreVersion}`}
+                    >
+                      <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
+                      <span className="truncate">Play: v{app.playStoreVersion}</span>
                     </span>
                   </div>
                   {app.changelog && (

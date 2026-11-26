@@ -1830,21 +1830,44 @@ export async function POST(req: Request) {
               }),
             }).catch(() => {});
 
-            await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                chat_id: adminChatId,
-                text: (
-                  `⏰ <b>Telegram Post Scheduled!</b>\n\n` +
-                  `📦 <b>App:</b> ${app.name}\n` +
-                  `📅 <b>Scheduled For:</b> <code>${targetDate.toLocaleString("en-US", { timeZone: "Asia/Kolkata" })} IST</code>\n` +
-                  `📢 <b>Target Channel:</b> ${settings.telegramChannelId || "@awtmods"}\n\n` +
-                  `<i>Website is already live. The bot will broadcast to the Telegram channel at the scheduled time.</i>`
-                ),
-                parse_mode: "HTML",
-              }),
-            });
+            const scheduledText = (
+              `⏰ <b>Telegram Post Scheduled!</b>\n\n` +
+              `📦 <b>App:</b> ${app.name}\n` +
+              `📅 <b>Scheduled For:</b> <code>${targetDate.toLocaleString("en-US", { timeZone: "Asia/Kolkata" })} IST</code>\n` +
+              `📢 <b>Target Channel:</b> ${settings.telegramChannelId || "@awtmods"}\n\n` +
+              `<i>Website is already live. The bot will broadcast to the Telegram channel at the scheduled time.</i>`
+            );
+
+            if (cq.message?.message_id && !cq.message?.photo) {
+              await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: adminChatId,
+                  message_id: cq.message.message_id,
+                  text: scheduledText,
+                  parse_mode: "HTML",
+                  reply_markup: {
+                    inline_keyboard: [
+                      [
+                        { text: "🚀 Post Now Instead", callback_data: `broadcast:${app.id}` },
+                        { text: "⏭️ Skip Telegram", callback_data: `sched_skip:${app.id}` },
+                      ],
+                    ],
+                  },
+                }),
+              }).catch(() => {});
+            } else {
+              await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: adminChatId,
+                  text: scheduledText,
+                  parse_mode: "HTML",
+                }),
+              }).catch(() => {});
+            }
           }
         }
 
@@ -2986,6 +3009,23 @@ export async function POST(req: Request) {
     }
 
     if (isAuthorized && (hasApkDoc || hasApkText)) {
+      const privateChannelId =
+        settings.telegramPrivateChannelId || "-1004449242945";
+      const publicChannelId = settings.telegramChannelId || "@awtmods";
+      const chatUsername = (message.chat?.username || "").toLowerCase();
+
+      // Ignore forwarded/uploaded files inside storage or broadcast channels (e.g. @awtmodsfilescloud)
+      // so storing backup APKs in the cloud channel never triggers duplicate DM posts.
+      if (
+        isChannel &&
+        (String(chatId) === String(privateChannelId) ||
+          String(chatId) === String(publicChannelId) ||
+          chatUsername === "awtmodsfilescloud" ||
+          chatUsername === publicChannelId.replace(/^@/, "").toLowerCase())
+      ) {
+        return NextResponse.json({ ok: true, ignoredStorageChannelPost: true });
+      }
+
       const rawFileName =
         doc?.file_name ||
         caption.match(/([a-zA-Z0-9_\-\.]+\.apk)/i)?.[1] ||
@@ -2995,8 +3035,6 @@ export async function POST(req: Request) {
 
       // Derive Telegram message link for direct VIP downloads
       let telegramMessageLink = "";
-      const privateChannelId =
-        settings.telegramPrivateChannelId || "-1004449242945";
 
       if (isChannel) {
         const cleanChan = String(chatId).replace(/^-100/, "").replace(/^-/, "");
@@ -3050,58 +3088,7 @@ export async function POST(req: Request) {
         });
 
         if (releaseRes.success) {
-          const siteUrl = settings.siteUrl || "https://www.awtmods.in";
-          const appUrl = `${siteUrl}/apps/${matchedApp.slug}.html`;
-
-          const mirrorsList = parsed.externalUrls.map(
-            (u) =>
-              `• <b>${u.mirrorName}:</b> <a href="${u.url}">${u.url.slice(0, 32)}...</a>`
-          );
-          if (telegramMessageLink) {
-            mirrorsList.push(
-              `• <b>Telegram VIP Direct:</b> Linked (Msg #${message.message_id})`
-            );
-          }
-
-          const successText = [
-            `🎉 <b>${matchedApp.name} Auto-Updated to ${parsed.versionName}!</b>`,
-            ``,
-            `📱 <b>App:</b> <a href="${appUrl}">${matchedApp.name}</a>`,
-            `🏷️ <b>Version:</b> <code>${parsed.versionName}</code> (Version Code: <code>${releaseRes.app?.latest_version?.version_code || parsed.versionCode}</code>)`,
-            `📦 <b>File Size:</b> ${parsed.fileSize}`,
-            `🌐 <b>Website Status:</b> Live on AWTMods.in (Cache Instantly Cleared)`,
-            ``,
-            `🔗 <b>Download Mirrors Linked:</b>`,
-            mirrorsList.join("\n") || "• Default Telegram Mirror",
-            ``,
-            `<i>Tap below to broadcast this update directly to @${settings.telegramChannelId?.replace(/^@/, "") || "awtmods"}!</i>`,
-          ].join("\n");
-
-          await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              chat_id: replyChatId,
-              text: successText,
-              parse_mode: "HTML",
-              reply_markup: {
-                inline_keyboard: [
-                  [
-                    {
-                      text: "🚀 Broadcast to Channel",
-                      callback_data: `broadcast_${matchedApp.id}`,
-                    },
-                    {
-                      text: "🌐 View on Website",
-                      url: appUrl,
-                    },
-                  ],
-                ],
-              },
-            }),
-          });
-
-          // Also generate and send the visual Draft Preview with 1-tap Approve & Edit buttons
+          // Send a single clean Draft Preview card (no duplicate confirmation bubble)
           const { sendDraftPreviewToAdmin } = await import("@/lib/telegram-broadcast");
           await sendDraftPreviewToAdmin(releaseRes.app || matchedApp, adminChatId).catch((err) =>
             console.warn("Draft preview after matched release err:", err)

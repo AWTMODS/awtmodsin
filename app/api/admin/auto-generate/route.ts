@@ -201,6 +201,8 @@ export async function POST(req: Request) {
     const body = await req.json();
     const query = (body.query || "").trim();
     const platform = body.platform || "android";
+    const requestedCategorySlug = (body.categorySlug || "").trim().toLowerCase();
+    const isPcPlatform = platform === "pc" || requestedCategorySlug === "pc-software";
     const createImmediately = !!body.createImmediately;
     const initialStatus = body.status === "published" ? "published" : "draft";
 
@@ -233,6 +235,111 @@ export async function POST(req: Request) {
     }
 
     const categories = await getCategories();
+
+    // Dedicated PC Software generator (never pulls Android Play Store package IDs or APK templates)
+    if (isPcPlatform) {
+      const cleanPcName = query
+        .replace(/\b(mod|apk|pc|software|windows|exe|crack|pre-activated)\b/gi, "")
+        .replace(/\s+/g, " ")
+        .trim() || query;
+      const formattedPcTitle = `${cleanPcName} for PC (Pre-Activated)`;
+      const pcSlug = generateCleanSlug(`${cleanPcName} pc`);
+      const pcCategoryId =
+        categories.find((c) => c.slug === "pc-software")?.id ||
+        categories[0]?.id ||
+        "";
+      const pcFeatures = [
+        "Full Version Pre-Activated (No License Key Needed)",
+        "Offline Installer — Safe & Malware-Free",
+        "All Pro Tools, Plugins & Export Features Unlocked",
+        "High-Speed 64-bit Windows Performance",
+        "Telemetry & Auto-Update Blocker Included",
+      ];
+
+      // Optional icon lookup from Play Store only for branding image (package_name stays pc.awtmods.*)
+      let pcIcon = "/icons/default-app.png";
+      try {
+        const gplay = await getGPlay();
+        const res = await gplay.search({ term: cleanPcName, num: 1 });
+        if (res?.[0]?.icon) pcIcon = res[0].icon;
+      } catch {}
+
+      const pcDescription = `### Overview
+**${formattedPcTitle}** is a full-featured Windows desktop software package curated by **AWTMods**, pre-activated for seamless offline installation and maximum creative/productivity performance.
+
+---
+
+### 🌟 Included Features
+${pcFeatures.map((f) => `- **${f}**`).join("\n")}
+
+---
+
+### 💻 System Requirements
+- **OS:** Windows 10 / Windows 11 (64-bit)
+- **RAM:** 8 GB minimum (16 GB recommended)
+- **Architecture:** x64
+
+---
+
+### 📥 How to Download & Install on PC
+1. **Download Archive:** Click the **Download** button above to get the latest PC installer package.
+2. **Extract Files:** Unzip the archive using WinRAR or 7-Zip.
+3. **Run Setup:** Launch \`Setup.exe\` and follow the on-screen installer steps.
+4. **Launch & Enjoy:** Software is pre-activated—no additional crack or keygen required!`;
+
+      const generatedPcApp = {
+        name: formattedPcTitle,
+        slug: pcSlug,
+        package_name: null,
+        developer: "Aadith C V",
+        category_id: pcCategoryId,
+        platform: "pc",
+        short_description: `Download ${formattedPcTitle} for Windows 10/11 (64-bit). Pre-activated offline installer with all pro features unlocked.`,
+        description: pcDescription,
+        icon_url: pcIcon,
+        banner_url: null,
+        android_requirement: "Windows 10 / 11 (64-bit)",
+        is_featured: false,
+        is_trending: false,
+        status: initialStatus,
+        screenshots: [],
+        mod_features: pcFeatures,
+        version: {
+          version_name: "v1.0.0",
+          version_code: 1,
+          file_size: "Varies",
+          architecture: "x64 (64-bit)",
+          android_requirement: "Windows 10 / 11 (64-bit)",
+          sha256: null,
+          release_notes: "Initial Pre-Activated PC Software release.",
+          is_latest: true,
+          status: initialStatus,
+          download_sources: [
+            {
+              download_type: "external",
+              hosting_provider: "custom",
+              download_url: "https://devuploads.com",
+              mirror_name: "DevUploads PC Mirror",
+              is_primary: true,
+            },
+          ],
+        },
+      };
+
+      if (createImmediately) {
+        const created = await createApplication(generatedPcApp as any);
+        try {
+          revalidatePath("/");
+          revalidatePath("/apps");
+          revalidatePath("/pc-software");
+          revalidatePath("/admin/apps");
+        } catch {}
+        return NextResponse.json({ success: true, app: created, generated: generatedPcApp });
+      }
+
+      return NextResponse.json({ success: true, appData: generatedPcApp });
+    }
+
     const gplay = await getGPlay();
 
     // Check if query is a direct Google Play store URL or Package ID

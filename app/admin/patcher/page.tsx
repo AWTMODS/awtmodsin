@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Smartphone,
   CheckCircle,
@@ -19,6 +19,8 @@ import {
   Save,
   RotateCcw,
   Sparkles,
+  Search,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -47,8 +49,13 @@ interface PatcherReleaseItem {
 export default function PatcherAdminPage() {
   const [staged, setStaged] = useState<PatcherReleaseItem[]>([]);
   const [live, setLive] = useState<PatcherReleaseItem[]>([]);
+  const [totalLiveCount, setTotalLiveCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [publishingId, setPublishingId] = useState<string | null>(null);
+
+  // Search & pagination states
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showAll, setShowAll] = useState(false);
 
   // Form overrides mapped by version ID
   const [editUrls, setEditUrls] = useState<Record<string, string>>({});
@@ -184,10 +191,21 @@ export default function PatcherAdminPage() {
     }
   };
 
-  const loadData = async () => {
+  const loadData = async (searchStr = searchQuery, fetchAll = showAll) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/patcher/releases?_t=${Date.now()}`, {
+      const params = new URLSearchParams();
+      params.set("_t", Date.now().toString());
+      if (searchStr.trim()) {
+        params.set("search", searchStr.trim());
+      }
+      if (fetchAll) {
+        params.set("limit", "all");
+      } else {
+        params.set("limit", "80");
+      }
+
+      const res = await fetch(`/api/admin/patcher/releases?${params.toString()}`, {
         cache: "no-store",
         headers: {
           "Cache-Control": "no-cache",
@@ -198,6 +216,8 @@ export default function PatcherAdminPage() {
       if (data.success) {
         setStaged(data.staged || []);
         setLive(data.live || []);
+        setTotalLiveCount(data.totalLiveCount ?? (data.live || []).length);
+        if (fetchAll) setShowAll(true);
 
         // Initialize edit states
         const urls: Record<string, string> = {};
@@ -228,6 +248,17 @@ export default function PatcherAdminPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  // Instant client-side filter over currently loaded live items
+  const filteredLive = useMemo(() => {
+    if (!searchQuery.trim()) return live;
+    const q = searchQuery.toLowerCase().trim();
+    return live.filter((item) => {
+      const name = item.application?.name?.toLowerCase() || "";
+      const pkg = item.application?.package_name?.toLowerCase() || "";
+      return name.includes(q) || pkg.includes(q);
+    });
+  }, [live, searchQuery]);
 
   const handlePublish = async (item: PatcherReleaseItem) => {
     setPublishingId(item.id);
@@ -298,7 +329,7 @@ export default function PatcherAdminPage() {
 
         <div className="flex items-center gap-2">
           <button
-            onClick={loadData}
+            onClick={() => loadData(searchQuery, showAll)}
             disabled={loading}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-border bg-card hover:bg-muted transition"
           >
@@ -314,9 +345,16 @@ export default function PatcherAdminPage() {
           <div className="flex items-center gap-2">
             <Clock className="w-5 h-5 text-amber-400" />
             <h2 className="text-lg font-bold">Staged Releases (Pending Approval)</h2>
-            <span className="bg-amber-400/10 text-amber-400 text-xs font-bold px-2 py-0.5 rounded-full border border-amber-400/20">
-              {staged.length}
-            </span>
+            {loading && staged.length === 0 ? (
+              <span className="inline-flex items-center gap-1.5 bg-amber-400/10 text-amber-400 text-xs font-semibold px-2 py-0.5 rounded-full border border-amber-400/20">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Loading...
+              </span>
+            ) : (
+              <span className="bg-amber-400/10 text-amber-400 text-xs font-bold px-2 py-0.5 rounded-full border border-amber-400/20">
+                {staged.length}
+              </span>
+            )}
           </div>
         </div>
 
@@ -324,7 +362,31 @@ export default function PatcherAdminPage() {
           When you patch an APK in the Android Patcher app, it is held here as a draft. Upload your APK file to Telegram or DevUploads, paste the link below, and click <strong>Publish Live</strong>.
         </p>
 
-        {staged.length === 0 ? (
+        {loading && staged.length === 0 ? (
+          <div className="grid gap-4">
+            {[1, 2].map((i) => (
+              <div
+                key={i}
+                className="p-5 rounded-xl border border-amber-400/20 bg-card/60 animate-pulse space-y-4"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-muted" />
+                    <div className="space-y-1.5">
+                      <div className="h-4 w-36 bg-muted rounded" />
+                      <div className="h-3 w-52 bg-muted/60 rounded" />
+                    </div>
+                  </div>
+                  <div className="h-7 w-28 bg-amber-400/10 rounded-lg" />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="h-10 bg-muted/40 rounded-lg" />
+                  <div className="h-10 bg-muted/40 rounded-lg" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : staged.length === 0 ? (
           <div className="text-center py-12 px-4 rounded-xl border border-dashed border-border bg-card/50 text-muted-foreground text-sm">
             <Clock className="w-8 h-8 mx-auto mb-2 opacity-40 text-amber-400" />
             No staged releases waiting. Patch a new APK from your Android Patcher to queue here.
@@ -489,25 +551,100 @@ export default function PatcherAdminPage() {
 
       {/* SECTION 2: LIVE RELEASES */}
       <div className="space-y-4 pt-6">
-        <div className="flex items-center gap-2">
-          <CheckCircle className="w-5 h-5 text-emerald-400" />
-          <h2 className="text-lg font-bold">Active Live Releases (Currently Served to Users)</h2>
-          <span className="bg-emerald-400/10 text-emerald-400 text-xs font-bold px-2 py-0.5 rounded-full border border-emerald-400/20">
-            {live.length}
-          </span>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <CheckCircle className="w-5 h-5 text-emerald-400" />
+            <h2 className="text-lg font-bold">Active Live Releases (Currently Served to Users)</h2>
+            {loading && live.length === 0 ? (
+              <span className="inline-flex items-center gap-1.5 bg-emerald-400/10 text-emerald-400 text-xs font-semibold px-2 py-0.5 rounded-full border border-emerald-400/20">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Loading...
+              </span>
+            ) : (
+              <span className="bg-emerald-400/10 text-emerald-400 text-xs font-bold px-2 py-0.5 rounded-full border border-emerald-400/20">
+                {totalLiveCount > 0 ? totalLiveCount : live.length}
+              </span>
+            )}
+          </div>
         </div>
 
         <p className="text-xs text-muted-foreground">
           These are the active version codes served to users. Modded APKs query these permanent URLs automatically.
         </p>
 
-        {live.length === 0 ? (
+        {/* Search & Filter Bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+          <div className="relative flex-1 max-w-md">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  loadData(searchQuery, showAll);
+                }
+              }}
+              placeholder="Search live apps by name or package..."
+              className="w-full bg-background border border-border rounded-lg pl-9 pr-8 py-2 text-xs focus:outline-none focus:border-emerald-500 transition"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => {
+                  setSearchQuery("");
+                  if (live.length < 50) loadData("", showAll);
+                }}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-xs p-0.5"
+                title="Clear search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span>
+              Showing <strong className="text-foreground">{filteredLive.length}</strong> of{" "}
+              <strong className="text-emerald-400">{totalLiveCount || live.length}</strong> active
+            </span>
+            {!showAll && totalLiveCount > live.length && !searchQuery && (
+              <button
+                onClick={() => loadData("", true)}
+                disabled={loading}
+                className="px-2.5 py-1 rounded-md border border-border bg-card hover:bg-muted font-medium text-xs text-primary transition disabled:opacity-50 inline-flex items-center gap-1"
+              >
+                {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                Load All ({totalLiveCount})
+              </button>
+            )}
+          </div>
+        </div>
+
+        {loading && live.length === 0 ? (
+          <div className="grid gap-3">
+            {[1, 2, 3, 4].map((i) => (
+              <div
+                key={i}
+                className="p-4 rounded-xl border border-border bg-card animate-pulse flex flex-col md:flex-row md:items-center justify-between gap-4"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-muted" />
+                  <div className="space-y-1.5">
+                    <div className="h-4 w-36 bg-muted rounded" />
+                    <div className="h-3 w-56 bg-muted/60 rounded" />
+                  </div>
+                </div>
+                <div className="h-8 w-48 bg-muted/40 rounded-lg" />
+              </div>
+            ))}
+          </div>
+        ) : filteredLive.length === 0 ? (
           <div className="text-center py-12 px-4 rounded-xl border border-dashed border-border bg-card/50 text-muted-foreground text-sm">
-            No live releases active.
+            {searchQuery ? `No active releases found matching "${searchQuery}".` : "No live releases active."}
           </div>
         ) : (
           <div className="grid gap-3">
-            {live.map((item) => {
+            {filteredLive.map((item) => {
               const pkg = item.application?.package_name || "";
               const origin = typeof window !== "undefined" ? window.location.origin : "https://www.awtmods.in";
               const endpoint = `${origin}/api/update?package=${pkg}`;

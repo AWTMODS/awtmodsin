@@ -17,15 +17,16 @@ export async function GET(req: Request) {
     const fetchAll = limitParam === "all";
     const liveLimit = fetchAll ? 1000 : Math.min(Math.max(parseInt(limitParam || "80", 10), 20), 500);
 
-    // 1. Prepare parallel queries: Staged Drafts & Active Live Releases
+    // 1. Prepare parallel queries: Staged Drafts & Active Live Releases (Exclude PC software)
     let liveQuery = supabase
       .from("application_versions")
       .select(`
         id, version_name, version_code, release_notes, status, is_latest, created_at,
-        application:applications!inner(id, name, package_name, slug, icon_url)
+        application:applications!inner(id, name, package_name, slug, icon_url, platform)
       `, { count: "exact" })
       .eq("status", "published")
       .eq("is_latest", true)
+      .neq("application.platform", "pc")
       .order("created_at", { ascending: false });
 
     if (search) {
@@ -44,15 +45,18 @@ export async function GET(req: Request) {
         .from("application_versions")
         .select(`
           id, version_name, version_code, release_notes, status, created_at,
-          application:applications(id, name, package_name, slug, icon_url),
+          application:applications!inner(id, name, package_name, slug, icon_url, platform),
           download_sources(id, download_url, mirror_name, is_primary)
         `)
         .eq("status", "draft")
+        .neq("application.platform", "pc")
         .order("created_at", { ascending: false }),
       liveQuery,
     ]);
 
-    const stagedVersions = stagedRes.data || [];
+    const stagedVersions = (stagedRes.data || []).filter(
+      (v: any) => v.application?.platform !== "pc"
+    );
     if (stagedRes.error) {
       console.error("Staged versions error:", stagedRes.error);
     }
@@ -110,7 +114,9 @@ export async function GET(req: Request) {
     }
 
     // Deduplicate live versions so each package appears at most once in active list
-    const liveVersions = liveRes.data || [];
+    const liveVersions = (liveRes.data || []).filter(
+      (v: any) => v.application?.platform !== "pc"
+    );
     const totalLiveCount = liveRes.count ?? liveVersions.length;
     const seenLiveKeys = new Set<string>();
     const uniqueLive: any[] = [];

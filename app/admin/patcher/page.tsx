@@ -37,6 +37,7 @@ interface PatcherReleaseItem {
     package_name: string;
     slug: string;
     icon_url: string;
+    platform?: string;
   };
   download_sources?: Array<{
     id: string;
@@ -214,9 +215,11 @@ export default function PatcherAdminPage() {
       });
       const data = await res.json();
       if (data.success) {
-        setStaged(data.staged || []);
-        setLive(data.live || []);
-        setTotalLiveCount(data.totalLiveCount ?? (data.live || []).length);
+        const nonPcStaged = (data.staged || []).filter((item: PatcherReleaseItem) => item.application?.platform !== "pc");
+        const nonPcLive = (data.live || []).filter((item: PatcherReleaseItem) => item.application?.platform !== "pc");
+        setStaged(nonPcStaged);
+        setLive(nonPcLive);
+        setTotalLiveCount(data.totalLiveCount ?? nonPcLive.length);
         if (fetchAll) setShowAll(true);
 
         // Initialize edit states
@@ -224,7 +227,7 @@ export default function PatcherAdminPage() {
         const notes: Record<string, string> = {};
         const tg: Record<string, boolean> = {};
 
-        (data.staged || []).forEach((item: PatcherReleaseItem) => {
+        nonPcStaged.forEach((item: PatcherReleaseItem) => {
           urls[item.id] = item.download_sources?.find((s: any) => s.download_url && !s.download_url.includes("ARTWEBTE"))?.download_url
             || item.download_sources?.[0]?.download_url
             || "https://t.me/awtmods";

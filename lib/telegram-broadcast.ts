@@ -27,6 +27,51 @@ function escapeHtml(text: string | null | undefined): string {
     .replace(/>/g, "&gt;");
 }
 
+function closeHtmlTags(html: string): string {
+  const tagStack: string[] = [];
+  const tagRegex = /<\/?([a-zA-Z0-9]+)(?:\s+[^>]*?)?(\/?)>/g;
+  let match: RegExpExecArray | null;
+  while ((match = tagRegex.exec(html)) !== null) {
+    const tagName = match[1].toLowerCase();
+    const isSelfClosing = match[2] === "/" || ["img", "br", "hr", "input"].includes(tagName);
+    const isClosing = match[0].startsWith("</");
+
+    if (isSelfClosing) continue;
+    if (isClosing) {
+      if (tagStack.length > 0 && tagStack[tagStack.length - 1] === tagName) {
+        tagStack.pop();
+      }
+    } else {
+      tagStack.push(tagName);
+    }
+  }
+
+  while (tagStack.length > 0) {
+    html += `</${tagStack.pop()}>`;
+  }
+  return html;
+}
+
+function prepareSafeTelegramCaption(rawCaption: string, maxLen: number = 1024): string {
+  // Strip custom tg-emoji tags to standard emojis for standard Bot API (avoids 60-char inflation per emoji)
+  let cleaned = rawCaption.replace(/<tg-emoji[^>]*>(.*?)<\/tg-emoji>/gi, "$1");
+  if (cleaned.length <= maxLen) {
+    return cleaned;
+  }
+
+  // Find last line break or space before limit to avoid slicing tags
+  let slicePoint = cleaned.lastIndexOf("\n", maxLen - 15);
+  if (slicePoint < maxLen / 2) {
+    slicePoint = cleaned.lastIndexOf(" ", maxLen - 15);
+  }
+  if (slicePoint <= 0) {
+    slicePoint = maxLen - 15;
+  }
+
+  let truncated = cleaned.slice(0, slicePoint) + "...";
+  return closeHtmlTags(truncated);
+}
+
 /**
  * Broadcasts an app update or release to the configured Telegram Channel
  */
@@ -257,9 +302,9 @@ export async function broadcastToTelegram(
 
       if (usePhoto) {
         payload.photo = photoUrl;
-        payload.caption = currentCaption.length > 1024 ? currentCaption.slice(0, 1020) + "..." : currentCaption;
+        payload.caption = prepareSafeTelegramCaption(currentCaption, 1024);
       } else {
-        payload.text = currentCaption;
+        payload.text = currentCaption.length > 4096 ? prepareSafeTelegramCaption(currentCaption, 4096) : currentCaption;
         payload.disable_web_page_preview = false;
       }
 
@@ -271,11 +316,15 @@ export async function broadcastToTelegram(
 
       let data = await res.json();
 
-      // If Telegram rejects custom emojis (ENTITY_NOT_ALLOWED), strip them to standard emojis and retry
-      if (!data.ok && (data.description?.includes("ENTITY") || data.description?.includes("custom_emoji"))) {
-        const plainCaption = currentCaption.replace(/<tg-emoji[^>]*>(.*?)<\/tg-emoji>/gi, "$1");
+      // If Telegram rejects due to entities, custom emoji or unclosed tags, retry with sanitized plain text
+      if (!data.ok && (
+        data.description?.toLowerCase().includes("entity") ||
+        data.description?.toLowerCase().includes("parse") ||
+        data.description?.toLowerCase().includes("custom_emoji")
+      )) {
+        const plainCaption = prepareSafeTelegramCaption(currentCaption, usePhoto ? 1024 : 4096);
         if (usePhoto) {
-          payload.caption = plainCaption.length > 1024 ? plainCaption.slice(0, 1020) + "..." : plainCaption;
+          payload.caption = plainCaption;
         } else {
           payload.text = plainCaption;
         }
@@ -286,6 +335,24 @@ export async function broadcastToTelegram(
           body: JSON.stringify(payload),
         });
         data = await res.json();
+
+        // If it still fails, strip all HTML tags completely
+        if (!data.ok && data.description?.toLowerCase().includes("parse")) {
+          const stripped = currentCaption.replace(/<[^>]*>/g, "");
+          if (usePhoto) {
+            payload.caption = stripped.length > 1024 ? stripped.slice(0, 1020) + "..." : stripped;
+          } else {
+            payload.text = stripped.length > 4096 ? stripped.slice(0, 4090) + "..." : stripped;
+          }
+          delete payload.parse_mode;
+
+          res = await fetch(`https://api.telegram.org/bot${token}/${endpoint}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          data = await res.json();
+        }
       }
 
       return data;

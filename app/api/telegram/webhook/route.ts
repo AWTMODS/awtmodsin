@@ -1478,19 +1478,7 @@ export async function POST(req: Request) {
           const appId = rest[0];
           const app = await getApplicationById(appId);
           if (app) {
-            const supabase = getDbClient();
-            if (supabase) {
-              await supabase.from("site_settings").upsert(
-                {
-                  setting_key: `admin_wizard_${adminChatId}`,
-                  setting_value: { step: "waiting_for_version_code", appId, appName: app.name },
-                  updated_at: new Date().toISOString(),
-                },
-                { onConflict: "setting_key" }
-              );
-            }
-
-            await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            const promptRes = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
@@ -1502,7 +1490,20 @@ export async function POST(req: Request) {
                 ),
                 parse_mode: "HTML",
               }),
-            }).catch(() => {});
+            }).catch(() => null);
+            const promptMessageId = promptRes ? (await promptRes.json().catch(() => null))?.result?.message_id : undefined;
+
+            const supabase = getDbClient();
+            if (supabase) {
+              await supabase.from("site_settings").upsert(
+                {
+                  setting_key: `admin_wizard_${adminChatId}`,
+                  setting_value: { step: "waiting_for_version_code", appId, appName: app.name, promptMessageId },
+                  updated_at: new Date().toISOString(),
+                },
+                { onConflict: "setting_key" }
+              );
+            }
           }
         }
 
@@ -1511,20 +1512,8 @@ export async function POST(req: Request) {
           const appId = rest[0];
           const app = await getApplicationById(appId);
           if (app) {
-            const supabase = getDbClient();
-            if (supabase) {
-              await supabase.from("site_settings").upsert(
-                {
-                  setting_key: `admin_wizard_${adminChatId}`,
-                  setting_value: { step: "waiting_for_size", appId, appName: app.name },
-                  updated_at: new Date().toISOString(),
-                },
-                { onConflict: "setting_key" }
-              );
-            }
-
             const currentSize = app.latest_version?.file_size || "Not set";
-            await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            const promptRes = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
@@ -1536,7 +1525,20 @@ export async function POST(req: Request) {
                 ),
                 parse_mode: "HTML",
               }),
-            }).catch(() => {});
+            }).catch(() => null);
+            const promptMessageId = promptRes ? (await promptRes.json().catch(() => null))?.result?.message_id : undefined;
+
+            const supabase = getDbClient();
+            if (supabase) {
+              await supabase.from("site_settings").upsert(
+                {
+                  setting_key: `admin_wizard_${adminChatId}`,
+                  setting_value: { step: "waiting_for_size", appId, appName: app.name, promptMessageId },
+                  updated_at: new Date().toISOString(),
+                },
+                { onConflict: "setting_key" }
+              );
+            }
           }
         }
 
@@ -1545,19 +1547,7 @@ export async function POST(req: Request) {
           const appId = rest[0];
           const app = await getApplicationById(appId);
           if (app) {
-            const supabase = getDbClient();
-            if (supabase) {
-              await supabase.from("site_settings").upsert(
-                {
-                  setting_key: `admin_wizard_${adminChatId}`,
-                  setting_value: { step: "waiting_for_logo", appId, appName: app.name },
-                  updated_at: new Date().toISOString(),
-                },
-                { onConflict: "setting_key" }
-              );
-            }
-
-            await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            const promptRes = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
@@ -1568,7 +1558,20 @@ export async function POST(req: Request) {
                 ),
                 parse_mode: "HTML",
               }),
-            }).catch(() => {});
+            }).catch(() => null);
+            const promptMessageId = promptRes ? (await promptRes.json().catch(() => null))?.result?.message_id : undefined;
+
+            const supabase = getDbClient();
+            if (supabase) {
+              await supabase.from("site_settings").upsert(
+                {
+                  setting_key: `admin_wizard_${adminChatId}`,
+                  setting_value: { step: "waiting_for_logo", appId, appName: app.name, promptMessageId },
+                  updated_at: new Date().toISOString(),
+                },
+                { onConflict: "setting_key" }
+              );
+            }
           }
         }
 
@@ -1577,19 +1580,7 @@ export async function POST(req: Request) {
           const appId = rest[0];
           const app = await getApplicationById(appId);
           if (app) {
-            const supabase = getDbClient();
-            if (supabase) {
-              await supabase.from("site_settings").upsert(
-                {
-                  setting_key: `admin_wizard_${adminChatId}`,
-                  setting_value: { step: "waiting_for_features", appId, appName: app.name },
-                  updated_at: new Date().toISOString(),
-                },
-                { onConflict: "setting_key" }
-              );
-            }
-
-            await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            const promptRes = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
@@ -1601,7 +1592,20 @@ export async function POST(req: Request) {
                 ),
                 parse_mode: "HTML",
               }),
-            }).catch(() => {});
+            }).catch(() => null);
+            const promptMessageId = promptRes ? (await promptRes.json().catch(() => null))?.result?.message_id : undefined;
+
+            const supabase = getDbClient();
+            if (supabase) {
+              await supabase.from("site_settings").upsert(
+                {
+                  setting_key: `admin_wizard_${adminChatId}`,
+                  setting_value: { step: "waiting_for_features", appId, appName: app.name, promptMessageId },
+                  updated_at: new Date().toISOString(),
+                },
+                { onConflict: "setting_key" }
+              );
+            }
           }
         }
 
@@ -1759,6 +1763,9 @@ export async function POST(req: Request) {
                 reply_markup: {
                   inline_keyboard: [
                     [
+                      { text: "📅 Auto-Spread (+1h After Last)", callback_data: `sched_do:${app.id}:spread` },
+                    ],
+                    [
                       { text: "⏱️ In 15 Mins", callback_data: `sched_do:${app.id}:15` },
                       { text: "⏱️ In 30 Mins", callback_data: `sched_do:${app.id}:30` },
                     ],
@@ -1789,9 +1796,17 @@ export async function POST(req: Request) {
           const timing = rest[1] || "60";
           const app = await getApplicationById(appId);
           if (app) {
+            const { getScheduledPosts, scheduleAppPost } = await import("@/lib/telegram-scheduler");
             const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
             let targetDate = new Date();
-            if (timing === "15") {
+            if (timing === "spread") {
+              const pending = (await getScheduledPosts()).filter((p) => p.status === "pending");
+              const latestMs = pending.reduce((max, p) => {
+                const ms = new Date(p.scheduledFor).getTime();
+                return Number.isFinite(ms) && ms > max ? ms : max;
+              }, Date.now());
+              targetDate = new Date(latestMs + 60 * 60 * 1000);
+            } else if (timing === "15") {
               targetDate = new Date(Date.now() + 15 * 60 * 1000);
             } else if (timing === "30") {
               targetDate = new Date(Date.now() + 30 * 60 * 1000);
@@ -1818,7 +1833,6 @@ export async function POST(req: Request) {
               targetDate = new Date(nowIst.getTime() - IST_OFFSET_MS);
             }
 
-            const { scheduleAppPost } = await import("@/lib/telegram-scheduler");
             await scheduleAppPost(app.id, targetDate.toISOString(), adminChatId);
 
             await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
@@ -2376,6 +2390,9 @@ export async function POST(req: Request) {
                           { text: "🚀 Post to Telegram Now", callback_data: `broadcast:${appData.id}` },
                         ],
                         [
+                          { text: "📅 Auto-Spread (+1h After Last)", callback_data: `sched_do:${appData.id}:spread` },
+                        ],
+                        [
                           { text: "⏱️ In 15 Mins", callback_data: `sched_do:${appData.id}:15` },
                           { text: "⏱️ In 30 Mins", callback_data: `sched_do:${appData.id}:30` },
                         ],
@@ -2439,15 +2456,20 @@ export async function POST(req: Request) {
               const updatedApp = await getApplicationById(wiz.appId);
               if (updatedApp) {
                 const { sendDraftPreviewToAdmin } = await import("@/lib/telegram-broadcast");
-                await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    chat_id: adminChatId,
-                    text: `✅ <b>Version Code updated to <code>${newCode}</code>!</b>\nHere is your updated Channel Broadcast Preview:`,
-                    parse_mode: "HTML",
-                  }),
-                });
+                if (wiz.promptMessageId) {
+                  await fetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ chat_id: adminChatId, message_id: wiz.promptMessageId }),
+                  }).catch(() => {});
+                }
+                if (message.message_id) {
+                  await fetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ chat_id: adminChatId, message_id: message.message_id }),
+                  }).catch(() => {});
+                }
                 await sendDraftPreviewToAdmin(updatedApp, adminChatId);
                 return NextResponse.json({ ok: true, wizardUpdated: "version_code" });
               }
@@ -2483,15 +2505,20 @@ export async function POST(req: Request) {
               const updatedApp = await getApplicationById(wiz.appId);
               if (updatedApp) {
                 const { sendDraftPreviewToAdmin } = await import("@/lib/telegram-broadcast");
-                await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    chat_id: adminChatId,
-                    text: `✅ <b>Exact App Size updated to <code>${cleanSize}</code>!</b>\nHere is your updated Channel Broadcast Preview:`,
-                    parse_mode: "HTML",
-                  }),
-                });
+                if (wiz.promptMessageId) {
+                  await fetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ chat_id: adminChatId, message_id: wiz.promptMessageId }),
+                  }).catch(() => {});
+                }
+                if (message.message_id) {
+                  await fetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ chat_id: adminChatId, message_id: message.message_id }),
+                  }).catch(() => {});
+                }
                 await sendDraftPreviewToAdmin(updatedApp, adminChatId);
                 return NextResponse.json({ ok: true, wizardUpdated: "file_size" });
               }
@@ -2520,15 +2547,20 @@ export async function POST(req: Request) {
             purgeAppCaches(updatedApp?.slug);
             if (updatedApp) {
               const { sendDraftPreviewToAdmin } = await import("@/lib/telegram-broadcast");
-              await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  chat_id: adminChatId,
-                  text: `✅ <b>Official App Logo Updated!</b>\nHere is your updated Channel Broadcast Preview:`,
-                  parse_mode: "HTML",
-                }),
-              });
+              if (wiz.promptMessageId) {
+                await fetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ chat_id: adminChatId, message_id: wiz.promptMessageId }),
+                }).catch(() => {});
+              }
+              if (message.message_id) {
+                await fetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ chat_id: adminChatId, message_id: message.message_id }),
+                }).catch(() => {});
+              }
               await sendDraftPreviewToAdmin(updatedApp, adminChatId);
               return NextResponse.json({ ok: true, wizardUpdated: "logo" });
             }
@@ -2554,15 +2586,20 @@ export async function POST(req: Request) {
             purgeAppCaches(updatedApp?.slug);
             if (updatedApp) {
               const { sendDraftPreviewToAdmin } = await import("@/lib/telegram-broadcast");
-              await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  chat_id: adminChatId,
-                  text: `✅ <b>Mod Features Updated! (${rawLines.length} features)</b>\nHere is your updated Channel Broadcast Preview:`,
-                  parse_mode: "HTML",
-                }),
-              });
+              if (wiz.promptMessageId) {
+                await fetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ chat_id: adminChatId, message_id: wiz.promptMessageId }),
+                }).catch(() => {});
+              }
+              if (message.message_id) {
+                await fetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ chat_id: adminChatId, message_id: message.message_id }),
+                }).catch(() => {});
+              }
               await sendDraftPreviewToAdmin(updatedApp, adminChatId);
               return NextResponse.json({ ok: true, wizardUpdated: "features" });
             }

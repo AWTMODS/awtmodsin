@@ -32,6 +32,7 @@ import { ReviewsSection } from "@/components/applications/reviews-section";
 import { AppDescriptionRenderer } from "@/components/applications/app-description-renderer";
 import { CompanionHelper } from "@/components/applications/companion-helper";
 import { ModComparisonMatrix } from "@/components/applications/mod-comparison-matrix";
+import { PcMirrorsTabs } from "@/components/applications/pc-mirrors-tabs";
 import { formatDate, formatNumber, getAppUrl, getDownloadUrl, cleanAppSlug } from "@/lib/utils";
 import { buildApplicationMetadata, buildApplicationJsonLd, SITE_URL } from "@/lib/seo";
 
@@ -344,6 +345,9 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
               </span>
             </div>
 
+            {isPc ? (
+              <PcMirrorsTabs appSlug={app.slug} downloadSources={downloadSources} />
+            ) : (
             <div className="space-y-3">
               {downloadSources.map((mirror, index) => {
                 const mirrorLabel =
@@ -406,6 +410,7 @@ export default async function AppDetailPage({ params }: AppDetailProps) {
                 );
               })}
             </div>
+            )}
           </div>
 
           {/* Installation Guide Section */}

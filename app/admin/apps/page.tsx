@@ -19,14 +19,28 @@ export default async function AdminAppsPage({
     getCategories(),
   ]);
 
+  const viewType = searchParams?.type;
+  const pageTitle =
+    viewType === "games"
+      ? "Android Games"
+      : viewType === "pc"
+      ? "PC Software"
+      : "Android Applications";
+  const pageDescription =
+    viewType === "games"
+      ? "Manage all Android Games packages."
+      : viewType === "pc"
+      ? "Manage all PC Software packages."
+      : "Manage all Android App packages.";
+
   return (
     <div className="space-y-6">
       <div className="pb-4 border-b border-border">
         <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
-          Applications &amp; Software
+          {pageTitle}
         </h1>
         <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-          Manage all Android Apps, Android Games, and PC Software packages.
+          {pageDescription}
         </p>
       </div>
 

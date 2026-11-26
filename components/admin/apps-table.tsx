@@ -36,11 +36,29 @@ interface AppsTableProps {
   defaultType?: string;
 }
 
+function isPcApp(app: Application): boolean {
+  return (app as any).platform === "pc" || app.category?.slug === "pc-software";
+}
+
+function isGameApp(app: Application): boolean {
+  if (isPcApp(app)) return false;
+  const catSlug = app.category?.slug?.toLowerCase() || "";
+  const catName = app.category?.name?.toLowerCase() || "";
+  const name = app.name.toLowerCase();
+  const pkg = (app.package_name || "").toLowerCase();
+  return (
+    catSlug === "games" ||
+    catName.includes("game") ||
+    name.includes("game") ||
+    pkg.includes("game")
+  );
+}
+
 export function AppsTable({
   initialApps,
   categories,
   defaultStatus = "",
-  defaultType = "all",
+  defaultType = "apps",
 }: AppsTableProps) {
   const router = useRouter();
   const [apps, setApps] = useState<Application[]>(initialApps);
@@ -50,11 +68,15 @@ export function AppsTable({
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedStatus, setSelectedStatus] = useState(defaultStatus);
-  const [typeFilter, setTypeFilter] = useState<"all" | "apps" | "games" | "pc" | "duplicates">(
-    defaultType === "games" || defaultType === "pc" || defaultType === "apps"
-      ? (defaultType as any)
-      : "all"
+  const resolvedDefaultType: "apps" | "games" | "pc" =
+    defaultType === "games" || defaultType === "pc" ? defaultType : "apps";
+  const [typeFilter, setTypeFilter] = useState<"apps" | "games" | "pc" | "duplicates">(
+    resolvedDefaultType
   );
+
+  useEffect(() => {
+    setTypeFilter(resolvedDefaultType);
+  }, [resolvedDefaultType]);
 
   // Sync state whenever initialApps changes from server refresh
   useEffect(() => {
@@ -175,10 +197,19 @@ export function AppsTable({
     }
   };
 
-  // Detect duplicate packages across all applications
+  // Scope apps to the current section (Android Apps, Android Games, or PC Software)
+  const sectionApps = useMemo(() => {
+    return apps.filter((app) => {
+      if (resolvedDefaultType === "pc") return isPcApp(app);
+      if (resolvedDefaultType === "games") return isGameApp(app);
+      return !isPcApp(app) && !isGameApp(app);
+    });
+  }, [apps, resolvedDefaultType]);
+
+  // Detect duplicate packages within the current section
   const duplicatePackages = useMemo(() => {
     const pkgCounts = new Map<string, number>();
-    for (const app of apps) {
+    for (const app of sectionApps) {
       const p = app.package_name?.trim().toLowerCase();
       if (p) pkgCounts.set(p, (pkgCounts.get(p) || 0) + 1);
     }
@@ -187,25 +218,11 @@ export function AppsTable({
       if (count > 1) dups.add(pkg);
     });
     return dups;
-  }, [apps]);
+  }, [sectionApps]);
 
-  const allCount = apps.length;
-  const pcCount = apps.filter(
-    (app) => (app as any).platform === "pc" || app.category?.slug === "pc-software"
-  ).length;
-  const gamesCount = apps.filter((app) => {
-    const isPC = (app as any).platform === "pc" || app.category?.slug === "pc-software";
-    if (isPC) return false;
-    const catSlug = app.category?.slug?.toLowerCase() || "";
-    const catName = app.category?.name?.toLowerCase() || "";
-    const name = app.name.toLowerCase();
-    const pkg = (app.package_name || "").toLowerCase();
-    return catSlug === "games" || catName.includes("game") || name.includes("game") || pkg.includes("game");
-  }).length;
-  const androidAppsCount = Math.max(0, allCount - pcCount - gamesCount);
-  const code1Count = apps.filter((app) => app.latest_version?.version_code === 1).length;
+  const code1Count = sectionApps.filter((app) => app.latest_version?.version_code === 1).length;
 
-  const filteredApps = apps.filter((app) => {
+  const filteredApps = sectionApps.filter((app) => {
     const matchesSearch =
       !search ||
       app.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -223,23 +240,10 @@ export function AppsTable({
         ? app.latest_version?.version_code === 1
         : app.status === selectedStatus);
 
-    const isPC = (app as any).platform === "pc" || app.category?.slug === "pc-software";
-    const catSlug = app.category?.slug?.toLowerCase() || "";
-    const catName = app.category?.name?.toLowerCase() || "";
-    const name = app.name.toLowerCase();
-    const pkg = (app.package_name || "").toLowerCase();
-    const isGame = !isPC && (catSlug === "games" || catName.includes("game") || name.includes("game") || pkg.includes("game"));
-
-    let matchesType = true;
-    if (typeFilter === "apps") {
-      matchesType = !isPC && !isGame;
-    } else if (typeFilter === "games") {
-      matchesType = isGame;
-    } else if (typeFilter === "pc") {
-      matchesType = isPC;
-    } else if (typeFilter === "duplicates") {
-      matchesType = duplicatePackages.has((app.package_name || "").trim().toLowerCase());
-    }
+    const matchesType =
+      typeFilter === "duplicates"
+        ? duplicatePackages.has((app.package_name || "").trim().toLowerCase())
+        : true;
 
     return matchesSearch && matchesCategory && matchesStatus && matchesType;
   });
@@ -353,67 +357,58 @@ export function AppsTable({
 
   return (
     <div className="space-y-4">
-      {/* Platform & Type Tabs (All / Android Apps / Android Games / PC Software) */}
+      {/* Section Tab & Duplicates */}
       <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-secondary/60 border border-border overflow-x-auto scrollbar-none [scrollbar-width:none]">
-        <button
-          type="button"
-          onClick={() => setTypeFilter("all")}
-          className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
-            typeFilter === "all"
-              ? "bg-card text-foreground shadow-xs border border-border"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <span>All Items</span>
-          <span className="px-1.5 py-0.5 rounded-md bg-muted text-[10px] font-bold">
-            {allCount}
-          </span>
-        </button>
+        {resolvedDefaultType === "apps" && (
+          <button
+            type="button"
+            onClick={() => setTypeFilter("apps")}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
+              typeFilter === "apps"
+                ? "bg-card text-emerald-500 shadow-xs border border-emerald-500/30"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <span>📱 Android Apps</span>
+            <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-500 text-[10px] font-bold">
+              {sectionApps.length}
+            </span>
+          </button>
+        )}
 
-        <button
-          type="button"
-          onClick={() => setTypeFilter("apps")}
-          className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
-            typeFilter === "apps"
-              ? "bg-card text-emerald-500 shadow-xs border border-emerald-500/30"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <span>📱 Android Apps</span>
-          <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-500 text-[10px] font-bold">
-            {androidAppsCount}
-          </span>
-        </button>
+        {resolvedDefaultType === "games" && (
+          <button
+            type="button"
+            onClick={() => setTypeFilter("games")}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
+              typeFilter === "games"
+                ? "bg-card text-amber-500 shadow-xs border border-amber-500/30"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <span>🎮 Android Games</span>
+            <span className="px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-500 text-[10px] font-bold">
+              {sectionApps.length}
+            </span>
+          </button>
+        )}
 
-        <button
-          type="button"
-          onClick={() => setTypeFilter("games")}
-          className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
-            typeFilter === "games"
-              ? "bg-card text-amber-500 shadow-xs border border-amber-500/30"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <span>🎮 Android Games</span>
-          <span className="px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-500 text-[10px] font-bold">
-            {gamesCount}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setTypeFilter("pc")}
-          className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
-            typeFilter === "pc"
-              ? "bg-card text-blue-500 shadow-xs border border-blue-500/30"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <span>💻 PC Software</span>
-          <span className="px-1.5 py-0.5 rounded-md bg-blue-500/10 text-blue-500 text-[10px] font-bold">
-            {pcCount}
-          </span>
-        </button>
+        {resolvedDefaultType === "pc" && (
+          <button
+            type="button"
+            onClick={() => setTypeFilter("pc")}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
+              typeFilter === "pc"
+                ? "bg-card text-blue-500 shadow-xs border border-blue-500/30"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <span>💻 PC Software</span>
+            <span className="px-1.5 py-0.5 rounded-md bg-blue-500/10 text-blue-500 text-[10px] font-bold">
+              {sectionApps.length}
+            </span>
+          </button>
+        )}
 
         {duplicatePackages.size > 0 && (
           <button
@@ -469,7 +464,7 @@ export function AppsTable({
               onChange={(e) => setSelectedStatus(e.target.value)}
               className="w-full sm:w-auto rounded-xl border border-border bg-card px-3 py-2 text-xs sm:text-sm text-foreground focus:outline-none truncate"
             >
-              <option value="">All Statuses ({apps.length})</option>
+              <option value="">All Statuses ({sectionApps.length})</option>
               {code1Count > 0 && (
                 <option value="code_1" className="text-amber-500 font-bold">
                   ⚠️ Code: 1 (Needs Release) ({code1Count})
@@ -481,14 +476,14 @@ export function AppsTable({
                 </option>
               )}
               <option value="published">
-                Published ({apps.filter((a) => a.status === "published").length})
+                Published ({sectionApps.filter((a) => a.status === "published").length})
               </option>
               <option value="draft">
-                Draft ({apps.filter((a) => a.status === "draft").length})
+                Draft ({sectionApps.filter((a) => a.status === "draft").length})
               </option>
-              {apps.some((a) => a.status === "archived") && (
+              {sectionApps.some((a) => a.status === "archived") && (
                 <option value="archived">
-                  Archived ({apps.filter((a) => a.status === "archived").length})
+                  Archived ({sectionApps.filter((a) => a.status === "archived").length})
                 </option>
               )}
             </select>
@@ -596,10 +591,10 @@ export function AppsTable({
           </div>
           <button
             type="button"
-            onClick={() => setTypeFilter("all")}
+            onClick={() => setTypeFilter(resolvedDefaultType)}
             className="text-xs font-bold underline shrink-0 hover:text-rose-300 transition-colors"
           >
-            Show All Apps
+            Show All
           </button>
         </div>
       )}

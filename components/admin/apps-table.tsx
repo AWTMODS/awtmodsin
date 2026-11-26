@@ -669,7 +669,7 @@ export function AppsTable({
                             </div>
                             <div className="text-[11px] text-muted-foreground font-mono flex items-center gap-1.5 flex-wrap">
                               <span>{app.developer}</span>
-                              {app.platform !== "pc" && app.package_name && (
+                              {app.package_name && (
                                 <>
                                   <span className="text-muted-foreground/50">•</span>
                                   <span className="text-[10px] text-muted-foreground/80">{app.package_name}</span>

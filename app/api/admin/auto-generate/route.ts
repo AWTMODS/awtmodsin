@@ -287,10 +287,15 @@ ${pcFeatures.map((f) => `- **${f}**`).join("\n")}
 3. **Run Setup:** Launch \`Setup.exe\` and follow the on-screen installer steps.
 4. **Launch & Enjoy:** Software is pre-activated—no additional crack or keygen required!`;
 
+      const exeBase = cleanPcName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "")
+        .slice(0, 32) || "software";
+
       const generatedPcApp = {
         name: formattedPcTitle,
         slug: pcSlug,
-        package_name: null,
+        package_name: `${exeBase}.exe`,
         developer: "Aadith C V",
         category_id: pcCategoryId,
         platform: "pc",

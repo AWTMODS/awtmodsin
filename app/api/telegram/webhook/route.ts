@@ -2262,7 +2262,7 @@ export async function POST(req: Request) {
               .maybeSingle();
 
             if (appData) {
-              const { data: verData } = await supabase
+              let { data: verData } = await supabase
                 .from("application_versions")
                 .select("id, version_name, version_code, release_notes")
                 .eq("application_id", appData.id)
@@ -2270,6 +2270,17 @@ export async function POST(req: Request) {
                 .order("created_at", { ascending: false })
                 .limit(1)
                 .maybeSingle();
+
+              if (!verData) {
+                const fallbackVer = await supabase
+                  .from("application_versions")
+                  .select("id, version_name, version_code, release_notes")
+                  .eq("application_id", appData.id)
+                  .order("created_at", { ascending: false })
+                  .limit(1)
+                  .maybeSingle();
+                verData = fallbackVer.data;
+              }
 
               if (verData) {
                 // 1. Update or create download source
@@ -2390,6 +2401,9 @@ export async function POST(req: Request) {
             }
           }
         }
+
+        // Never fall through to Mod Webpage Scraper when replying to a Staged Patcher message
+        return NextResponse.json({ ok: true, replyHandledNoMatch: pkgName || null });
       }
     }
 
@@ -2665,10 +2679,18 @@ export async function POST(req: Request) {
     const fullMessage = (text || caption || "").trim();
     const allUrls = fullMessage.match(/(?:https?:\/\/)[^\s]+/gi) || [];
 
-    // Filter out direct APK links that will be handled by the APK release engine
+    // Filter out direct APK / file-host download links so they aren't treated as Mod webpages to scrape
     const appLinkMatches = allUrls.filter((url: string) => {
       const u = url.toLowerCase();
-      return !u.endsWith(".apk") && !u.includes(".apk?");
+      return (
+        !u.endsWith(".apk") &&
+        !u.includes(".apk?") &&
+        !u.includes("devuploads.com") &&
+        !u.includes("mediafire.com") &&
+        !u.includes("mega.nz") &&
+        !u.includes("drive.google.com") &&
+        !u.includes("t.me/")
+      );
     });
 
     if (isAuthorized && appLinkMatches.length > 0 && !hasApkDoc && !hasApkText) {

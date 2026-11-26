@@ -44,6 +44,11 @@ export async function POST(req: Request) {
       is_latest: true,
     };
     if (releaseNotes) updateData.release_notes = releaseNotes;
+    if (body.version_name) updateData.version_name = body.version_name;
+    if (body.version_code) {
+      const parsedCode = parseInt(body.version_code, 10);
+      if (!isNaN(parsedCode)) updateData.version_code = parsedCode;
+    }
 
     await supabase
       .from("application_versions")

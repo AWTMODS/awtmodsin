@@ -21,6 +21,7 @@ import {
   Sparkles,
   Search,
   Loader2,
+  Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -61,6 +62,9 @@ export default function PatcherAdminPage() {
   // Form overrides mapped by version ID
   const [editUrls, setEditUrls] = useState<Record<string, string>>({});
   const [editNotes, setEditNotes] = useState<Record<string, string>>({});
+  const [editVersionNames, setEditVersionNames] = useState<Record<string, string>>({});
+  const [editVersionCodes, setEditVersionCodes] = useState<Record<string, number>>({});
+  const [savingDraftId, setSavingDraftId] = useState<string | null>(null);
   const [broadcastTg, setBroadcastTg] = useState<Record<string, boolean>>({});
   const [showJson, setShowJson] = useState<Record<string, boolean>>({});
 
@@ -225,6 +229,8 @@ export default function PatcherAdminPage() {
         // Initialize edit states
         const urls: Record<string, string> = {};
         const notes: Record<string, string> = {};
+        const vNames: Record<string, string> = {};
+        const vCodes: Record<string, number> = {};
         const tg: Record<string, boolean> = {};
 
         nonPcStaged.forEach((item: PatcherReleaseItem) => {
@@ -232,11 +238,15 @@ export default function PatcherAdminPage() {
             || item.download_sources?.[0]?.download_url
             || "https://t.me/awtmods";
           notes[item.id] = item.release_notes || "Base Update\nNew Features\nFixed Bugs";
+          vNames[item.id] = item.version_name || "";
+          vCodes[item.id] = item.version_code || 1;
           tg[item.id] = true;
         });
 
         setEditUrls(urls);
         setEditNotes(notes);
+        setEditVersionNames(vNames);
+        setEditVersionCodes(vCodes);
         setBroadcastTg(tg);
       } else {
         toast.error(data.error || "Failed to load releases");
@@ -263,6 +273,35 @@ export default function PatcherAdminPage() {
     });
   }, [live, searchQuery]);
 
+  const handleSaveDraft = async (item: PatcherReleaseItem) => {
+    setSavingDraftId(item.id);
+    try {
+      const res = await fetch("/api/admin/patcher/releases", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: item.id,
+          version_name: editVersionNames[item.id] ?? item.version_name,
+          version_code: editVersionCodes[item.id] ?? item.version_code,
+          download_url: editUrls[item.id] || "https://t.me/awtmods",
+          release_notes: editNotes[item.id] || item.release_notes,
+        }),
+      });
+
+      const out = await res.json();
+      if (res.ok && out.success) {
+        toast.success(`Draft saved for ${item.application?.name || "app"}`);
+        loadData();
+      } else {
+        toast.error(out.error || "Failed to save draft");
+      }
+    } catch (e: any) {
+      toast.error("Save failed: " + e.message);
+    } finally {
+      setSavingDraftId(null);
+    }
+  };
+
   const handlePublish = async (item: PatcherReleaseItem) => {
     setPublishingId(item.id);
     try {
@@ -271,6 +310,8 @@ export default function PatcherAdminPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           version_id: item.id,
+          version_name: editVersionNames[item.id] ?? item.version_name,
+          version_code: editVersionCodes[item.id] ?? item.version_code,
           update_url: editUrls[item.id] || "https://t.me/awtmods",
           release_notes: editNotes[item.id] || item.release_notes,
           broadcast_telegram: broadcastTg[item.id] ?? false,
@@ -437,12 +478,42 @@ export default function PatcherAdminPage() {
 
                   <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-400/10 border border-amber-400/20 font-mono text-xs text-amber-300">
                     <span>STAGED CODE:</span>
-                    <strong className="text-sm font-black text-amber-200">v{item.version_code}</strong>
+                    <strong className="text-sm font-black text-amber-200">
+                      v{editVersionCodes[item.id] ?? item.version_code}
+                    </strong>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                      <Pencil className="w-3 h-3 text-amber-400" />
+                      Version Name
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-400 font-mono"
+                      value={editVersionNames[item.id] ?? item.version_name ?? ""}
+                      onChange={(e) => setEditVersionNames({ ...editVersionNames, [item.id]: e.target.value })}
+                      placeholder="e.g. 9.1.94.1929"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                      <Pencil className="w-3 h-3 text-amber-400" />
+                      Version Code
+                    </label>
+                    <input
+                      type="number"
+                      className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-400 font-mono"
+                      value={editVersionCodes[item.id] ?? item.version_code ?? ""}
+                      onChange={(e) => setEditVersionCodes({ ...editVersionCodes, [item.id]: parseInt(e.target.value, 10) || 0 })}
+                      placeholder="e.g. 147600575"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5 sm:col-span-2 md:col-span-2">
                     <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                       Telegram / Direct Download Link
                     </label>
@@ -454,19 +525,19 @@ export default function PatcherAdminPage() {
                       placeholder="https://t.me/awtmods/1234 or DevUploads link"
                     />
                   </div>
+                </div>
 
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      Changelog Description
-                    </label>
-                    <textarea
-                      rows={2}
-                      className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary"
-                      value={editNotes[item.id] ?? ""}
-                      onChange={(e) => setEditNotes({ ...editNotes, [item.id]: e.target.value })}
-                      placeholder="Base Update\nNew Features\nFixed Bugs"
-                    />
-                  </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Changelog Description
+                  </label>
+                  <textarea
+                    rows={2}
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary font-mono text-xs"
+                    value={editNotes[item.id] ?? ""}
+                    onChange={(e) => setEditNotes({ ...editNotes, [item.id]: e.target.value })}
+                    placeholder="Base Update\nNew Features\nFixed Bugs"
+                  />
                 </div>
 
                 {/* Live JSON Payload Preview */}
@@ -491,7 +562,8 @@ export default function PatcherAdminPage() {
                             {
                               Header: item.application?.name || "AWTMods App",
                               package_name: item.application?.package_name || "",
-                              version_code: item.version_code,
+                              version_code: editVersionCodes[item.id] ?? item.version_code,
+                              version_name: editVersionNames[item.id] ?? item.version_name,
                               force_update: true,
                               title: "Update version ",
                               description_type: 2,
@@ -524,7 +596,35 @@ export default function PatcherAdminPage() {
                     <span>Automatically Broadcast release to Telegram channel (@awtmods)</span>
                   </label>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {item.application?.id && (
+                      <a
+                        href={`/admin/apps/${item.application.id}/edit`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition border border-border"
+                        title="Edit App Details in Full Editor"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        Edit App
+                      </a>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => handleSaveDraft(item)}
+                      disabled={savingDraftId === item.id}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-muted-foreground hover:text-amber-400 hover:bg-amber-500/10 rounded-lg transition border border-border"
+                      title="Save edits to draft without publishing yet"
+                    >
+                      {savingDraftId === item.id ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Save className="w-3.5 h-3.5" />
+                      )}
+                      Save Draft
+                    </button>
+
                     <button
                       type="button"
                       onClick={() => handleDiscard(item)}

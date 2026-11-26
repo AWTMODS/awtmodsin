@@ -153,6 +153,62 @@ export async function GET(req: Request) {
   }
 }
 
+export async function PATCH(req: Request) {
+  try {
+    const body = await req.json();
+    const { id, version_name, version_code, release_notes, download_url } = body;
+    if (!id) {
+      return NextResponse.json({ error: "Version ID is required" }, { status: 400 });
+    }
+
+    const supabase = getDbClient();
+    if (!supabase) {
+      return NextResponse.json({ error: "Database client unavailable" }, { status: 500 });
+    }
+
+    const updateData: any = {};
+    if (version_name !== undefined) updateData.version_name = version_name;
+    if (version_code !== undefined) {
+      const code = parseInt(version_code, 10);
+      if (!isNaN(code)) updateData.version_code = code;
+    }
+    if (release_notes !== undefined) updateData.release_notes = release_notes;
+
+    if (Object.keys(updateData).length > 0) {
+      const { error: vErr } = await supabase
+        .from("application_versions")
+        .update(updateData)
+        .eq("id", id);
+      if (vErr) throw vErr;
+    }
+
+    if (download_url !== undefined) {
+      const { data: src } = await supabase
+        .from("download_sources")
+        .select("id")
+        .eq("version_id", id)
+        .maybeSingle();
+
+      if (src) {
+        await supabase
+          .from("download_sources")
+          .update({
+            download_url,
+            hosting_provider: download_url.includes("t.me") ? "telegram" : "custom",
+            is_active: true,
+            is_primary: true,
+          })
+          .eq("id", src.id);
+      }
+    }
+
+    return NextResponse.json({ success: true, message: "Draft updated successfully" });
+  } catch (err: any) {
+    console.error("Patcher draft update error:", err);
+    return NextResponse.json({ error: err.message || "Failed to update draft" }, { status: 500 });
+  }
+}
+
 export async function DELETE(req: Request) {
   try {
     const { searchParams } = new URL(req.url);

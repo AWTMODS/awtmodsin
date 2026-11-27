@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Clock, Send, Trash2, RefreshCw, CheckCircle2, Calendar, ExternalLink, Pencil, Check, X } from "lucide-react";
+import { Clock, Send, Trash2, RefreshCw, CheckCircle2, Calendar, ExternalLink, Pencil, Check, X, Edit } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import type { ScheduledPost } from "@/lib/telegram-scheduler";
@@ -208,17 +208,30 @@ export function DashboardScheduledPostsWidget({
             >
               <div className="space-y-1.5">
                 <div className="flex items-start justify-between gap-2">
-                  <span className="font-bold text-sm text-foreground line-clamp-1" title={post.appName}>
-                    {post.appName}
-                  </span>
                   <Link
-                    href={`/apps/${post.appSlug}.html`}
-                    target="_blank"
-                    className="text-muted-foreground hover:text-foreground p-1 rounded-lg hover:bg-muted/50 shrink-0"
-                    title="View on Website"
+                    href={`/admin/apps/${post.appId}/edit`}
+                    className="font-bold text-sm text-foreground hover:text-emerald-400 transition-colors line-clamp-1"
+                    title={`Edit ${post.appName}`}
                   >
-                    <ExternalLink className="h-3.5 w-3.5" />
+                    {post.appName}
                   </Link>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Link
+                      href={`/admin/apps/${post.appId}/edit`}
+                      className="text-muted-foreground hover:text-emerald-400 p-1 rounded-lg hover:bg-muted/50"
+                      title="Edit Post"
+                    >
+                      <Edit className="h-3.5 w-3.5" />
+                    </Link>
+                    <Link
+                      href={`/apps/${post.appSlug.replace(/\.html$/, "")}.html`}
+                      target="_blank"
+                      className="text-muted-foreground hover:text-foreground p-1 rounded-lg hover:bg-muted/50"
+                      title="View on Website"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </Link>
+                  </div>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-mono">

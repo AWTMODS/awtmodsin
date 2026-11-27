@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Clock, Send, Trash2, RefreshCw, CheckCircle2, Calendar, ExternalLink } from "lucide-react";
+import { Clock, Send, Trash2, RefreshCw, CheckCircle2, Calendar, ExternalLink, Pencil, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import type { ScheduledPost } from "@/lib/telegram-scheduler";
@@ -17,6 +17,74 @@ export function DashboardScheduledPostsWidget({
   const [posts, setPosts] = useState<ScheduledPost[]>(initialPosts);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDateTime, setEditDateTime] = useState("");
+
+  useEffect(() => {
+    setPosts(initialPosts);
+  }, [initialPosts]);
+
+  // Convert ISO UTC string to "YYYY-MM-DDTHH:mm" in Asia/Kolkata (IST) for datetime-local input
+  const toIstInputValue = (iso: string) => {
+    try {
+      const d = new Date(iso);
+      const parts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Kolkata",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      }).formatToParts(d);
+      const get = (t: string) => parts.find((p) => p.type === t)?.value || "00";
+      const hour = get("hour") === "24" ? "00" : get("hour");
+      return `${get("year")}-${get("month")}-${get("day")}T${hour}:${get("minute")}`;
+    } catch {
+      return "";
+    }
+  };
+
+  const handleStartEdit = (post: ScheduledPost) => {
+    setEditingId(post.id);
+    setEditDateTime(toIstInputValue(post.scheduledFor));
+  };
+
+  const handleSaveReschedule = async (post: ScheduledPost) => {
+    if (!editDateTime) {
+      toast.error("Please select a valid date and time");
+      return;
+    }
+    const parsed = new Date(`${editDateTime}:00+05:30`);
+    if (Number.isNaN(parsed.getTime())) {
+      toast.error("Invalid date/time format");
+      return;
+    }
+
+    setBusyId(post.id);
+    try {
+      const res = await fetch("/api/admin/telegram/scheduled", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "reschedule",
+          postId: post.id,
+          scheduledFor: parsed.toISOString(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to reschedule");
+      if (Array.isArray(data.posts)) {
+        setPosts(data.posts);
+      }
+      setEditingId(null);
+      toast.success(`📅 Updated schedule for ${post.appName} to ${formatIstTime(parsed.toISOString())}`);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to reschedule post");
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   const pendingPosts = posts.filter((p) => p.status === "pending");
   const recentCompleted = posts.filter((p) => p.status === "published").slice(0, 3);
@@ -154,14 +222,55 @@ export function DashboardScheduledPostsWidget({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-mono">
-                  <span className="inline-flex items-center gap-1 text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md font-semibold">
+                  <button
+                    type="button"
+                    onClick={() => handleStartEdit(post)}
+                    className="inline-flex items-center gap-1 text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 px-2 py-0.5 rounded-md font-semibold transition-colors"
+                    title="Click to edit scheduled date & time (IST)"
+                  >
                     <Calendar className="h-3 w-3" />
-                    {formatIstTime(post.scheduledFor)}
-                  </span>
+                    <span>{formatIstTime(post.scheduledFor)}</span>
+                    <Pencil className="h-2.5 w-2.5 ml-0.5 opacity-80" />
+                  </button>
                   <span className="text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-md">
                     {formatCountdown(post.scheduledFor)}
                   </span>
                 </div>
+
+                {editingId === post.id && (
+                  <div className="mt-2 p-2.5 rounded-xl bg-background/80 border border-emerald-500/30 space-y-2">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                      Custom Date &amp; Time (IST)
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={editDateTime}
+                      onChange={(e) => setEditDateTime(e.target.value)}
+                      className="w-full rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    />
+                    <div className="flex items-center gap-1.5">
+                      <Button
+                        size="sm"
+                        disabled={busyId === post.id}
+                        onClick={() => handleSaveReschedule(post)}
+                        className="flex-1 h-7 rounded-lg text-[11px] font-bold bg-emerald-500 hover:bg-emerald-400 text-black gap-1"
+                      >
+                        <Check className="h-3 w-3" />
+                        <span>Save Time</span>
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busyId === post.id}
+                        onClick={() => setEditingId(null)}
+                        className="h-7 px-2 rounded-lg text-[11px]"
+                        title="Cancel"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center gap-2 pt-2 border-t border-border/40">

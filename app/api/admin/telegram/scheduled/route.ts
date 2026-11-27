@@ -26,10 +26,11 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { action, postId, appId } = body as {
-      action: "publish_now" | "cancel";
+    const { action, postId, appId, scheduledFor } = body as {
+      action: "publish_now" | "cancel" | "reschedule";
       postId?: string;
       appId?: string;
+      scheduledFor?: string;
     };
 
     if (!action || (!postId && !appId)) {
@@ -43,6 +44,22 @@ export async function POST(req: Request) {
 
     if (!target) {
       return NextResponse.json({ error: "Scheduled post not found" }, { status: 404 });
+    }
+
+    if (action === "reschedule") {
+      if (!scheduledFor) {
+        return NextResponse.json({ error: "Missing scheduledFor date/time" }, { status: 400 });
+      }
+      const parsed = new Date(scheduledFor);
+      if (Number.isNaN(parsed.getTime())) {
+        return NextResponse.json({ error: "Invalid scheduledFor date/time" }, { status: 400 });
+      }
+      const nextIso = parsed.toISOString();
+      const updated = posts.map((p) =>
+        p.id === target.id ? { ...p, scheduledFor: nextIso } : p
+      );
+      await saveScheduledPosts(updated);
+      return NextResponse.json({ success: true, posts: updated });
     }
 
     if (action === "cancel") {

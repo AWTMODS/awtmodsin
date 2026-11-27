@@ -12,6 +12,7 @@ import { formatNumber } from "@/lib/utils";
 import { DashboardCharts } from "@/components/admin/dashboard-charts";
 import { DashboardRadarWidget } from "@/components/admin/dashboard-radar-widget";
 import { DashboardScheduledPostsWidget } from "@/components/admin/dashboard-scheduled-posts-widget";
+import { MorpheImportButton } from "@/components/admin/morphe-import-button";
 import {
   Layers,
   Download,
@@ -126,6 +127,8 @@ export default async function AdminDashboardPage() {
               )}
             </Button>
           </Link>
+
+          <MorpheImportButton className="px-3.5" />
 
           <Link href="/admin/apps/new" prefetch={true}>
             <Button size="sm" className="rounded-xl px-4 gap-1.5 font-semibold">

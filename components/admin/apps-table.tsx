@@ -103,15 +103,45 @@ export function AppsTable({
   const [radarUpdates, setRadarUpdates] = useState<Record<string, any>>({});
   const [isScanningRadar, setIsScanningRadar] = useState(false);
 
-  useEffect(() => {
-    fetch("/api/admin/radar/check", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.radar?.updates) {
-          setRadarUpdates(d.radar.updates);
+  const loadRadarState = async () => {
+    try {
+      const [checkRes, queueRes] = await Promise.all([
+        fetch("/api/admin/radar/check", { cache: "no-store" }),
+        fetch("/api/admin/radar/apps?activeOnly=true", { cache: "no-store" }),
+      ]);
+      const checkData = await checkRes.json().catch(() => null);
+      if (checkData?.radar?.updates) {
+        setRadarUpdates(checkData.radar.updates);
+      }
+      const queueData = await queueRes.json().catch(() => null);
+      if (Array.isArray(queueData?.apps)) {
+        const queued: Record<string, boolean> = {};
+        for (const rApp of queueData.apps) {
+          if (
+            rApp.workflow_status === "MODDING_STARTED" ||
+            rApp.workflow_status === "MODDED_COMPLETED" ||
+            rApp.workflow_status === "READY_TO_PUBLISH"
+          ) {
+            const webId = rApp.website_app_id || String(rApp.id || "").replace(/^radar-/, "");
+            if (webId) queued[webId] = true;
+          }
         }
-      })
-      .catch(() => {});
+        setStartedModdingIds((prev) => ({ ...queued, ...prev }));
+      }
+    } catch {
+      // Non-fatal
+    }
+  };
+
+  useEffect(() => {
+    loadRadarState();
+    const onDbChange = () => {
+      loadRadarState();
+    };
+    window.addEventListener("awtmods:db-change", onDbChange);
+    return () => {
+      window.removeEventListener("awtmods:db-change", onDbChange);
+    };
   }, []);
 
   const handleRunRadar = async () => {
@@ -698,6 +728,34 @@ export function AppsTable({
                               Play: v{radarUpdates[app.id].playStoreVersion}
                             </a>
                           )}
+                          {(versionCode === 1 || !!radarUpdates[app.id]) && (
+                            <button
+                              type="button"
+                              disabled={startingAppId === app.id || startedModdingIds[app.id]}
+                              onClick={() => handleStartModding(app)}
+                              className={`mt-0.5 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors whitespace-nowrap ${
+                                startedModdingIds[app.id]
+                                  ? "bg-emerald-500/15 text-emerald-500 border border-emerald-500/30"
+                                  : "bg-amber-500 hover:bg-amber-400 text-black shadow-2xs"
+                              }`}
+                              title="Start Modding & Release Update"
+                            >
+                              {startingAppId === app.id ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : startedModdingIds[app.id] ? (
+                                <CheckCircle className="h-3 w-3" />
+                              ) : (
+                                <Play className="h-3 w-3 fill-current" />
+                              )}
+                              <span>
+                                {startingAppId === app.id
+                                  ? "Starting..."
+                                  : startedModdingIds[app.id]
+                                  ? "In Queue"
+                                  : "Start Modding"}
+                              </span>
+                            </button>
+                          )}
                         </div>
                       </td>
 
@@ -750,35 +808,6 @@ export function AppsTable({
                       {/* Action buttons */}
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          {(versionCode === 1 || !!radarUpdates[app.id]) && (
-                            <button
-                              type="button"
-                              disabled={startingAppId === app.id || startedModdingIds[app.id]}
-                              onClick={() => handleStartModding(app)}
-                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors ${
-                                startedModdingIds[app.id]
-                                  ? "bg-emerald-500/15 text-emerald-500 border border-emerald-500/30"
-                                  : "bg-amber-500 hover:bg-amber-400 text-black shadow-2xs"
-                              }`}
-                              title="Start Modding & Release Update"
-                            >
-                              {startingAppId === app.id ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                              ) : startedModdingIds[app.id] ? (
-                                <CheckCircle className="h-3 w-3" />
-                              ) : (
-                                <Play className="h-3 w-3 fill-current" />
-                              )}
-                              <span>
-                                {startingAppId === app.id
-                                  ? "Starting..."
-                                  : startedModdingIds[app.id]
-                                  ? "In Queue"
-                                  : "Start Modding"}
-                              </span>
-                            </button>
-                          )}
-
                           <Link
                             href={`/admin/apps/${app.id}/edit`}
                             className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted"

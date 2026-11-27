@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { RadarTrackedApp } from "@/lib/radar-engine";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,10 @@ interface RadarModdingQueueProps {
 export function RadarModdingQueue({ initialApps }: RadarModdingQueueProps) {
   const [apps, setApps] = useState<RadarTrackedApp[]>(initialApps);
   const [activeTab, setActiveTab] = useState<"ALL" | "MODDING_STARTED" | "MODDED_COMPLETED" | "READY_TO_PUBLISH">("ALL");
+
+  useEffect(() => {
+    setApps(initialApps);
+  }, [initialApps]);
 
   // Workflow Modal States
   const [activeModalApp, setActiveModalApp] = useState<RadarTrackedApp | null>(null);

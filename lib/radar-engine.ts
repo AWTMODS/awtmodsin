@@ -143,6 +143,22 @@ let inMemoryState: RadarInMemoryState = {
 
 let hasInitialized = false;
 
+// Serialize read-modify-write operations so rapid concurrent clicks (e.g. Start Modding on many apps)
+// never overwrite each other's changes in radar_engine_full_state or playstore_radar_state.
+let stateMutationQueue: Promise<any> = Promise.resolve();
+function withStateLock<T>(fn: () => Promise<T>): Promise<T> {
+  const next = stateMutationQueue.then(fn, fn);
+  stateMutationQueue = next.catch(() => {});
+  return next;
+}
+
+let radarStateMutationQueue: Promise<any> = Promise.resolve();
+function withRadarStateLock<T>(fn: () => Promise<T>): Promise<T> {
+  const next = radarStateMutationQueue.then(fn, fn);
+  radarStateMutationQueue = next.catch(() => {});
+  return next;
+}
+
 // Dynamic import helper for Google Play scraper
 async function getGPlay() {
   const mod = await import("google-play-scraper");
@@ -317,8 +333,17 @@ async function loadState(): Promise<RadarInMemoryState> {
             if (siteVer) existingApp.last_detected_version = siteVer;
             didChange = true;
           }
-          // Synchronize workflow status from playstore_radar_state so active modding is preserved
-          if (update.workflowStatus && existingApp.workflow_status !== update.workflowStatus) {
+          // Synchronize workflow status from playstore_radar_state, but NEVER downgrade an app
+          // that is already in the active modding queue back to UPDATE_DETECTED.
+          const isAlreadyInQueue =
+            existingApp.workflow_status === "MODDING_STARTED" ||
+            existingApp.workflow_status === "MODDED_COMPLETED" ||
+            existingApp.workflow_status === "READY_TO_PUBLISH";
+          if (
+            update.workflowStatus &&
+            existingApp.workflow_status !== update.workflowStatus &&
+            !(isAlreadyInQueue && update.workflowStatus === "UPDATE_DETECTED")
+          ) {
             existingApp.workflow_status = update.workflowStatus;
             didChange = true;
           }
@@ -326,7 +351,11 @@ async function loadState(): Promise<RadarInMemoryState> {
             (c) => c.radar_app_id === existingApp?.id
           );
           if (matchingCycle) {
-            if (update.workflowStatus && matchingCycle.workflow_status !== update.workflowStatus) {
+            if (
+              update.workflowStatus &&
+              matchingCycle.workflow_status !== update.workflowStatus &&
+              !(isAlreadyInQueue && update.workflowStatus === "UPDATE_DETECTED")
+            ) {
               matchingCycle.workflow_status = update.workflowStatus;
               didChange = true;
             }
@@ -1070,39 +1099,41 @@ async function syncRadarStateWorkflowStatus(
   app: RadarTrackedApp,
   status: RadarWorkflowStatus
 ) {
-  try {
-    const radarState = await getRadarState();
-    let changed = false;
-    const rawId = (app.id || "").replace(/^radar-/, "");
-    const targetPkg = (app.package_name || "").toLowerCase();
+  return withRadarStateLock(async () => {
+    try {
+      const radarState = await getRadarState();
+      let changed = false;
+      const rawId = (app.id || "").replace(/^radar-/, "");
+      const targetPkg = (app.package_name || "").toLowerCase();
 
-    for (const [key, update] of Object.entries(radarState.updates || {})) {
-      if (!update) continue;
-      const updatePkg = (update.packageName || "").toLowerCase();
-      const updateId = (update.appId || "").toLowerCase();
+      for (const [key, update] of Object.entries(radarState.updates || {})) {
+        if (!update) continue;
+        const updatePkg = (update.packageName || "").toLowerCase();
+        const updateId = (update.appId || "").toLowerCase();
 
-      if (
-        updateId === app.id.toLowerCase() ||
-        updateId === rawId.toLowerCase() ||
-        updatePkg === targetPkg
-      ) {
-        if (status === "MOD_RELEASED") {
-          delete radarState.updates[key];
-          changed = true;
-        } else {
-          update.workflowStatus = status;
-          update.isMuted = true;
-          changed = true;
+        if (
+          updateId === app.id.toLowerCase() ||
+          updateId === rawId.toLowerCase() ||
+          updatePkg === targetPkg
+        ) {
+          if (status === "MOD_RELEASED") {
+            delete radarState.updates[key];
+            changed = true;
+          } else {
+            update.workflowStatus = status;
+            update.isMuted = true;
+            changed = true;
+          }
         }
       }
-    }
 
-    if (changed) {
-      await saveRadarState(radarState);
+      if (changed) {
+        await saveRadarState(radarState);
+      }
+    } catch (err) {
+      console.warn("syncRadarStateWorkflowStatus error:", err);
     }
-  } catch (err) {
-    console.warn("syncRadarStateWorkflowStatus error:", err);
-  }
+  });
 }
 
 /**
@@ -1119,83 +1150,90 @@ export async function transitionToModdingStarted(params: {
   assignedModder?: string;
   priority?: RadarPriority;
 }): Promise<{ success: boolean; error?: string }> {
-  const state = await loadState();
-  const app = await findRadarApp(state, params.appId);
-  if (!app) return { success: false, error: "Application not found" };
+  const result = await withStateLock(async () => {
+    const state = await loadState();
+    const app = await findRadarApp(state, params.appId);
+    if (!app) return { success: false as const, error: "Application not found" };
 
-  const prevStatus = app.workflow_status;
-  const now = new Date().toISOString();
+    const prevStatus = app.workflow_status;
+    const now = new Date().toISOString();
 
-  // 1. Update Application status
-  app.workflow_status = "MODDING_STARTED";
-  app.updated_at = now;
+    // 1. Update Application status
+    app.workflow_status = "MODDING_STARTED";
+    app.updated_at = now;
 
-  // 2. Find or create current cycle
-  let cycle = state.cycles.find((c) => c.radar_app_id === app.id || c.radar_app_id === params.appId);
-  if (!cycle || cycle.workflow_status === "MOD_RELEASED") {
-    cycle = {
-      id: `cycle-${Date.now()}`,
+    // 2. Find or create current cycle
+    let cycle = state.cycles.find((c) => c.radar_app_id === app.id || c.radar_app_id === params.appId);
+    if (!cycle || cycle.workflow_status === "MOD_RELEASED") {
+      cycle = {
+        id: `cycle-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        radar_app_id: app.id,
+        cycle_number: (state.cycles.filter((c) => c.radar_app_id === app.id).length || 0) + 1,
+        target_play_store_version: app.current_play_store_version,
+        workflow_status: "MODDING_STARTED",
+        priority: params.priority || "Medium",
+        assigned_modder: params.assignedModder || "Aadith C V",
+        modding_started_at: now,
+        created_at: now,
+        updated_at: now,
+      };
+      state.cycles.unshift(cycle);
+    } else {
+      cycle.workflow_status = "MODDING_STARTED";
+      cycle.priority = params.priority || cycle.priority;
+      cycle.assigned_modder = params.assignedModder || cycle.assigned_modder;
+      cycle.modding_started_at = now;
+      cycle.updated_at = now;
+    }
+
+    // 3. Save multiline remarks & instructions
+    if (params.remarks || params.internalInstructions) {
+      const remark: RadarRemark = {
+        id: `rem-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        radar_app_id: app.id,
+        cycle_id: cycle.id,
+        admin_name: params.adminName || "Admin",
+        remarks: params.remarks,
+        internal_instructions: params.internalInstructions,
+        required_modifications: params.requiredModifications,
+        known_issues: params.knownIssues,
+        testing_requirements: params.testingRequirements,
+        created_at: now,
+        updated_at: now,
+      };
+      state.remarks.unshift(remark);
+    }
+
+    // 4. Record Activity
+    state.activities.unshift({
+      id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       radar_app_id: app.id,
-      cycle_number: (state.cycles.filter((c) => c.radar_app_id === app.id).length || 0) + 1,
-      target_play_store_version: app.current_play_store_version,
-      workflow_status: "MODDING_STARTED",
-      priority: params.priority || "Medium",
-      assigned_modder: params.assignedModder || "Aadith C V",
-      modding_started_at: now,
+      app_name: app.app_name,
+      action: "MODDING_STARTED",
+      from_status: prevStatus,
+      to_status: "MODDING_STARTED",
+      performed_by: params.adminName || "Admin",
+      notes: `Modder: ${params.assignedModder || "Aadith C V"} • Priority: ${params.priority || "Medium"}`,
       created_at: now,
-      updated_at: now,
-    };
-    state.cycles.unshift(cycle);
-  } else {
-    cycle.workflow_status = "MODDING_STARTED";
-    cycle.priority = params.priority || cycle.priority;
-    cycle.assigned_modder = params.assignedModder || cycle.assigned_modder;
-    cycle.modding_started_at = now;
-    cycle.updated_at = now;
-  }
+    });
 
-  // 3. Save multiline remarks & instructions
-  if (params.remarks || params.internalInstructions) {
-    const remark: RadarRemark = {
-      id: `rem-${Date.now()}`,
-      radar_app_id: app.id,
-      cycle_id: cycle.id,
-      admin_name: params.adminName || "Admin",
-      remarks: params.remarks,
-      internal_instructions: params.internalInstructions,
-      required_modifications: params.requiredModifications,
-      known_issues: params.knownIssues,
-      testing_requirements: params.testingRequirements,
-      created_at: now,
-      updated_at: now,
-    };
-    state.remarks.unshift(remark);
-  }
-
-  // 4. Record Activity
-  state.activities.unshift({
-    id: `act-${Date.now()}`,
-    radar_app_id: app.id,
-    app_name: app.app_name,
-    action: "MODDING_STARTED",
-    from_status: prevStatus,
-    to_status: "MODDING_STARTED",
-    performed_by: params.adminName || "Admin",
-    notes: `Modder: ${params.assignedModder || "Aadith C V"} • Priority: ${params.priority || "Medium"}`,
-    created_at: now,
+    await persistState(state);
+    return { success: true as const, app };
   });
 
-  await persistState(state);
+  if (!result.success) {
+    return { success: false, error: result.error };
+  }
 
-  // Sync into playstore_radar_state so dashboard widget updates immediately (run in parallel)
-  syncRadarStateWorkflowStatus(app, "MODDING_STARTED").catch((err) =>
+  // Sync into playstore_radar_state so dashboard widget updates immediately (serialized via radarStateLock)
+  syncRadarStateWorkflowStatus(result.app, "MODDING_STARTED").catch((err) =>
     console.error("syncRadarStateWorkflowStatus error:", err)
   );
 
   // Telegram alert non-blocking
   dispatchTelegramNotification({
     type: "MODDING_STARTED",
-    app,
+    app: result.app,
     priority: params.priority || "Medium",
     modder: params.assignedModder || "Aadith C V",
     notes: params.remarks,

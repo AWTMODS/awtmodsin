@@ -325,6 +325,10 @@ async function loadState(): Promise<RadarInMemoryState> {
         });
 
         if (existingApp) {
+          if (update.icon_url && !existingApp.icon_url) {
+            existingApp.icon_url = update.icon_url;
+            didChange = true;
+          }
           if (
             existingApp.current_play_store_version !== playVer ||
             (siteVer && existingApp.last_detected_version !== siteVer)
@@ -654,15 +658,45 @@ export async function getRadarTrackedApps(params?: {
   }
 
   // Attach current modding cycle and latest remark
+  // Also backfill any missing icon_url from the main applications table
+  const missingIcons = list.filter((a) => !a.icon_url);
+  let iconByPkg = new Map<string, string>();
+  let iconById = new Map<string, string>();
+  if (missingIcons.length > 0) {
+    try {
+      const supabase = getDbClient();
+      if (supabase) {
+        const { data: appIcons } = await supabase
+          .from("applications")
+          .select("id, package_name, icon_url")
+          .not("icon_url", "is", null);
+        for (const row of appIcons || []) {
+          if (row.icon_url) {
+            if (row.id) iconById.set(String(row.id).toLowerCase(), row.icon_url);
+            if (row.package_name) iconByPkg.set(String(row.package_name).toLowerCase(), row.icon_url);
+          }
+        }
+      }
+    } catch {
+      // Non-fatal
+    }
+  }
+
   const enriched = list.map((app) => {
     const current_cycle = state.cycles.find(
       (c) => c.radar_app_id === app.id && c.workflow_status === app.workflow_status
     ) || state.cycles.filter((c) => c.radar_app_id === app.id)[0];
 
     const latest_remarks = state.remarks.filter((r) => r.radar_app_id === app.id);
+    const rawId = (app.id || "").replace(/^radar-/, "").toLowerCase();
+    const resolvedIcon =
+      app.icon_url ||
+      iconById.get(rawId) ||
+      (app.package_name ? iconByPkg.get(app.package_name.toLowerCase()) : undefined);
 
     return {
       ...app,
+      icon_url: resolvedIcon,
       current_cycle,
       latest_remarks,
     };

@@ -201,17 +201,19 @@ export function RadarAppsTable({ initialApps, defaultStatus = "" }: RadarAppsTab
                     {/* App info */}
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-3">
-                        <div className="relative h-10 w-10 rounded-xl overflow-hidden border border-border bg-background shrink-0">
+                        <div className="relative h-10 w-10 rounded-xl overflow-hidden border border-border bg-secondary flex items-center justify-center font-bold text-xs text-foreground shrink-0">
                           {app.icon_url && (
                             <img
                               src={app.icon_url}
                               alt={app.app_name}
-                              className="h-full w-full object-cover"
+                              referrerPolicy="no-referrer"
+                              className="absolute inset-0 h-full w-full object-cover"
                               onError={(e) => {
                                 (e.currentTarget as HTMLElement).style.display = "none";
                               }}
                             />
                           )}
+                          <span>{app.app_name.slice(0, 1).toUpperCase()}</span>
                         </div>
                         <div className="min-w-0">
                           <Link
